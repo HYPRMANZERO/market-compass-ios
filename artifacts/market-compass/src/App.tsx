@@ -4,7 +4,9 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useAnalyzeMarket, useBacktestMarket, useCalculateDebtPlan, useGetMarketCandles, useInterpretLocalCommand } from '@workspace/api-client-react';
+import { useCalculateDebtPlan, useInterpretLocalCommand } from '@workspace/api-client-react';
+import { fetchPublicCandles, type PublicVenue } from '@/lib/publicMarkets';
+import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
 import type { AssistantCommand, BacktestResult, Candle, DebtPlan, MarketAnalysis, MarketSeries } from '@workspace/api-client-react';
 import {
   Activity, ArrowDownRight, ArrowLeftRight, ArrowRight, ArrowUpRight, Check, ChevronDown,
@@ -392,32 +394,28 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   const [fastWindow, setFastWindow] = useState('10');
   const [slowWindow, setSlowWindow] = useState('30');
   const [feeBps, setFeeBps] = useState('10');
-  const candlesRequest = useGetMarketCandles();
-  const analyze = useAnalyzeMarket();
-  const backtestRequest = useBacktestMarket();
+  const [venue, setVenue] = useState<PublicVenue>('auto');
+  const [fetching, setFetching] = useState(false);
+  const [candlesError, setCandlesError] = useState(false);
+  const [backtesting, setBacktesting] = useState(false);
   const activeSeries = series ?? (localCached ? data.marketCache : null);
   const activeAnalysis = analysis ?? (localCached && data.analysisCache?.symbol === activeSeries?.symbol ? data.analysisCache : null);
-  const fetching = candlesRequest.isPending || analyze.isPending;
-
-  function requestMarket(event: FormEvent<HTMLFormElement>) {
+  async function requestMarket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = symbol.trim().toUpperCase();
-    if (!normalized) return;
+    if (!normalized || fetching) return;
+    setFetching(true); setCandlesError(false);
     setSeries(null); setAnalysis(null); setLocalCached(false); setNotice(''); setBacktest(null);
-    candlesRequest.mutate({ data: { symbol: normalized, range } }, {
-      onSuccess: (result) => {
-        setSeries(result);
-        setData((old) => ({ ...old, marketCache: result }));
-        if (result.candles.length >= 5) {
-          analyze.mutate({ data: { symbol: result.symbol, candles: result.candles } }, {
-            onSuccess: (evaluated) => { setAnalysis(evaluated); setData((old) => ({ ...old, analysisCache: evaluated })); },
-          });
-        }
-      },
-      onError: () => {
-        if (data.marketCache && data.marketCache.symbol === normalized) setLocalCached(true);
-      },
-    });
+    try {
+      const result = await fetchPublicCandles(normalized, range, venue);
+      const evaluated = localTechnicalReading(result.symbol, result.candles);
+      setSeries(result); setAnalysis(evaluated);
+      setData((old) => ({ ...old, marketCache: result, analysisCache: evaluated }));
+    } catch (error) {
+      setCandlesError(true);
+      setNotice(error instanceof Error ? error.message : 'The market provider could not be reached.');
+      if (data.marketCache && data.marketCache.symbol === normalized) setLocalCached(true);
+    } finally { setFetching(false); }
   }
   const price = activeAnalysis?.lastPrice ?? activeSeries?.candles.at(-1)?.close;
   const addDraft = () => {
@@ -425,7 +423,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     const draft: Draft = { id: crypto.randomUUID(), symbol: activeSeries.symbol, side: 'buy', quantity: 1, limitPrice: price, rationale: 'Created from the last provider candle. Review before approval.', status: 'pending', createdAt: new Date().toISOString() };
     setData((old) => ({ ...old, drafts: [draft, ...old.drafts] }));
   };
-  const analysisError = analyze.isError;
+  const analysisError = false;
 
   async function importCsv(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -437,18 +435,17 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
       const imported: MarketSeries = {
         symbol: (file.name.replace(/\.csv$/i, '').trim().toUpperCase() || 'CSV').slice(0, 24),
         source: `CSV import · ${file.name}`,
-        currency: 'USD',
-        asOf: new Date().toISOString(),
-        delayed: false,
+        currency: /(?:\.JO|\.JSE|JSE)/i.test(file.name) ? 'ZAR' : 'USD',
+        asOf: parsed.candles.at(-1)!.date,
+        delayed: true,
         candles: parsed.candles,
-        notice: `Imported ${parsed.candles.length} candles from ${file.name}. Currency is assumed to be USD; confirm it matches the file.${parsed.skipped ? ` ${parsed.skipped} row${parsed.skipped === 1 ? '' : 's'} skipped as unreadable, invalid, or duplicate.` : ''}`,
+        notice: `Imported ${parsed.candles.length} historical candles from ${file.name}. Currency inferred from filename only (ZAR for JSE, otherwise USD); verify your file's currency and JSE price units (often cents). No exchange feed has been verified for imported data.${parsed.skipped ? ` ${parsed.skipped} row${parsed.skipped === 1 ? '' : 's'} skipped.` : ''}`,
       };
       setSeries(imported);
       setData((old) => ({ ...old, marketCache: imported }));
-      analyze.mutate({ data: { symbol: imported.symbol, candles: imported.candles } }, {
-        onSuccess: (evaluated) => { setAnalysis(evaluated); setData((old) => ({ ...old, analysisCache: evaluated })); },
-        onError: () => setNotice('Candles imported, but the technical reading could not be computed for this series.'),
-      });
+      const evaluated = localTechnicalReading(imported.symbol, imported.candles);
+      setAnalysis(evaluated);
+      setData((old) => ({ ...old, analysisCache: evaluated }));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'That file could not be read as a candle CSV.');
     }
@@ -463,23 +460,24 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     if (slow <= fast) { setNotice('The slow window must be larger than the fast window.'); return; }
     if (activeSeries.candles.length <= slow + 1) { setNotice(`This series has ${activeSeries.candles.length} candles; the slow window of ${slow} needs more than ${slow + 1}.`); return; }
     setNotice('');
-    backtestRequest.mutate({ data: { symbol: activeSeries.symbol, candles: activeSeries.candles, fast, slow, feeBps: Number.isFinite(fee) ? fee : 10 } }, {
-      onSuccess: setBacktest,
-      onError: () => setNotice('The backtest could not be computed for this series.'),
-    });
+    setBacktesting(true);
+    try { setBacktest(localSmaBacktest(activeSeries.candles, fast, slow, fee)); }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Backtest could not be calculated.'); }
+    finally { setBacktesting(false); }
   };
-  const candlesError = candlesRequest.isError;
   return <>
-    <PageIntro eyebrow="Observe before interpreting" title="Markets" description="Request real provider candles, then examine technical measures and the evaluated model with its limits in view." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Provider data only</div>} />
+    <PageIntro eyebrow="Observe before interpreting" title="Markets" description="Import real daily crypto candles from public exchange APIs; calculate local indicators on your device. JSE/other markets require an authorized CSV feed." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Public exchange candles</div>} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
-        <label className="flex-1"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Ticker symbol</span><input data-testid="input-market-symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="Enter a symbol, e.g. a company ticker" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
+        <label className="flex-1"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Crypto spot pair</span><input data-testid="input-market-symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTC, ETH, SOL or BTCUSD" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
+        <label className="sm:w-36"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Data source</span><select value={venue} onChange={(e) => setVenue(e.target.value as PublicVenue)} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[12px]"><option value="auto">Auto</option><option value="kraken">Kraken</option><option value="coinbase">Coinbase</option></select></label>
         <label className="sm:w-40"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Lookback</span><span className="relative block"><select data-testid="select-market-range" value={range} onChange={(e) => setRange(e.target.value as typeof range)} className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-8 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="1m">1 month</option><option value="3m">3 months</option><option value="6m">6 months</option><option value="1y">1 year</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-3.5 text-muted-foreground" /></span></label>
         <ActionButton type="submit" disabled={!symbol.trim() || fetching}>{fetching ? <LoaderCircle className="animate-spin" size={15} /> : <Search size={15} />}{fetching ? 'Loading data' : 'Request data'}</ActionButton>
       </form>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · manually refreshed · not live quotes</span></div>
       <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Upload size={15} /></span>
-        <p className="flex-1 text-[11px] leading-5 text-muted-foreground">Provider throttled or offline? Import a CSV of daily candles with columns <span className="mono text-foreground">date,open,high,low,close[,volume]</span>.</p>
+        <p className="flex-1 text-[11px] leading-5 text-muted-foreground">For JSE shares, stocks, ETFs, licensed data feeds or offline use, import an authorized CSV with columns <span className="mono text-foreground">date,open,high,low,close[,volume]</span>. Check currency, units and licensing.</p>
         <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-[12px] font-semibold hover:bg-muted">
           <Upload size={14} />Import CSV
           <input type="file" accept=".csv,text/csv" className="hidden" data-testid="input-market-csv" onChange={importCsv} />
@@ -527,7 +525,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
           <label className="sm:w-28"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Fast</span><input value={fastWindow} onChange={(event) => setFastWindow(event.target.value)} type="number" min="2" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
           <label className="sm:w-28"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Slow</span><input value={slowWindow} onChange={(event) => setSlowWindow(event.target.value)} type="number" min="3" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
           <label className="sm:w-28"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Fee (bps)</span><input value={feeBps} onChange={(event) => setFeeBps(event.target.value)} type="number" min="0" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
-          <ActionButton onClick={runBacktest} disabled={backtestRequest.isPending}>{backtestRequest.isPending ? <LoaderCircle className="animate-spin" size={15} /> : <Activity size={15} />}{backtestRequest.isPending ? 'Replaying' : 'Run backtest'}</ActionButton>
+          <ActionButton onClick={runBacktest} disabled={backtesting}>{backtesting ? <LoaderCircle className="animate-spin" size={15} /> : <Activity size={15} />}{backtesting ? 'Replaying' : 'Run backtest'}</ActionButton>
           <p className="flex-1 text-[10px] leading-5 text-muted-foreground sm:text-right">Replays the same {activeSeries.candles.length} candles against a buy-and-hold benchmark. Past results are not a forecast.</p>
         </div>
         {backtest ? <div className="grid gap-0 md:grid-cols-2">
