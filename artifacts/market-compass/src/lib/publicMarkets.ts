@@ -3,7 +3,17 @@ import type { Candle, MarketSeries } from '@workspace/api-client-react';
 export type PublicVenue = 'auto' | 'kraken' | 'coinbase';
 export type CandleRange = '1m' | '3m' | '6m' | '1y';
 
-const LOOKBACK: Record<CandleRange, number> = { '1m': 31, '3m': 93, '6m': 186, '1y': 366 };
+/** Calendar lookbacks use midnight UTC as an exclusive end. Today's incomplete candle is not included. */
+export function historicalWindow(range: CandleRange, now = new Date()): { start: Date; end: Date } {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const months = range === '1m' ? 1 : range === '3m' ? 3 : range === '6m' ? 6 : 12;
+  const year = end.getUTCFullYear();
+  const month = end.getUTCMonth() - months;
+  const day = end.getUTCDate();
+  const lastOfTargetMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const start = new Date(Date.UTC(year, month, Math.min(day, lastOfTargetMonth)));
+  return { start, end };
+}
 const ASSETS = ['BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOGE', 'LTC', 'DOT', 'LINK', 'AVAX'];
 
 function normalize(input: string): { base: string; currency: string } {
@@ -34,12 +44,14 @@ async function jsonFrom(url: string): Promise<any> {
   } finally { clearTimeout(timeout); }
 }
 function makeSeries(base: string, range: CandleRange, candles: Candle[], source: string, notice: string): MarketSeries {
-  if (candles.length < 5) throw new Error(`Only ${candles.length} valid provider candles returned.`);
-  const last = candles.at(-1)!;
+  const { start, end } = historicalWindow(range);
+  const selected = normalizeCandles(candles.filter(c => Date.parse(c.date) >= start.getTime() && Date.parse(c.date) < end.getTime()), 400);
+  if (selected.length < 5) throw new Error(`Only ${selected.length} valid provider candles available in the selected historical period.`);
+  const first = selected[0], last = selected[selected.length - 1];
   return {
     symbol: `${base}USD`, source, currency: 'USD', delayed: true,
-    asOf: last.date, candles: normalizeCandles(candles, LOOKBACK[range]),
-    notice: `${notice} Latest shown candle begins ${last.date} UTC. Daily candles are historical and are not a live executable quote. Rate limits and temporary outages can apply.`
+    asOf: last.date, candles: selected,
+    notice: `${notice} Calendar lookback: ${range}, requested from ${start.toISOString().slice(0, 10)} through ${new Date(end.getTime() - 86400000).toISOString().slice(0, 10)} UTC. Received ${selected.length} completed daily candles (${first.date.slice(0, 10)}–${last.date.slice(0, 10)} UTC). Today is excluded. Historical data is not a live executable quote. Rate limits and temporary outages may apply.`
   };
 }
 async function kraken(base: string, range: CandleRange): Promise<MarketSeries> {
@@ -57,9 +69,10 @@ async function kraken(base: string, range: CandleRange): Promise<MarketSeries> {
   return makeSeries(base, range, candles, 'Kraken Spot REST · public OHLC', 'Source: Kraken public daily spot candles. Most recent unfinished candle excluded.');
 }
 async function coinbase(base: string, range: CandleRange): Promise<MarketSeries> {
-  const days = LOOKBACK[range];
+  const { start, end: endDate } = historicalWindow(range);
+  const days = Math.ceil((endDate.getTime() - start.getTime()) / 86400000);
   const product = `${base}-USD`;
-  const end = Math.floor(Date.now() / 86400000) * 86400000;
+  const end = endDate.getTime();
   const candles: Candle[] = [];
   // Coinbase Exchange returns a maximum of 300 candles per request.
   for (let back = 0; back < days; back += 200) {
