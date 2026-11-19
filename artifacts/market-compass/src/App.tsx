@@ -5,7 +5,8 @@ import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useCalculateDebtPlan, useInterpretLocalCommand } from '@workspace/api-client-react';
-import { fetchPublicCandles, type PublicVenue } from '@/lib/publicMarkets';
+import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
+import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
 import type { AssistantCommand, BacktestResult, Candle, DebtPlan, MarketAnalysis, MarketSeries } from '@workspace/api-client-react';
 import {
@@ -23,8 +24,8 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; marketCache: MarketSeries | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
-const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: 'USD', marketCache: null, analysisCache: null, queue: [] };
+type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: 'USD', marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -343,7 +344,7 @@ function Overview({ data }: { data: WorkspaceData }) {
     </div>
     <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
       <Panel title="Market feed" action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Open markets <ArrowRight className="ml-1 inline" size={13} /></Link>}>
-        {feed ? <div className="p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="mono text-[20px] font-medium">{feed.symbol}</div><div className="mt-1 text-[11px] text-muted-foreground">Source: {feed.source || 'Not specified'} · {feed.currency}</div></div><StatusTag tone="warn">Saved local copy</StatusTag></div><div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-[11px] text-muted-foreground"><span>{feed.candles.length} candle records · not live</span><span>Provider timestamp {formatTime(feed.asOf)}</span></div>{feed.notice && <p className="mt-3 rounded-lg bg-muted/70 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{feed.notice}</p>}</div> : <EmptyState icon={Database} title="No market feed selected" description="Choose a ticker on the markets page to request provider data. No prices are filled in until then." action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Choose a ticker <ArrowRight className="ml-1 inline" size={13} /></Link>} />}
+        {feed ? <div className="p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="mono text-[20px] font-medium">{feed.symbol}</div><div className="mt-1 text-[11px] text-muted-foreground">Source: {feed.source || 'Not specified'} · {feed.currency}</div></div><StatusTag tone="warn">Saved local copy</StatusTag></div><div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-[11px] text-muted-foreground"><span>{feed.candles.length} candle records · not live</span><span>Latest completed day {utcCandleDate(feed.asOf)} UTC</span></div>{feed.notice && <p className="mt-3 rounded-lg bg-muted/70 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{feed.notice}</p>}</div> : <EmptyState icon={Database} title="No market feed selected" description="Choose a ticker on the markets page to request provider data. No prices are filled in until then." action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Choose a ticker <ArrowRight className="ml-1 inline" size={13} /></Link>} />}
       </Panel>
       <Panel title="Local items needing a look">
         <div className="divide-y divide-border">
@@ -358,34 +359,15 @@ function Overview({ data }: { data: WorkspaceData }) {
   </>;
 }
 
-function CandleChart({ candles }: { candles: Candle[] }) {
-  const visible = candles.slice(-72);
-  if (!visible.length) return null;
-  const all = visible.flatMap((c) => [c.high, c.low]);
-  const min = Math.min(...all), max = Math.max(...all), span = max - min || 1;
-  const width = 900, height = 245, step = width / visible.length, bodyWidth = Math.max(2, Math.min(8, step * .56));
-  return <div className="overflow-hidden px-3 pb-2 pt-5">
-    <div className="mb-3 flex justify-between text-[9px] text-muted-foreground"><span>{money(max)}</span><span>{money(min)}</span></div>
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-[230px] w-full" role="img" aria-label="Candlestick chart of provider data">
-      {[0, .25, .5, .75, 1].map((p) => <line key={p} x1="0" x2={width} y1={height * p} y2={height * p} stroke="hsl(var(--border))" strokeDasharray="3 6" />)}
-      {visible.map((candle, i) => {
-        const x = i * step + step / 2, yHigh = height - ((candle.high - min) / span) * height, yLow = height - ((candle.low - min) / span) * height;
-        const yOpen = height - ((candle.open - min) / span) * height, yClose = height - ((candle.close - min) / span) * height;
-        const up = candle.close >= candle.open, color = up ? 'hsl(158 31% 40%)' : 'hsl(5 52% 53%)';
-        return <g key={`${candle.date}-${i}`}><line x1={x} x2={x} y1={yHigh} y2={yLow} stroke={color} strokeWidth="1.2" /><rect x={x - bodyWidth / 2} y={Math.min(yOpen, yClose)} width={bodyWidth} height={Math.max(Math.abs(yClose - yOpen), 1.5)} fill={color} rx=".6" /></g>;
-      })}
-    </svg>
-    <div className="mt-2 flex justify-between text-[9px] text-muted-foreground"><span>{visible[0]?.date}</span><span>{visible[visible.length - 1]?.date}</span></div>
-  </div>;
-}
 
 function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
   return <div className="border-t border-border py-4"><div className="text-[10px] uppercase tracking-[.13em] text-muted-foreground">{label}</div><div className="mono mt-2 text-[18px]">{value}</div>{note && <div className="mt-1 text-[10px] text-muted-foreground">{note}</div>}</div>;
 }
 
 function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
-  const [symbol, setSymbol] = useState('');
-  const [range, setRange] = useState<'1m' | '3m' | '6m' | '1y'>('6m');
+  const [symbol, setSymbol] = useState(data.marketCache && /Kraken|Coinbase/i.test(data.marketCache.source) ? data.marketCache.symbol.replace(/USD$/, '') : '');
+  const [range, setRange] = useState<CandleRange>(data.marketRange ?? '6m');
+  const [loadedRange, setLoadedRange] = useState<CandleRange | null>(data.marketRange);
   const [series, setSeries] = useState<MarketSeries | null>(null);
   const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
   const [localCached, setLocalCached] = useState(Boolean(data.marketCache));
@@ -398,24 +380,40 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   const [fetching, setFetching] = useState(false);
   const [candlesError, setCandlesError] = useState(false);
   const [backtesting, setBacktesting] = useState(false);
+  const requestSerial = useRef(0);
   const activeSeries = series ?? (localCached ? data.marketCache : null);
   const activeAnalysis = analysis ?? (localCached && data.analysisCache?.symbol === activeSeries?.symbol ? data.analysisCache : null);
-  async function requestMarket(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalized = symbol.trim().toUpperCase();
-    if (!normalized || fetching) return;
+  async function loadMarket(normalized: string, requestedRange: CandleRange, requestedVenue: PublicVenue) {
+    if (!normalized) return;
+    const token = ++requestSerial.current;
     setFetching(true); setCandlesError(false);
     setSeries(null); setAnalysis(null); setLocalCached(false); setNotice(''); setBacktest(null);
     try {
-      const result = await fetchPublicCandles(normalized, range, venue);
+      const result = await fetchPublicCandles(normalized, requestedRange, requestedVenue);
+      if (token !== requestSerial.current) return; // Discard stale overlapping lookback requests.
       const evaluated = localTechnicalReading(result.symbol, result.candles);
-      setSeries(result); setAnalysis(evaluated);
-      setData((old) => ({ ...old, marketCache: result, analysisCache: evaluated }));
+      setSeries(result); setAnalysis(evaluated); setLoadedRange(requestedRange);
+      setData((old) => ({ ...old, marketCache: result, marketRange: requestedRange, analysisCache: evaluated }));
     } catch (error) {
+      if (token !== requestSerial.current) return;
       setCandlesError(true);
       setNotice(error instanceof Error ? error.message : 'The market provider could not be reached.');
-      if (data.marketCache && data.marketCache.symbol === normalized) setLocalCached(true);
-    } finally { setFetching(false); }
+      if (data.marketCache && data.marketCache.symbol.replace(/USD$/, '') === normalized.replace(/USD$/, '')) {
+        setLocalCached(true); setLoadedRange(data.marketRange ?? null);
+      }
+    } finally { if (token === requestSerial.current) setFetching(false); }
+  }
+  function requestMarket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void loadMarket(symbol.trim().toUpperCase(), range, venue);
+  }
+  function selectRange(next: CandleRange) {
+    setRange(next);
+    if (symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), next, venue);
+  }
+  function selectVenue(next: PublicVenue) {
+    setVenue(next);
+    if (symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), range, next);
   }
   const price = activeAnalysis?.lastPrice ?? activeSeries?.candles.at(-1)?.close;
   const addDraft = () => {
@@ -429,7 +427,8 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    setNotice(''); setAnalysis(null); setBacktest(null); setLocalCached(false);
+    ++requestSerial.current; setFetching(false);
+    setNotice(''); setAnalysis(null); setBacktest(null); setLocalCached(false); setCandlesError(false);
     try {
       const parsed = parseCandleCsv(await file.text());
       const imported: MarketSeries = {
@@ -441,8 +440,8 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
         candles: parsed.candles,
         notice: `Imported ${parsed.candles.length} historical candles from ${file.name}. Currency inferred from filename only (ZAR for JSE, otherwise USD); verify your file's currency and JSE price units (often cents). No exchange feed has been verified for imported data.${parsed.skipped ? ` ${parsed.skipped} row${parsed.skipped === 1 ? '' : 's'} skipped.` : ''}`,
       };
-      setSeries(imported);
-      setData((old) => ({ ...old, marketCache: imported }));
+      setSeries(imported); setLoadedRange(null);
+      setData((old) => ({ ...old, marketCache: imported, marketRange: null }));
       const evaluated = localTechnicalReading(imported.symbol, imported.candles);
       setAnalysis(evaluated);
       setData((old) => ({ ...old, analysisCache: evaluated }));
@@ -470,11 +469,11 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
         <label className="flex-1"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Crypto spot pair</span><input data-testid="input-market-symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTC, ETH, SOL or BTCUSD" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
-        <label className="sm:w-36"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Data source</span><select value={venue} onChange={(e) => setVenue(e.target.value as PublicVenue)} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[12px]"><option value="auto">Auto</option><option value="kraken">Kraken</option><option value="coinbase">Coinbase</option></select></label>
-        <label className="sm:w-40"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Lookback</span><span className="relative block"><select data-testid="select-market-range" value={range} onChange={(e) => setRange(e.target.value as typeof range)} className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-8 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="1m">1 month</option><option value="3m">3 months</option><option value="6m">6 months</option><option value="1y">1 year</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-3.5 text-muted-foreground" /></span></label>
+        <label className="sm:w-36"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Data source</span><select value={venue} onChange={(e) => selectVenue(e.target.value as PublicVenue)} className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[12px]"><option value="auto">Auto</option><option value="kraken">Kraken</option><option value="coinbase">Coinbase</option></select></label>
+        <label className="sm:w-40"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Lookback</span><span className="relative block"><select data-testid="select-market-range" value={range} onChange={(e) => selectRange(e.target.value as CandleRange)} className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-8 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="1m">1 month</option><option value="3m">3 months</option><option value="6m">6 months</option><option value="1y">1 year</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-3.5 text-muted-foreground" /></span></label>
         <ActionButton type="submit" disabled={!symbol.trim() || fetching}>{fetching ? <LoaderCircle className="animate-spin" size={15} /> : <Search size={15} />}{fetching ? 'Loading data' : 'Request data'}</ActionButton>
       </form>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · manually refreshed · not live quotes</span></div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically · not live quotes</span></div>
       <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Upload size={15} /></span>
         <p className="flex-1 text-[11px] leading-5 text-muted-foreground">For JSE shares, stocks, ETFs, licensed data feeds or offline use, import an authorized CSV with columns <span className="mono text-foreground">date,open,high,low,close[,volume]</span>. Check currency, units and licensing.</p>
@@ -490,14 +489,14 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     {!activeSeries && !fetching && !candlesError && <Panel><EmptyState icon={TrendingUp} title="Start with an actual data request" description="Enter a ticker to retrieve candle data. Market Compass does not use sample prices or simulated balances." /></Panel>}
     {activeSeries && !fetching && <>
       <div className={`mb-4 flex flex-col justify-between gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center ${localCached ? 'border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)]' : 'border-border bg-card'}`}>
-        <div className="flex items-center gap-3"><span className={`grid h-8 w-8 place-items-center rounded-full ${localCached ? 'bg-[hsl(38,45%,80%)]' : 'bg-muted'}`}>{localCached ? <Clock3 size={15} /> : <Database size={15} />}</span><div><div className="text-[11px] font-semibold">{localCached ? 'Showing saved copy · may be out of date' : activeSeries.delayed ? 'Provider marks this feed as delayed' : 'Provider data received'}</div><div className="mt-1 text-[10px] text-muted-foreground">Source: {activeSeries.source} · As of {formatTime(activeSeries.asOf)}{localCached ? ' · saved in this browser' : ''}</div></div></div>
-        <span className="text-[10px] text-muted-foreground">{activeSeries.candles.length} candles · {activeSeries.currency}</span>
+        <div className="flex items-center gap-3"><span className={`grid h-8 w-8 place-items-center rounded-full ${localCached ? 'bg-[hsl(38,45%,80%)]' : 'bg-muted'}`}>{localCached ? <Clock3 size={15} /> : <Database size={15} />}</span><div><div className="text-[11px] font-semibold">{localCached ? 'Showing saved copy · may be out of date' : 'Completed historical daily candles · not a live quote'}</div><div className="mt-1 text-[10px] text-muted-foreground">Source: {activeSeries.source} · Latest completed day: {utcCandleDate(activeSeries.asOf)} (UTC){localCached ? ' · saved in this browser' : ''}</div></div></div>
+        <div className="text-[10px] text-muted-foreground sm:text-right"><div>{loadedRange ? ({ '1m': '1 month', '3m': '3 months', '6m': '6 months', '1y': '1 year' } as const)[loadedRange] : 'Imported / saved window'} · {activeSeries.candles.length} candles · {activeSeries.currency}</div><div className="mt-1">Actual dates: {utcCandleDate(activeSeries.candles[0]?.date)} – {utcCandleDate(activeSeries.candles.at(-1)?.date)} (UTC)</div></div>
       </div>
       {activeSeries.notice && <div className="mb-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-[11px] leading-5 text-muted-foreground">{activeSeries.notice}</div>}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(270px,.8fr)]">
-        <Panel title={`${activeSeries.symbol} · Candles`} action={<span className="mono text-[10px] text-muted-foreground">{range}</span>}>
-          {activeSeries.candles.length ? <CandleChart candles={activeSeries.candles} /> : <EmptyState icon={Activity} title="No candles returned" description="The provider returned no candle records for this request." />}
-          <div className="flex flex-wrap justify-between gap-2 border-t border-border px-5 py-3 text-[10px] text-muted-foreground"><span>OHLC candles · last {Math.min(activeSeries.candles.length, 72)} records charted</span><span>Prices in {activeSeries.currency}</span></div>
+        <Panel title={`${activeSeries.symbol} · Candles`} action={<span className="mono text-[10px] text-muted-foreground">{loadedRange ?? 'CSV'} · {activeSeries.candles.length} days</span>}>
+          {activeSeries.candles.length ? <HistoricalCandleChart candles={activeSeries.candles} currency={activeSeries.currency} /> : <EmptyState icon={Activity} title="No candles returned" description="The provider returned no candle records for this request." />}
+          <div className="flex flex-wrap justify-between gap-2 border-t border-border px-5 py-3 text-[10px] text-muted-foreground"><span>OHLC candles · all {activeSeries.candles.length} loaded records charted · select a date above</span><span>Prices in {activeSeries.currency}</span></div>
         </Panel>
         <Panel title="Technical reading" action={activeAnalysis && <StatusTag tone={activeAnalysis.trend === 'up' ? 'good' : activeAnalysis.trend === 'down' ? 'bad' : 'warn'}>{activeAnalysis.trend} trend</StatusTag>}>
           {activeAnalysis ? <div className="px-5 pb-1">
@@ -507,7 +506,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
               <Metric label="SMA · 20" value={activeAnalysis.sma20 == null ? '—' : money(activeAnalysis.sma20, activeSeries.currency)} />
               <Metric label="SMA · 50" value={activeAnalysis.sma50 == null ? '—' : money(activeAnalysis.sma50, activeSeries.currency)} />
               <Metric label="ATR" value={activeAnalysis.atrPercent == null ? '—' : `${activeAnalysis.atrPercent.toFixed(2)}%`} note="Volatility estimate" />
-              <Metric label="Analysis as of" value={formatTime(activeAnalysis.asOf)} />
+              <Metric label="Last analyzed candle" value={utcCandleDate(activeAnalysis.asOf)} note="Completed UTC trading day" />
             </div>
             <div className="border-t border-border py-4"><div className="text-[10px] uppercase tracking-[.13em] text-muted-foreground">Fibonacci retracement levels</div>{activeAnalysis.fibonacci.length ? <div className="mt-3 space-y-2">{activeAnalysis.fibonacci.map((level) => <div key={`${level.ratio}-${level.label}`} className="flex items-center justify-between text-[11px]"><span className="text-muted-foreground">{level.label} <span className="mono ml-1 text-[9px]">{level.ratio}</span></span><span className="mono">{money(level.price, activeSeries.currency)}</span></div>)}</div> : <p className="mt-2 text-[11px] text-muted-foreground">No levels provided.</p>}</div>
           </div> : analysisError ? <div className="p-5"><div className="flex gap-2 text-[12px] font-semibold"><CircleAlert size={16} className="text-destructive" /> Analysis unavailable</div><p className="mt-2 text-[11px] leading-5 text-muted-foreground">Candle data is still available. Technical measures were not returned; retry the data request to recalculate.</p></div> : activeSeries.candles.length >= 5 ? <div className="p-5 text-[11px] leading-5 text-muted-foreground">Analysis will appear once the candle evaluation finishes.</div> : <EmptyState icon={Gauge} title="Not enough data to evaluate" description="At least five provider candles are needed for an analysis request." />}
@@ -526,8 +525,9 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
           <label className="sm:w-28"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Slow</span><input value={slowWindow} onChange={(event) => setSlowWindow(event.target.value)} type="number" min="3" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
           <label className="sm:w-28"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Fee (bps)</span><input value={feeBps} onChange={(event) => setFeeBps(event.target.value)} type="number" min="0" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
           <ActionButton onClick={runBacktest} disabled={backtesting}>{backtesting ? <LoaderCircle className="animate-spin" size={15} /> : <Activity size={15} />}{backtesting ? 'Replaying' : 'Run backtest'}</ActionButton>
-          <p className="flex-1 text-[10px] leading-5 text-muted-foreground sm:text-right">Replays the same {activeSeries.candles.length} candles against a buy-and-hold benchmark. Past results are not a forecast.</p>
+          <p className="flex-1 text-[10px] leading-5 text-muted-foreground sm:text-right">Loaded history: {utcCandleDate(activeSeries.candles[0]?.date)} – {utcCandleDate(activeSeries.candles.at(-1)?.date)} UTC ({activeSeries.candles.length} candles). Slow SMA uses {slowWindow} warm-up days; the tested dates begin afterward. Past results are not a forecast.</p>
         </div>
+        {backtest && <div className="border-b border-border bg-muted/40 px-5 py-3 text-[11px] leading-5"><strong>Backtest dates:</strong> {utcCandleDate(activeSeries.candles[backtest.slowWindow]?.date)} – {utcCandleDate(activeSeries.candles.at(-1)?.date)} (UTC). <span className="text-muted-foreground">Prior candles warm up the SMA; the buy-and-hold baseline starts {utcCandleDate(activeSeries.candles[backtest.slowWindow - 1]?.date)}.</span></div>}
         {backtest ? <div className="grid gap-0 md:grid-cols-2">
           <div className="grid grid-cols-2 gap-x-6 px-5 py-2 md:border-r md:border-border">
             <Metric label="Strategy return" value={`${(backtest.strategyReturn * 100).toFixed(1)}%`} note={`SMA ${backtest.fastWindow}/${backtest.slowWindow}`} />
