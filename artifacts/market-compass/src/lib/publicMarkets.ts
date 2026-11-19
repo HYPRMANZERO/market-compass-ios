@@ -7,7 +7,7 @@ const LOOKBACK: Record<CandleRange, number> = { '1m': 31, '3m': 93, '6m': 186, '
 const ASSETS = ['BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOGE', 'LTC', 'DOT', 'LINK', 'AVAX'];
 
 function normalize(input: string): { base: string; currency: string } {
-  const raw = input.trim().toUpperCase().replace(/[\s/\-_]/g, '');
+  const raw = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const cleaned = raw.startsWith('XBT') ? `BTC${raw.slice(3)}` : raw;
   const base = ASSETS.find(asset => cleaned === asset || cleaned === `${asset}USD` || cleaned === `${asset}USDT`);
   if (!base) throw new Error('Direct market import currently supports BTC, ETH, SOL, XRP, ADA, DOGE, LTC, DOT, LINK or AVAX against USD. For JSE shares and other assets, import an authorized CSV.');
