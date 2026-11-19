@@ -4,7 +4,10 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useCalculateDebtPlan, useInterpretLocalCommand } from '@workspace/api-client-react';
+import { useInterpretLocalCommand } from '@workspace/api-client-react';
+import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
+import { CURRENCIES, REGIONS, detectRegion, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
+import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
@@ -24,8 +27,9 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
-const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: 'USD', marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+const initialRegion = detectRegion();
+const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -550,22 +554,43 @@ function Field({ label, value, onChange, placeholder, type = 'text', step, min }
 }
 
 function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
-  const calculate = useCalculateDebtPlan();
   const [plan, setPlan] = useState<DebtPlan | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const accounts = data.accounts;
   const update = (id: string, key: keyof Omit<DebtAccount, 'id'>, value: string) => setData((old) => ({ ...old, accounts: old.accounts.map((account) => account.id === id ? { ...account, [key]: value } : account) }));
   const addAccount = () => setData((old) => ({ ...old, accounts: [...old.accounts, { id: crypto.randomUUID(), name: '', balance: '', apr: '', minimumPayment: '' }] }));
   const removeAccount = (id: string) => setData((old) => ({ ...old, accounts: old.accounts.filter((account) => account.id !== id) }));
+  const hasMoneyEntered = accounts.some(a => Number(a.balance) > 0 || Number(a.minimumPayment) > 0) || Number(data.monthlyExtra) > 0 || Number(data.emergencyReserve) > 0;
+  const changeCurrency = (next: string, nextRegion?: string) => {
+    if (next !== data.currency && hasMoneyEntered) {
+      const accept = window.confirm('Currency changes do NOT convert existing debt balances, repayments or reserves. You must review and manually enter all figures in the new currency before calculating. Continue?');
+      if (!accept) return;
+    }
+    setData(old => ({
+      ...old, region: nextRegion ?? old.region, currency: next,
+      currencyReviewRequired: (next !== old.currency && hasMoneyEntered) || old.currencyReviewRequired
+    }));
+    setPlan(null);
+  };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setErrorMessage('');
-    const valid = accounts.every((a) => a.name.trim() && Number.isFinite(num(a.balance)) && num(a.balance) >= 0 && Number.isFinite(num(a.apr)) && num(a.apr) >= 0 && num(a.apr) <= 200 && Number.isFinite(num(a.minimumPayment)) && num(a.minimumPayment) >= 0);
+    if (data.currencyReviewRequired) { setErrorMessage('Review the amounts for your newly selected currency and confirm below before calculating.'); return; }
+    if (!accounts.length) { setErrorMessage('Add at least one debt account first.'); return; }
+    const valid = accounts.every(a => a.name.trim() && Number.isFinite(num(a.balance)) && num(a.balance) >= 0 && Number.isFinite(num(a.apr)) && num(a.apr) >= 0 && num(a.apr) <= 200 && Number.isFinite(num(a.minimumPayment)) && num(a.minimumPayment) >= 0);
     if (!valid) { setErrorMessage('Complete each account name, balance, APR (0–200), and minimum payment with valid non-negative numbers.'); return; }
-    calculate.mutate({ data: { currency: data.currency, accounts: accounts.map(({ name, balance, apr, minimumPayment }) => ({ name: name.trim(), balance: Number(balance), apr: Number(apr), minimumPayment: Number(minimumPayment) })), monthlyExtra: num(data.monthlyExtra) || 0, emergencyReserve: num(data.emergencyReserve) || 0 } }, { onSuccess: setPlan, onError: () => setErrorMessage('The comparison could not be calculated. Your saved inputs remain in this browser; please retry.') });
+    try {
+      setPlan(calculateLocalDebtPlan({
+        currency: data.currency,
+        accounts: accounts.map(({ name, balance, apr, minimumPayment }) => ({
+          name: name.trim(), balance: Number(balance), apr: Number(apr), minimumPayment: Number(minimumPayment)
+        })),
+        monthlyExtra: num(data.monthlyExtra) || 0, emergencyReserve: num(data.emergencyReserve) || 0
+      }));
+    } catch (e) { setPlan(null); setErrorMessage(e instanceof Error ? e.message : 'Unable to calculate the plan.'); }
   };
   const total = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   return <>
-    <PageIntro eyebrow="Plan with your own numbers" title="Debt payoff" description="Compare two deterministic payoff approaches. Your inputs are saved locally; nothing is sent until you request a calculation." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck size={14} /> Saved in this browser</div>} />
+    <PageIntro eyebrow="Plan with your own numbers" title="Debt payoff" description="Build a local payoff plan and prepare secure provider payment handoffs without connecting your bank accounts. No payments are initiated from this page." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck size={14} /> Encrypted device workspace</div>} />
     <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
       <div className="space-y-4">
         <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50</span>}>
@@ -578,24 +603,45 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
           <div className="grid gap-4 p-5 sm:grid-cols-2">
             <Field label="Extra available each month" value={data.monthlyExtra} onChange={(v) => setData((old) => ({ ...old, monthlyExtra: v }))} type="number" min="0" step="0.01" placeholder="0.00" />
             <Field label="Emergency reserve to preserve" value={data.emergencyReserve} onChange={(v) => setData((old) => ({ ...old, emergencyReserve: v }))} type="number" min="0" step="0.01" placeholder="0.00" />
-            <label><span className="mb-1.5 block text-[10px] font-semibold text-muted-foreground">Currency</span><select value={data.currency} onChange={(e) => setData((old) => ({ ...old, currency: e.target.value }))} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="USD">USD · US dollar</option><option value="CAD">CAD · Canadian dollar</option><option value="EUR">EUR · Euro</option><option value="GBP">GBP · Pound sterling</option><option value="AUD">AUD · Australian dollar</option></select></label>
+            <label><span className="mb-1.5 block text-[10px] font-semibold text-muted-foreground">Country / region</span>
+              <select value={selectedRegion(data.region)} onChange={e => {
+                const chosen = selectedRegion(e.target.value);
+                changeCurrency(regionDefaultCurrency(chosen), chosen);
+              }} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30">
+                {['Africa', 'Europe', 'Americas', 'Asia & Pacific'].map(group => <optgroup key={group} label={group}>
+                  {REGIONS.filter(item => item.group === group).map(item => <option key={item.code} value={item.code}>{item.country} · {item.currency}</option>)}
+                </optgroup>)}
+              </select>
+            </label>
+            <label><span className="mb-1.5 block text-[10px] font-semibold text-muted-foreground">Planning currency</span>
+              <select value={data.currency} onChange={e => changeCurrency(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30">
+                {CURRENCIES.map(item => <option key={item.code} value={item.code}>{item.code} · {item.name}</option>)}
+              </select>
+            </label>
             <div className="rounded-lg bg-muted/60 px-3 py-2.5"><div className="text-[10px] text-muted-foreground">Current entered principal</div><div className="mono mt-1.5 text-[16px]">{money(total, data.currency)}</div></div>
           </div>
         </Panel>
+        <p className="rounded-lg border border-border bg-muted/45 px-4 py-3 text-[11px] leading-5 text-muted-foreground">Currency is selected using the region but can be changed independently. No automatic FX conversion is performed. Every account in a payoff comparison must be expressed in the same planning currency ({data.currency}).</p>
+        {data.currencyReviewRequired && <div role="alert" className="rounded-lg border border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)] px-4 py-3 text-[11px] leading-5">
+          <p className="font-semibold">Existing amounts have not been converted.</p>
+          <p>Check every debt balance, minimum payment, extra amount and reserve, then manually correct any figure that was in another currency.</p>
+          <button type="button" className="mt-2 rounded-md border border-border bg-background px-3 py-2 font-semibold" onClick={() => setData(old => ({ ...old, currencyReviewRequired: false }))}>I have reviewed all amounts in {data.currency}</button>
+        </div>}
         {errorMessage && <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3 text-[11px] leading-5 text-destructive" role="alert">{errorMessage}</div>}
-        <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-[420px] text-[10px] leading-5 text-muted-foreground">Calculation uses your inputs only. Estimates may not include fees, variable APR changes, or lender-specific rules.</p><ActionButton type="submit" disabled={calculate.isPending}>{calculate.isPending ? <LoaderCircle size={15} className="animate-spin" /> : <ArrowLeftRight size={15} />}{calculate.isPending ? 'Comparing' : 'Compare payoff paths'}</ActionButton></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><p className="max-w-[420px] text-[10px] leading-5 text-muted-foreground">Calculation uses your inputs only. Estimates may not include fees, variable APR changes, or lender-specific rules.</p><ActionButton type="submit" disabled={data.currencyReviewRequired}><ArrowLeftRight size={15} />Compare payoff paths locally</ActionButton></div>
       </div>
       <div className="space-y-4">
         <Panel title="Scenario comparison" action={plan && <StatusTag tone="good">Calculated</StatusTag>}>
           {plan ? <div className="p-5">
             <div className="mb-4 flex justify-between text-[10px] text-muted-foreground"><span>Total principal in plan</span><span className="mono text-foreground">{money(plan.totalPrincipal, plan.currency)}</span></div>
-            {plan.scenarios.map((scenario) => <div key={scenario.strategy} className="mb-3 rounded-lg border border-border p-4"><div className="flex items-center justify-between"><div className="serif text-[19px] capitalize">{scenario.strategy}</div><span className="mono text-[10px] text-muted-foreground">{scenario.months} months</span></div><div className="mt-4 grid grid-cols-2 gap-3"><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Total interest</div><div className="mono mt-1 text-[14px]">{money(scenario.totalInterest, plan.currency)}</div></div><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Total paid</div><div className="mono mt-1 text-[14px]">{money(scenario.totalPaid, plan.currency)}</div></div></div></div>)}
+            {plan.scenarios.map((scenario) => <div key={scenario.strategy} className="mb-3 rounded-lg border border-border p-4"><div className="flex items-center justify-between"><div className="serif text-[19px] capitalize">{scenario.strategy}</div><span className="mono text-[10px] text-muted-foreground">{scenario.amortized ? `${scenario.months} months` : 'Not fully repaid'}</span></div><div className="mt-4 grid grid-cols-2 gap-3"><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Total interest</div><div className="mono mt-1 text-[14px]">{money(scenario.totalInterest, plan.currency)}</div></div><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Total paid</div><div className="mono mt-1 text-[14px]">{money(scenario.totalPaid, plan.currency)}</div></div></div></div>)}
             {plan.notes.map((note, i) => <p key={`${i}-${note}`} className="mt-3 text-[10px] leading-5 text-muted-foreground">{note}</p>)}
           </div> : <EmptyState icon={ArrowLeftRight} title="Two paths, one informed choice" description="Enter at least one account and calculate to see the avalanche and snowball scenarios. No outcome is estimated here in advance." />}
         </Panel>
         <div className="rounded-xl border border-border bg-[hsl(42,44%,92%)] p-5"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 shrink-0 text-[hsl(34,52%,42%)]" size={17} /><div><div className="text-[11px] font-semibold">A calculation is not a promise</div><p className="mt-1.5 text-[10px] leading-5 text-muted-foreground">Actual payoff timing depends on your lender’s terms, payment timing, fees, and future rates. Keep an emergency reserve that fits your situation.</p></div></div></div>
       </div>
     </form>
+    <div className="mt-6"><DebtPaymentHandoff accounts={accounts} currency={data.currency} region={selectedRegion(data.region)} /></div>
   </>;
 }
 
