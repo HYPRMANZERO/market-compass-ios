@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrainCircuit, FileUp, ShieldCheck, WifiOff } from 'lucide-react';
+import { BrainCircuit, CircleAlert, FileUp, ShieldCheck, WifiOff } from 'lucide-react';
 import type { DebtPlan } from '@workspace/api-client-react';
 
 export type FinancialBaseline = {
