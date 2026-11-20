@@ -850,6 +850,17 @@ function OfflineOnlyBanner() {
 function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const [dailyOpen, setDailyOpen] = useState(false);
   const settings = vault.backupSettings;
+  const data = vault.data;
+  const financialAmountsPresent = data.accounts.length > 0 ||
+    data.monthlyExtra.trim() !== '' || data.emergencyReserve.trim() !== '' ||
+    Boolean(data.privateBudget && [data.privateBudget.monthlyIncome, data.privateBudget.monthlyEssentials, data.privateBudget.liquidFunds].some(v => v.trim() !== ''));
+  const chooseCurrency = (currency: string, region?: string) => {
+    if (currency !== data.currency && financialAmountsPresent && !window.confirm('Changing currency does NOT convert any debt or cash amounts. You must review and re-enter all amounts in the selected currency before calculating. Continue?')) return;
+    vault.setData(old=>({
+      ...old, currency, region: region ?? old.region,
+      currencyReviewRequired: old.currencyReviewRequired || (currency !== old.currency && financialAmountsPresent)
+    }));
+  };
   return <details id="mc-backup-controls" className="group mb-4 rounded-2xl border border-border bg-card shadow-sm lg:mb-7" aria-label="Encrypted vault and backup settings">
     <summary className="flex min-h-[55px] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(165,19%,91%)] text-primary"><ShieldCheck size={18}/></span>
@@ -861,6 +872,29 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     </summary>
     <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
       <p className="text-[12px] leading-5 text-muted-foreground">Your debt details and market history stay in this device's encrypted vault. Installing Market Compass on a second device does not automatically sync it. Back up your vault to move it safely.</p>
+      <div className="rounded-xl border border-border bg-muted/40 p-3">
+        <div className="flex items-center justify-between"><span className="text-[12px] font-bold">Local currency &amp; region</span><span className="rounded-full bg-background px-2.5 py-1 text-[11px] font-bold">{data.currency}</span></div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-[12px] font-semibold">Country / region
+            <select value={selectedRegion(data.region)} onChange={event=>{
+              const region=selectedRegion(event.target.value);
+              chooseCurrency(regionDefaultCurrency(region),region);
+            }} className="mt-1 block min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
+              {['Africa','Europe','Americas','Asia & Pacific'].map(group=><optgroup label={group} key={group}>
+                {REGIONS.filter(item=>item.group===group).map(item=><option key={item.code} value={item.code}>{item.country} ({item.currency})</option>)}
+              </optgroup>)}
+            </select>
+          </label>
+          <label className="text-[12px] font-semibold">Planning currency
+            <select value={data.currency} onChange={event=>chooseCurrency(event.target.value)}
+              className="mt-1 block min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
+              {CURRENCIES.map(item=><option key={item.code} value={item.code}>{item.code} · {item.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">New South African workspaces default to ZAR. Changing the label does not convert previously entered amounts. Historical market charts remain in their provider currency; an optional reference FX estimate appears under Markets.</p>
+        {data.currencyReviewRequired && <p className="mt-2 font-semibold text-[11px] text-destructive">Review previously entered amounts in Debt Plan before calculating.</p>}
+      </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
           <ShieldCheck size={16}/> Export encrypted backup
