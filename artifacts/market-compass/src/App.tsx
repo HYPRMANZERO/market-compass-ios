@@ -841,6 +841,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   return <MonthlyExpenses
     entries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
     settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+    desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
     currency={data.currency}
     debtAccounts={data.accounts}
     desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
