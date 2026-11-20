@@ -428,8 +428,16 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         throw Error('Desktop AI returned an invalid response.');
       if (messageSerial.current !== id) return;
       const reply = payload.reply.slice(0,1800);
-      add('ollama', reply); speak(reply);
-      setStatus('Answered by your desktop Ollama model. Independently verify financial claims.');
+      const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
+        ? payload.answerSource : 'private-desktop-model';
+      add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
+      setStatus(answerSource === 'private-desktop-model'
+        ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
+        : answerSource === 'private-assistant-shortcut'
+          ? 'Market Compass answered your greeting locally without accessing financial records.'
+          : answerSource === 'official-luno-api'
+            ? 'Read-only Luno source checked. Balances require verified, current API data.'
+            : 'Answered by a private, read-only assistant function.');
     } catch (error) {
       if (messageSerial.current !== id) return;
       setConnection('offline');
