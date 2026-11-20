@@ -9,6 +9,8 @@ import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSetti
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import MonthlyExpenses from '@/components/MonthlyExpenses';
+import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
 import { CURRENCIES, REGIONS, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
@@ -22,7 +24,7 @@ import type { AssistantCommand, BacktestResult, Candle, DebtPlan, MarketAnalysis
 import {
   Activity, ArrowDownRight, ArrowLeftRight, ArrowRight, ArrowUpRight, Check, ChevronDown,
   CircleAlert, CircleHelp, Clock3, Compass, Database, FileClock, Gauge, Landmark, ListChecks,
-  LoaderCircle, Menu, Plus, Search, ShieldCheck, Trash2, TrendingUp, Upload, WalletCards, X,
+  LoaderCircle, Menu, Plus, ReceiptText, Search, ShieldCheck, Trash2, TrendingUp, Upload, WalletCards, X,
 } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { encryptWorkspace, decryptWorkspace, readVault, writeVault, shareVaultToFiles, storeDailySnapshot, validateRecord, compressionSummary, type EncryptedRecord } from '@/lib/localVault';
@@ -34,11 +36,11 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { desktopAi: DesktopAiSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { desktopAi: DesktopAiSettings; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 // The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
 // All new installations start in ZAR; the user can change country and currency explicitly.
 const initialRegion = 'ZA';
-const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -244,6 +246,7 @@ const navItems = [
   { href: '/', label: 'Overview', icon: Compass },
   { href: '/markets', label: 'Markets', icon: Activity },
   { href: '/debt', label: 'Debt plan', icon: Landmark },
+  { href: '/expenses', label: 'Expenses', icon: ReceiptText },
   { href: '/drafts', label: 'Drafts', icon: FileClock },
   { href: '/assistant', label: 'Local assistant', icon: CircleHelp },
 ];
@@ -341,14 +344,14 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
       <div className="mx-auto min-w-0 max-w-[1440px] px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
     <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)]/98 px-1.5 pt-2 shadow-[0_-6px_20px_rgba(17,39,33,.06)] backdrop-blur-xl lg:hidden">
-      <div className="mx-auto grid max-w-[550px] grid-cols-5 gap-1">
+      <div className="mx-auto grid max-w-[550px] grid-cols-6 gap-0.5">
         {navItems.map(({ href, label, icon: Icon }) => {
           const selected = href === path;
-          const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label;
+          const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label === 'Expenses' ? 'Spend' : label;
           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
             className={`relative flex min-h-[57px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:scale-[.96] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
-            <Icon size={22} strokeWidth={selected ? 2.3 : 1.8}/>
+            <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
             <span className="text-[10px] font-semibold leading-none">{short}</span>
             {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
           </Link>;
@@ -834,6 +837,26 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
   </>;
 }
 
+function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
+  return <MonthlyExpenses
+    entries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
+    settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+    currency={data.currency}
+    debtAccounts={data.accounts}
+    onSave={(entry,syncDebtBalance)=>setData(old=>({
+      ...old,
+      expenseEntries:[
+        ...(old.expenseEntries??[]).filter(saved=>saved.id!==entry.id),entry
+      ],
+      accounts:syncDebtBalance && entry.debtAccountId && entry.remainingBalance!==null && entry.remainingBalance!==undefined
+        ? old.accounts.map(a=>a.id===entry.debtAccountId?{...a,balance:String(entry.remainingBalance)}:a)
+        : old.accounts,
+    }))}
+    onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
+    onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
+  />;
+}
+
 function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
   const [, navigate] = useLocation();
   const context: CompassCommandContext = {
@@ -843,6 +866,14 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
     privateBudget: data.privateBudget ?? emptyPrivateBudget,
     marketCache: data.marketCache,
     draftCount: data.drafts.filter(d => d.status === 'pending').length,
+    expenseSummary: (() => {
+      const current=salaryCycle(localDate());
+      const stats=cycleAnalysis(data.expenseEntries??[],current.start,data.currency,(data.expenseSettings??DEFAULT_EXPENSE_SETTINGS).cycleBudget);
+      return {cycleStart:current.start,cycleEnd:current.lastDay,income:stats.income,
+        expenses:stats.expenses,debtPayments:stats.debtPayments,transfers:stats.transfers,
+        recordedDifference:stats.recordedDifference,entryCount:stats.count,
+        cycleLimit:stats.budget,flags:stats.flags.slice(0,4)};
+    })(),
   };
   return <>
     <VoiceAssistant context={context} onNavigate={navigate} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
@@ -962,6 +993,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/"><Overview data={data} /></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
+    <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} /></Route>
     <Route component={NotFound} />
