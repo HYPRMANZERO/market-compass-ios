@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
+import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 
 type RecognitionResult = { 0: { transcript: string }; isFinal: boolean };
 type RecognitionEvent = { results: ArrayLike<RecognitionResult>; resultIndex: number };
@@ -20,14 +21,7 @@ type Message = { id: string; source: 'owner' | 'local' | 'ollama'; text: string;
 type Props = { context: CompassCommandContext; onNavigate: (path: string) => void };
 const ideas = ['What is my total debt?', 'Which debt has the highest APR?', 'How much extra can I afford?', 'What market data is saved?', 'Open Debt Plan'];
 
-function privateUrl(raw: string): string | null {
-  try {
-    const u = new URL(raw.trim());
-    if (u.protocol !== 'https:' || u.username || u.password || u.port || (u.pathname !== '/' && u.pathname !== '') || u.search || u.hash) return null;
-    if (!u.hostname.endsWith('.ts.net')) return null;
-    return u.origin;
-  } catch { return null; }
-}
+const privateUrl = privateTailnetOrigin;
 function speechAvailable() {
   if (typeof window === 'undefined') return false;
   const win = window as RecognitionWindow;
@@ -257,7 +251,7 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Connect private desktop Ollama <span className="ml-auto text-[11px] font-normal text-muted-foreground">{desktopReady ? 'Ollama model detected' : 'Optional'}</span></summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">For open-ended questions, connect to the Financial Advisor server running on your desktop through Tailscale Serve private HTTPS. The iPhone still answers supported commands offline without it. This does not create a Siri wake word or keep the microphone active in the background.</p>
       <label className="mt-4 block text-[12px] font-semibold">Your private Tailscale HTTPS URL
-        <input type="url" value={desktopUrl} onChange={e => {setDesktopUrl(e.target.value);setDesktopHealthy(false);setDesktopEnabled(false);}} placeholder="https://desktop.your-tailnet.ts.net/"
+        <input type="url" value={desktopUrl} onChange={e => {setDesktopUrl(e.target.value);setDesktopHealthy(false);setDesktopEnabled(false);}} onBlur={() => { const normalized = privateUrl(desktopUrl); if (normalized) setDesktopUrl(normalized + '/'); }} placeholder="desktop.your-tailnet.ts.net or https://..."
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
       <label className="mt-3 block text-[12px] font-semibold">Separate AI access token (48+ characters)
