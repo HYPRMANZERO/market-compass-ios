@@ -1,6 +1,6 @@
 # Market Compass voice assistant · iPhone 11, Windows desktop and laptop
 
-**Status:** Offline typed commands are included in the PWA. Push-to-talk and spoken replies depend on the device browser. An optional, separately running private Ollama server is required for open-ended AI conversations.
+**Status:** Offline commands are included in the installable PWA. A persistent encrypted-vault connection to self-hosted Ollama can reconnect automatically when the app is unlocked. Push-to-talk and spoken replies still depend on the device browser.
 
 The **AI** tab is no longer connected to the old, nonexistent GitHub Pages command API. It answers supported questions directly using the unlocked, locally encrypted workspace.
 
@@ -25,60 +25,67 @@ In the app tap the **shield** icon at top right → expand **Encrypted vault & s
 - When online, Market Compass can fetch a **dated approximate FX reference** from the public Frankfurter v2 API (no API key) and display a converted latest closing price alongside the original. This is not a live bank FX or trade quote. A previously fetched FX rate remains in the encrypted local vault for offline viewing.
 - Changing a debt currency never silently converts saved balances, reserves or monthly payments. You must re-enter amounts in the chosen currency and confirm the review banner.
 
-## 3. Desktop Ollama: optional connected conversations
+## 3. Set up a persistent desktop AI host (Windows)
 
-This section is needed only for open-ended conversations, not for the offline command engine.
+The desktop runs Ollama and the private Financial Advisor Node bridge. Tailscale Serve makes the bridge available **only** on the owner's tailnet, not the public internet.
 
-On your **Windows desktop**, install and log into [Tailscale](https://tailscale.com/), with the same tailnet on the iPhone and laptop. Run Tailscale Serve, NOT Funnel. Funnel would publish a private API to the internet.
+Your existing `tailscale serve --bg 8788` configuration is persistent as long as Tailscale remains running. You do not need to re-enter it each time.
 
-From PowerShell in your **private** `financial-advisor` checkout:
+### One-time desktop setup
+
+Use your normal Windows account (not an elevated Administrator window) for the Windows startup setup. In PowerShell:
 
 ```powershell
 cd C:\Users\liamd\financial-advisor
 git pull origin main
-ollama list
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\setup-market-compass-ai.ps1
 ```
 
-The private bridge defaults to `llama3.1`. If that model is not installed, download it once:
+The interactive setup:
+- Detects an installed Qwen 3.5 tag using `ollama list` (or pass `-Model "your-exact-tag"`).
+- Uses the `MC_AI_TOKEN` already present in the PowerShell session, or asks for the **same** separate 48+ character token previously entered into Market Compass.
+- Encrypts the token using **Windows DPAPI for the signed-in Windows account** in `%LOCALAPPDATA%\MarketCompass\PrivateAI\operator-token.dpapi`. The token is not committed to Git, and not placed in a startup command or config file as plaintext.
+- Saves non-secret model and executable settings to `%LOCALAPPDATA%\MarketCompass\PrivateAI\bridge-settings.json`.
+- Installs a Windows **Startup** shortcut to launch the private Node bridge automatically at **your Windows sign-in**.
+- Starts the bridge now if port `8788` has no listener and reports a local connectivity result.
+
+A startup log lives in `%LOCALAPPDATA%\MarketCompass\PrivateAI\bridge-startup.log` (no token values or financial input logging). If you move the project folder, rerun setup.
+
+Test the service from another PowerShell window:
 
 ```powershell
-ollama pull llama3.1
-```
-
-Create a **cryptographically random**, separate access token. Do not reuse the Market Compass vault password and do not paste the token into chat or GitHub:
-
-```powershell
-$bytes = New-Object byte[] 48
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-$env:MC_AI_TOKEN = [Convert]::ToBase64String($bytes)
-$env:MC_OLLAMA_MODEL = "llama3.1"
-node .\server\market-compass-ai.mjs
-```
-
-Keep this PowerShell process running. Copy the token privately to your phone, for example through your password manager. The bridge listens only on `127.0.0.1:8788` and sends model requests only to your local `127.0.0.1:11434`; it has no banking or trading tools.
-
-In a **second PowerShell window opened as Administrator** (Tailscale's Windows requirement), after installing Tailscale, run:
-
-```powershell
-tailscale serve --bg 8788
+Test-NetConnection 127.0.0.1 -Port 8788
 tailscale serve status
 ```
 
-Tailscale displays a private `https://<your-desktop>.<your-tailnet>.ts.net/` URL. Enable HTTPS when prompted by Tailscale. Confirm that both your iPhone and desktop are connected to the same tailnet. If the desktop goes to sleep or Ollama shuts down, remote chat will stop; offline typed commands continue functioning.
+The first should say `TcpTestSucceeded : True`, and Tailscale Serve should show a private `.ts.net` HTTPS address forwarded to `http://127.0.0.1:8788`.
 
-**Never** open firewall port 8788 or 11434 to the public internet, use `tailscale funnel`, or copy Ollama secrets to GitHub Pages.
+If you already have an old Financial Advisor bridge process listening on port 8788, stop it first before rerunning setup to apply changes. Don't expose ports 8788 or 11434 on your public router, and **never use Tailscale Funnel**.
 
-## 4. Connect in the AI tab
+**Availability limits:** The installed startup shortcut runs when your Windows user signs in. It does not provide a machine-wide service when nobody is logged in. Keep the desktop powered on, signed in, awake and connected to Tailscale. Windows sleeping, shutting down, signing out, or losing network connectivity will temporarily interrupt iPhone chat. Offline debt calculations remain available. For unattended access after reboot without login, a separately reviewed Windows service and Tailscale unattended configuration would be required.
 
-Open **AI → Connect private desktop Ollama**, then:
+### Revoke desktop autostart
 
-1. Enter the Tailscale **HTTPS hostname**, including the trailing slash (accepted hosts must end in `.ts.net`).
-2. Paste your private access token (48+ characters, not saved in the vault or persisted by the app).
-3. Leave **Share my entered financial summary** unchecked unless you explicitly want to send those user-entered details to your own desktop for that conversation.
-4. Tap **Test and connect desktop AI**. The connection test now authenticates your token and checks Ollama's installed-model list. It reports connected only after both pass. The model must still successfully generate a reply to complete end-to-end verification.
-5. Ask an open-ended question, such as **Explain the difference between snowball and avalanche debt repayment**. A reply labeled **Desktop Ollama** confirms the working full pipeline.
+Remove the `Market Compass Private AI.lnk` shortcut from your Windows Startup folder to disable automatic bridge startup. You may also delete the user-scoped `%LOCALAPPDATA%\MarketCompass\PrivateAI` directory **after stopping the bridge** to revoke saved local configuration. This does not remove tokens from encrypted Market Compass backups; rotate the token if a device or backup is lost.
 
-If the private connection is lost, a clear error is displayed and the local command engine remains available. CORS only accepts the deployed PWA's HTTPS origin and every chat request requires the separate operator token.
+## 4. Save the iPhone/laptop connection ONCE
+
+Open **Market Compass → AI → Desktop Ollama · saved connection**:
+
+1. Paste the private `https://<desktop>.<tailnet>.ts.net/` URL, or the bare tailnet hostname.
+2. Paste the matching 48+ character `MC_AI_TOKEN` for that desktop.
+3. Only enable **Share entered financial figures** if you want to transmit that summary to your **own** private desktop for open-ended answers. This is off by default.
+4. Tap **Save & reconnect automatically** once. The complete settings, including the AI access token, are stored in the **AES-GCM password-encrypted workspace** on this device. They are NOT put into localStorage, browser URLs or GitHub Pages source.
+5. The app tests `GET /api/session` with the authenticated token and checks that the configured Ollama model is installed. It displays **Desktop model available** only after both checks pass.
+6. Return to the AI tab after a later restart: once the vault is unlocked, the connection is restored automatically. It also retries on browser visibility changes, when the network comes back, and periodically while the app is open.
+
+Use **Check connection now** to retry without re-entering settings, **Pause connection** to retain the encrypted token without connecting, or **Forget credentials** to remove it from the current workspace. Your encrypted backup files may still include an earlier copy of the token.
+
+The conversation itself remains in page memory, not saved to the vault. Supported questions are always answered by the local deterministic engine; open-ended questions use private Ollama only when it is reachable.
+
+Each device has its **own encrypted vault**, so saving settings on the iPhone does not magically provision the laptop. To bring the same connection settings to a second device, restore an *encrypted vault backup* there, or save the connection once on that device. Never send an unencrypted vault or token via a public link.
+
+Browser/PWA limits remain: the iPhone cannot run Ollama in the background, stay awake when the app is closed, or skip the owner's vault unlock. Saving credentials does not grant the AI permission to make payments or trade.
 
 ## 5. Three devices and offline rules
 
