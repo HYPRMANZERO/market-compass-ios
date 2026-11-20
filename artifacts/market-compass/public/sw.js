@@ -31,7 +31,7 @@ self.addEventListener('fetch', event => {
     event.respondWith((async () => {
       try {
         const live = await fetch(req, { cache: 'no-store' });
-        if (live.ok && live.headers.get('Content-Type')?.includes('text/html')) {
+        if (live.ok && !live.redirected && live.url.startsWith(scope.origin + scope.pathname) && live.headers.get('Content-Type')?.includes('text/html')) {
           const cache = await caches.open(CACHE);
           await cache.put(SHELL_URL, live.clone());
         }
@@ -80,5 +80,27 @@ self.addEventListener('notificationclick', event => {
     const existing = clients.find(client => new URL(client.url).origin === new URL(target).origin);
     if (existing) { await existing.focus(); existing.navigate(target); return; }
     await self.clients.openWindow(target);
+  })());
+});
+
+// Notifications never contain banking data and only navigate inside the PWA.
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data?.json() || {}; } catch { /* Ignore invalid payload */ }
+  const title = 'Market Compass salary-day check-in';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: 'Open Market Compass to record salary and review upcoming expenses.',
+    tag: 'mc-salary-reminder', icon: new URL('icons/icon-192.png', self.registration.scope).href,
+    data: { url: new URL('expenses', self.registration.scope).href }
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL('expenses', self.registration.scope).href;
+  event.waitUntil((async () => {
+    const clientsList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = clientsList.find(client => client.url.startsWith(self.registration.scope));
+    if (existing) { await existing.navigate(target); return existing.focus(); }
+    return clients.openWindow(target);
   })());
 });
