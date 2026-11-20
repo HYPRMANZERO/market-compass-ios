@@ -152,7 +152,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       setConnection(previous => previous === 'connected' ? previous : 'checking');
       try {
         const response = await fetch(url + '/api/session', {
-          method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+          method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
           signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` },
         });
@@ -227,7 +227,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       const timer = window.setTimeout(() => controller.abort(), 15000);
       try {
         const response = await fetch(origin + path, {
-          mode: 'cors', credentials: 'omit', cache: 'no-store', signal: controller.signal,
+          mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` }
         });
         if (!response.ok) throw Error('The desktop source service returned HTTP ' + response.status);
@@ -291,7 +291,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + '/api/memory', {
-        method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory returned HTTP ' + response.status);
@@ -324,7 +324,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + (method === 'POST' ? '/api/memory/archive' : '/api/memory'), {
-        method, mode:'cors', credentials:'omit', cache:'no-store',
+        method, mode:'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache:'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory operation returned HTTP ' + response.status);
@@ -412,7 +412,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         expenseSummary: context.expenseSummary,
       } : undefined;
       const response = await fetch(url + '/api/chat', {
-        method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
