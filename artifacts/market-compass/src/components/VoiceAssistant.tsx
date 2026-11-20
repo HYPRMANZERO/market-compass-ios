@@ -209,18 +209,39 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       inFlight = true;
       setSourceLoading(true);
       try {
-        const [sources, balances] = await Promise.all([
+        // A slow/unavailable provider must never hide the independent
+        // document inventory. Always settle both requests and display
+        // the specific endpoint that failed.
+        const [inventoryResult, balanceResult] = await Promise.allSettled([
           request('/api/sources'), request('/api/balances')
         ]);
         if (!active) return;
-        if (sources.ok !== true || !sources.inventory || typeof sources.inventory !== 'object') throw Error('Financial source inventory unavailable.');
-        setSourceInventory(sources.inventory as SourceInventory);
-        if (balances.ok === true && balances.source && typeof balances.source === 'object') {
-          setLuno(balances.source as LunoStatus);
+        const errors: string[] = [];
+        if (inventoryResult.status === 'fulfilled') {
+          const sources = inventoryResult.value;
+          if (sources.ok === true && sources.inventory && typeof sources.inventory === 'object') {
+            setSourceInventory(sources.inventory as SourceInventory);
+          } else {
+            errors.push('Financial documents: invalid source inventory response.');
+          }
+        } else {
+          errors.push('Financial documents: ' + explainError(inventoryResult.reason));
         }
-        setSourceError('');
+        if (balanceResult.status === 'fulfilled') {
+          const balances = balanceResult.value;
+          if (balances.ok === true && balances.source && typeof balances.source === 'object') {
+            setLuno(balances.source as LunoStatus);
+          } else {
+            errors.push('Luno: invalid wallet status response.');
+          }
+        } else {
+          errors.push('Luno: ' + explainError(balanceResult.reason));
+        }
+        setSourceError(errors.length
+          ? 'Private source refresh was incomplete. ' + errors.join(' ') + ' Offline planning still works.'
+          : '');
       } catch (error) {
-        if (active) setSourceError('Unable to refresh private sources: ' + explainError(error) + '. The offline planner remains available.');
+        if (active) setSourceError('Private source refresh failed unexpectedly: ' + explainError(error));
       } finally { inFlight = false; if (active) setSourceLoading(false); }
     };
     void refresh();
