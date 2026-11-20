@@ -30,12 +30,19 @@ export default function SalaryPush({settings}:Props){
     if(!available || !privateOrigin)return;
     setBusy(true);setMessage('');
     try{
-      const reg=await navigator.serviceWorker.ready;
-      const existing=await reg.pushManager.getSubscription();
+      // Request iOS permission directly from the button gesture; do not wait
+      // for service-worker readiness before triggering the system prompt.
       if(enable){
+        if(/iPhone|iPad|iPod/i.test(navigator.userAgent) &&
+           !window.matchMedia('(display-mode: standalone)').matches)
+          throw Error('Open the private Market Compass app from its Home Screen icon first.');
         if(Notification.permission==='denied')throw Error('Notifications are blocked in iPhone Settings.');
         const permission=await Notification.requestPermission();
         if(permission!=='granted')throw Error('Notification permission was not granted.');
+      }
+      const reg=await navigator.serviceWorker.ready;
+      const existing=await reg.pushManager.getSubscription();
+      if(enable){
         const response=await fetch('/api/push/key',{headers:{Authorization:'Bearer '+settings.token},cache:'no-store'});
         if(!response.ok)throw Error('Private notification service is not configured.');
         const data=await response.json() as {publicKey:string};
