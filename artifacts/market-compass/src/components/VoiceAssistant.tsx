@@ -70,7 +70,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState('');
   const [formError, setFormError] = useState('');
-  const [host, setHost] = useState(settings.url);
+  const [host, setHost] = useState(settings.url || (typeof window !== 'undefined' ? privateTailnetOrigin(window.location.origin) || '' : ''));
   const [secret, setSecret] = useState(settings.token);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
@@ -98,7 +98,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   // The encrypted vault is the ONLY persistence layer. Never use localStorage,
   // URL params, cookies or browser autofill for the bearer token.
   useEffect(() => {
-    setHost(settings.url);
+    setHost(settings.url || (privateTailnetOrigin(window.location.origin) || ''));
     setSecret(settings.token);
     setShareFinancialContext(settings.shareFinancialContext);
   }, [settings.url, settings.token, settings.shareFinancialContext]);
@@ -152,7 +152,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       setConnection(previous => previous === 'connected' ? previous : 'checking');
       try {
         const response = await fetch(url + '/api/session', {
-          method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+          method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
           signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` },
         });
@@ -227,7 +227,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       const timer = window.setTimeout(() => controller.abort(), 15000);
       try {
         const response = await fetch(origin + path, {
-          mode: 'cors', credentials: 'omit', cache: 'no-store', signal: controller.signal,
+          mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` }
         });
         if (!response.ok) throw Error('The desktop source service returned HTTP ' + response.status);
@@ -291,7 +291,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + '/api/memory', {
-        method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory returned HTTP ' + response.status);
@@ -324,7 +324,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + (method === 'POST' ? '/api/memory/archive' : '/api/memory'), {
-        method, mode:'cors', credentials:'omit', cache:'no-store',
+        method, mode:'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache:'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory operation returned HTTP ' + response.status);
@@ -412,7 +412,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         expenseSummary: context.expenseSummary,
       } : undefined;
       const response = await fetch(url + '/api/chat', {
-        method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
@@ -660,10 +660,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         </div>
         {connectionMessage && <p className="mt-1 text-muted-foreground">{connectionMessage}</p>}
       </div>
-      <label className="mt-4 block text-[12px] font-semibold">Your private Tailscale HTTPS URL
+      <label className="mt-4 block text-[12px] font-semibold">Private AI HTTPS URL (Tailscale or this protected website)
         <input type="url" value={host} onChange={e=>setHost(e.target.value)}
           onBlur={() => {const url=privateTailnetOrigin(host); if(url)setHost(url+'/');}}
-          placeholder="https://desktop.your-tailnet.ts.net/"
+          placeholder="https://your-private-host.example.com/"
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
       <label className="mt-3 block text-[12px] font-semibold">Desktop AI token · encrypted in vault

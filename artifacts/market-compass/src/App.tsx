@@ -841,6 +841,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   return <MonthlyExpenses
     entries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
     settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+    desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
     currency={data.currency}
     debtAccounts={data.accounts}
     onSave={(entry,syncDebtBalance)=>setData(old=>({
@@ -872,7 +873,12 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
       return {cycleStart:current.start,cycleEnd:current.lastDay,income:stats.income,
         expenses:stats.expenses,debtPayments:stats.debtPayments,transfers:stats.transfers,
         recordedDifference:stats.recordedDifference,entryCount:stats.count,
-        cycleLimit:stats.budget,flags:stats.flags.slice(0,4)};
+        cycleLimit:stats.budget,flags:stats.flags.slice(0,4),
+        categories:stats.byCategory.slice(0,6).map(v=>({category:v.label,amount:v.amount})),
+        paymentMethods:stats.byPaymentMethod.slice(0,5).map(v=>({
+          app:v.app.replace(/\d{6,}/g,'[masked]').slice(0,60),
+          amount:v.amount,count:v.count
+        }))};
     })(),
   };
   return <>

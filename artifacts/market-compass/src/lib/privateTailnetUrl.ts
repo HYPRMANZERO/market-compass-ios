@@ -1,9 +1,4 @@
-/**
- * Strictly allow only private HTTPS Tailscale Serve hostnames.
- * Accept a bare "computer.tailnet.ts.net" hostname for mobile-friendly input,
- * but never silently upgrade an explicitly typed insecure URL.
- * Do not accept paths, credentials, query strings, ports or public tunnels.
- */
+/** Only private Tailnet HTTPS URLs or the current owner's same-origin Access app. */
 export function privateTailnetOrigin(raw: string): string | null {
   try {
     const entered = raw.trim();
@@ -11,11 +6,20 @@ export function privateTailnetOrigin(raw: string): string | null {
     const bareHostname = /^(?:[a-z0-9-]+\.)+[a-z0-9-]+\/?$/i.test(entered);
     const url = new URL(bareHostname ? `https://${entered}` : entered);
     if (url.protocol !== 'https:' || url.username || url.password || url.port ||
-        url.pathname !== '/' || url.search || url.hash ||
-        !url.hostname.endsWith('.ts.net')) return null;
-    // Do not accept a naked ts.net domain, an IP address or a malformed hostname.
-    const prefix = url.hostname.slice(0, -'.ts.net'.length);
-    if (!prefix || prefix.split('.').some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) return null;
+        url.pathname !== '/' || url.search || url.hash) return null;
+    if (url.hostname.endsWith('.ts.net')) {
+      const prefix = url.hostname.slice(0, -'.ts.net'.length);
+      if (!prefix || prefix.split('.').some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) return null;
+      return url.origin;
+    }
+    // Only the current exact HTTPS origin is eligible; arbitrary tunnel URLs
+    // cannot be saved into the public GitHub Pages edition.
+    if (typeof window === 'undefined' || window.location.protocol !== 'https:' ||
+        window.location.hostname.endsWith('.github.io') ||
+        window.location.hostname.endsWith('.ts.net') ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        url.origin !== window.location.origin) return null;
     return url.origin;
   } catch { return null; }
 }

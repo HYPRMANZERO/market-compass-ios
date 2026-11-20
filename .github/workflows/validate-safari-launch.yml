@@ -1,0 +1,36 @@
+name: Validate Safari launch branch
+on:
+  push:
+    branches: [feature/ios-safari-launch-2026-11-26]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - run: pnpm install --frozen-lockfile
+      - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs
+      - run: pnpm run typecheck:libs
+      - run: pnpm --filter @workspace/market-compass run typecheck
+      - name: Build static iPhone PWA
+        env:
+          PORT: '5173'
+          BASE_PATH: '/market-compass-ios/'
+          NODE_ENV: production
+        run: pnpm --filter @workspace/market-compass run build
+      - run: node scripts/prepare-offline-shell.mjs
+      - name: Verify compiled shell
+        run: |
+          test -f artifacts/market-compass/dist/public/index.html
+          test -f artifacts/market-compass/dist/public/sw.js
+          grep -q 'notificationclick' artifacts/market-compass/dist/public/sw.js

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry,cycleSpendingTrends} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
 const make=(date,kind,amount,category='other',extras={})=>({
   id:date+kind+amount,recordedAt:'2026-11-20T12:00:00Z',date,kind,amount,
   category,description:'Sample payment',paidVia:'Local bank app',currency:'ZAR',...extras,
@@ -47,4 +47,24 @@ test('payment entries validate debt balance without inventing repayment effect',
   assert.throws(()=>validateExpenseEntry(make('2026-11-20','expense',100,'groceries',{paidVia:''})),/payment app/);
   assert.equal(parseMoneyAmount('0',{zeroAllowed:true}),0);
   assert.throws(()=>parseMoneyAmount('1.999'),/two decimal/);
+});
+
+test('completed-cycle insights avoid over-interpreting partial salary cycles',()=>{
+  const entries=[
+    make('2026-08-28','income',9000,'salary'),
+    make('2026-09-10','expense',200,'subscriptions',{paidVia:'Card app'}),
+    make('2026-09-15','expense',600,'groceries',{paidVia:'Bank app'}),
+    make('2026-09-28','income',9000,'salary'),
+    make('2026-10-10','expense',400,'subscriptions',{paidVia:'Card app'}),
+    make('2026-10-12','expense',700,'groceries',{paidVia:'Bank app'}),
+    make('2026-10-28','income',9000,'salary'),
+    make('2026-11-20','expense',150,'subscriptions',{paidVia:'Card app'}),
+  ];
+  const previous=cycleAnalysis(entries,'2026-09-26','ZAR');
+  assert.equal(previous.byPaymentMethod.find(x=>x.app==='Card app').amount,400);
+  assert.equal(previous.byPaymentMethod.find(x=>x.app==='Bank app').amount,700);
+  const insights=cycleSpendingTrends(entries,'2026-10-26','2026-11-20','ZAR');
+  assert.equal(insights.available,true);
+  assert.equal(insights.first,'2026-09-26'); // not the incomplete Oct 26 cycle
+  assert.ok(insights.highlights.some(x=>/Subscriptions/.test(x)));
 });

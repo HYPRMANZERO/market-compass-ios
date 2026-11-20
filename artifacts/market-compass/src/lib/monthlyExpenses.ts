@@ -104,6 +104,15 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
     category:c.value,label:c.label,
     amount:within.filter(e=>e.category===c.value && (e.kind==='expense'||e.kind==='debt-payment')).reduce((a,e)=>a+e.amount,0),
   })).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
+  // Payment-app totals only represent manually recorded outflows, not bank feeds.
+  const byPaymentMethod=Object.values(within.filter(e=>e.kind==='expense'||e.kind==='debt-payment')
+    .reduce<Record<string,{app:string;amount:number;count:number}>>((acc,e)=>{
+      const key=e.paidVia.trim().toLowerCase();
+      if(!acc[key])acc[key]={app:e.paidVia.trim(),amount:0,count:0};
+      acc[key].amount+=e.amount;
+      acc[key].count++;
+      return acc;
+    },{})).sort((a,b)=>b.amount-a.amount).slice(0,8);
   const flags:string[]=[];
   if(budget!==null && outflow>budget)flags.push('Recorded spending and repayments exceed your chosen cycle limit. Pause nonessential purchases and review recurring bills.');
   else if(percent!==null && percent>=80)flags.push('You have used at least 80% of the cycle spending limit. Keep cash available for bills not yet recorded.');
@@ -118,5 +127,37 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
     .filter((e,i,arr)=>arr.findIndex(x=>(x.accountLabel||x.category)===(e.accountLabel||e.category))===i)
     .map(e=>({account:e.accountLabel||e.category,balance:e.remainingBalance!,date:e.date}));
   return {cycle:salaryCycle(cycleStart),count:within.length,income,expenses,debtPayments,transfers,outflow,
-    recordedDifference:income-outflow,budget,percent,byCategory,flags,latestBalances};
+    recordedDifference:income-outflow,budget,percent,byCategory,byPaymentMethod,flags,latestBalances};
+}
+
+/** Compare only two FINISHED salary cycles; do not overstate an incomplete month. */
+export function cycleSpendingTrends(entries:ExpenseEntry[], selectedCycleStart:string, today:string, currency:string){
+  dateParts(today);
+  const selected=salaryCycle(selectedCycleStart);
+  const lastCompleted=selected.endExclusive<=today?selected.start:shiftSalaryCycle(selected.start,-1).start;
+  const preceding=shiftSalaryCycle(lastCompleted,-1).start;
+  const recent=cycleAnalysis(entries,lastCompleted,currency);
+  const older=cycleAnalysis(entries,preceding,currency);
+  if(!recent.count || !older.count)return {available:false,first:lastCompleted,previous:preceding,
+    message:'Enter transactions across at least two completed salary cycles to compare spending reliably.',highlights:[] as string[]};
+  const money=(n:number)=>'R '+n.toFixed(2);
+  const highlights:string[]=[];
+  const change=recent.outflow-older.outflow;
+  const percent=older.outflow>0?Math.round(change/older.outflow*100):null;
+  highlights.push('Recorded outflows changed from '+money(older.outflow)+' to '+money(recent.outflow)+
+    ' ('+(change>=0?'+':'')+money(change)+', '+(percent===null?'no comparable percentage':String(percent)+'%')+
+    '). Historical records may be incomplete.');
+  const oldCategory=new Map(older.byCategory.map(x=>[x.category,x.amount]));
+  for(const x of recent.byCategory){
+    const baseline=oldCategory.get(x.category)||0;
+    if(baseline>0&&x.amount-baseline>=100 && x.amount>=baseline*1.25){
+      highlights.push(x.label+' rose from '+money(baseline)+' to '+money(x.amount)+
+        '. Review invoices and recurring charges before deciding whether this is avoidable.');
+    }
+  }
+  if(recent.debtPayments<older.debtPayments && older.debtPayments>0){
+    highlights.push('Recorded debt repayments were lower than the preceding cycle. Check lender minimums and due dates before making additional purchases.');
+  }
+  return {available:true,first:lastCompleted,previous:preceding,highlights:highlights.slice(0,4),
+    message:'Compares manually entered complete salary cycles only; not live banking data.'};
 }

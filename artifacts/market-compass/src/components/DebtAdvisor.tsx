@@ -124,7 +124,7 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
     const timer = setTimeout(() => controller.abort(), 125000);
     try {
       const response = await fetch(serverUrl(endpoint)! + '/api/advice', {
-        method: 'POST', cache: 'no-store', credentials: 'omit', signal: controller.signal,
+        method: 'POST', cache: 'no-store', credentials: serverUrl(endpoint) === window.location.origin ? 'same-origin' : 'omit', signal: controller.signal,
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           intent: 'debt_advice', currency: 'ZAR', confirmedCurrent: true,
