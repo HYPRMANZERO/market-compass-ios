@@ -1,0 +1,39 @@
+name: Browser-only iPhone Release Checks
+on:
+  pull_request:
+    paths:
+      - "artifacts/market-compass/**"
+      - "tests/**"
+      - "scripts/prepare-offline-shell.mjs"
+      - ".github/workflows/browser-release-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+      - run: pnpm install --frozen-lockfile
+      - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs tests/model-assurance.test.mjs tests/voice-currency.test.mjs
+      - run: pnpm run typecheck:libs
+      - run: pnpm --filter @workspace/market-compass run typecheck
+      - name: Build for protected root origin
+        env:
+          BASE_PATH: "/"
+          NODE_ENV: production
+        run: pnpm --filter @workspace/market-compass run build
+      - run: node scripts/prepare-offline-shell.mjs
+      - name: Verify service worker is compiled
+        run: |
+          test -f artifacts/market-compass/dist/public/index.html
+          test -f artifacts/market-compass/dist/public/manifest.webmanifest
+          if grep -q '__PRECACHE_JSON__' artifacts/market-compass/dist/public/sw.js; then
+            echo "Service worker still has build placeholders"; exit 1
+          fi
