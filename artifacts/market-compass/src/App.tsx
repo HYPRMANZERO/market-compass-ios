@@ -818,34 +818,55 @@ function Router() {
   return <UnlockedRouter vault={vault} />;
 }
 function OfflineOnlyBanner() {
-  return <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-[11px] leading-5 text-amber-900 sm:px-8 lg:px-10" role="status">
-    <strong>Local-first edition:</strong> This GitHub Pages installation stores your encrypted workspace on this device.
-    Live market feeds, remote analysis and broker connections need a separate API and are unavailable on GitHub Pages alone.
-  </div>;
+  // Security and provider limitations are available under Vault & Settings.
+  // Keep repetitive technical status banners off the primary mobile screens.
+  return null;
 }
 
 function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
-  const [open, setOpen] = useState(false);
+  const [dailyOpen, setDailyOpen] = useState(false);
   const settings = vault.backupSettings;
-  return <section className="border-b border-border bg-muted/40 px-5 py-3 text-xs sm:px-8 lg:px-10" aria-label="Encrypted local backups">
-    <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3">
-      <span className="text-muted-foreground">Encrypted local vault · {vault.saving ? 'Saving…' : vault.savedAt ? `Saved ${new Date(vault.savedAt).toLocaleTimeString()}` : 'Ready'} · {vault.compressionInfo}</span>
-      <div className="flex flex-wrap gap-3">
-        <button disabled={vault.saving || !vault.savedAt} className="font-semibold text-primary disabled:opacity-40" onClick={() => void vault.exportBackup()}>Save encrypted backup to Files</button>
-        <button className="font-semibold text-primary" onClick={() => setOpen(value => !value)}>Daily backup settings</button>
-        <button className="font-semibold text-primary" onClick={() => { void vault.exportBackup().then(saved => { if (saved) vault.lock(); }); }}>Backup & lock</button>
+  return <details id="mc-backup-controls" className="group mx-4 mt-3 rounded-2xl border border-border bg-card shadow-sm sm:mx-7 lg:mx-11 lg:mt-5" aria-label="Encrypted vault and backup settings">
+    <summary className="flex min-h-[55px] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(165,19%,91%)] text-primary"><ShieldCheck size={18}/></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12px] font-bold">Encrypted vault &amp; settings</span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.saving ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>
+      </span>
+      <ChevronDown size={18} className="text-muted-foreground transition-transform group-open:rotate-180"/>
+    </summary>
+    <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
+      <p className="text-[12px] leading-5 text-muted-foreground">Your debt details and market history stay in this device's encrypted vault. Installing Market Compass on a second device does not automatically sync it. Back up your vault to move it safely.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+          <ShieldCheck size={16}/> Export encrypted backup
+        </button>
+        <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup().then(saved => { if (saved) vault.lock(); }); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-[12px] font-semibold disabled:opacity-40">Backup &amp; lock app</button>
       </div>
-      {vault.dailyBackupPending && <p className="w-full font-semibold text-primary" role="status">Daily backup is ready. Tap “Save encrypted backup to Files” and select Save to Files in the iPhone share sheet.</p>}
-      {vault.backupMessage && <p role="status" className="w-full text-muted-foreground">{vault.backupMessage}</p>}
-      {vault.error && <p role="alert" className="w-full text-destructive">{vault.error}</p>}
+      <button type="button" onClick={() => setDailyOpen(value => !value)} className="flex min-h-11 w-full items-center justify-between rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
+        <span>Daily backup settings</span><ChevronDown size={17} className={dailyOpen ? 'rotate-180' : ''}/>
+      </button>
+      {dailyOpen && <div className="space-y-3 rounded-xl bg-muted/50 p-3 text-[12px]">
+        <label className="flex min-h-10 items-center gap-3">
+          <input aria-label="Enable daily encrypted backups" type="checkbox" checked={settings.enabled} onChange={e => vault.setSchedule({ ...settings, enabled: e.target.checked })}/>
+          Prepare an encrypted snapshot each day
+        </label>
+        <label className="flex items-center justify-between gap-3">Local backup time
+          <input aria-label="Daily backup time" type="time" value={settings.time} onChange={e => vault.setSchedule({ ...settings, time: e.target.value })} className="min-h-11 rounded-lg border border-input bg-background px-2"/>
+        </label>
+        <p className="text-[11px] leading-5 text-muted-foreground">Daily snapshots are prepared only when the app is unlocked and open. iPhone exports require your tap and Save to Files. Closing the app pauses scheduling.</p>
+        {settings.lastSnapshotDate && <p className="text-[11px] text-muted-foreground">Last daily snapshot: {settings.lastSnapshotDate}</p>}
+      </div>}
+      {vault.dailyBackupPending && <p role="status" className="text-[12px] font-semibold text-primary">An encrypted backup is ready. Tap Export and save it to Files.</p>}
+      {vault.backupMessage && <p role="status" className="text-[12px] text-muted-foreground">{vault.backupMessage}</p>}
+      {vault.error && <p role="alert" className="text-[12px] text-destructive">{vault.error}</p>}
+      <details className="rounded-xl border border-border px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+        <summary className="cursor-pointer font-semibold text-foreground">How offline mode and payments work</summary>
+        <p className="mt-2">Debt calculations and saved historical candles work without internet after you install and open the app once online. New market prices need an exchange connection. Desktop Ollama requires your private desktop to be reachable. Bank payments and merchant checkout are separate authorized provider actions, not automatic features of this PWA.</p>
+        <p className="mt-2">{vault.compressionInfo}</p>
+      </details>
     </div>
-    {open && <div className="mx-auto mt-3 flex max-w-[1440px] flex-wrap items-center gap-4 rounded-lg border border-border bg-background p-3">
-      <label className="flex items-center gap-2"><input aria-label="Enable daily encrypted backups" type="checkbox" checked={settings.enabled} onChange={e => vault.setSchedule({ ...settings, enabled: e.target.checked })}/>Prepare an encrypted backup daily</label>
-      <label className="flex items-center gap-2">Local time <input aria-label="Daily backup time" type="time" value={settings.time} onChange={e => vault.setSchedule({ ...settings, time: e.target.value })} className="rounded border border-input bg-background p-1"/></label>
-      <p className="w-full text-muted-foreground">When Market Compass is open and unlocked at or after this time, it creates an encrypted local daily snapshot (up to seven retained). On iPhone, saving to the Files app requires you to tap the export button and choose Save to Files. Closing the app pauses this schedule; it resumes on next unlock.</p>
-      {settings.lastSnapshotDate && <p className="text-muted-foreground">Most recent daily snapshot: {settings.lastSnapshotDate}</p>}
-    </div>}
-  </section>;
+  </details>;
 }
 
 function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
