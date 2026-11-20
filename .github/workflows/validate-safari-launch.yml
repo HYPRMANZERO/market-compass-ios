@@ -34,3 +34,37 @@ jobs:
           test -f artifacts/market-compass/dist/public/index.html
           test -f artifacts/market-compass/dist/public/sw.js
           grep -q 'notificationclick' artifacts/market-compass/dist/public/sw.js
+
+  windows-native-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - name: Install Windows native optional dependencies
+        shell: pwsh
+        run: |
+          Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
+          pnpm install --frozen-lockfile --force
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm Windows install failed' }
+      - name: Verify Tailwind Windows native binding
+        shell: pwsh
+        run: |
+          node -e "require('./node_modules/.pnpm/@tailwindcss+oxide@4.3.3/node_modules/@tailwindcss/oxide'); console.log('Tailwind Oxide native binding OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'Tailwind Windows native module could not load' }
+      - name: Build iPhone PWA on Windows
+        shell: pwsh
+        env:
+          PORT: '5173'
+          BASE_PATH: '/market-compass-ios/'
+          NODE_ENV: production
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Vite build failed' }
+          node scripts/prepare-offline-shell.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Offline shell failed' }
+          if (-not (Test-Path 'artifacts/market-compass/dist/public/index.html')) { throw 'No built index.html' }
