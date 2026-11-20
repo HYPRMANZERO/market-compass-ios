@@ -1,0 +1,33 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Market Compass//Salary Cycle Reminders//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Market Compass Salary Day
+X-WR-TIMEZONE:Africa/Johannesburg
+BEGIN:VTIMEZONE
+TZID:Africa/Johannesburg
+X-LIC-LOCATION:Africa/Johannesburg
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0200
+TZNAME:SAST
+DTSTART:19700101T000000
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:salary-day-26@hyprmanzero.github.io
+DTSTAMP:20261120T000000Z
+DTSTART;TZID=Africa/Johannesburg:20261126T080000
+DTEND;TZID=Africa/Johannesburg:20261126T081000
+RRULE:FREQ=MONTHLY;BYMONTHDAY=26
+SUMMARY:Market Compass - Record salary and review expenses
+DESCRIPTION:Open Market Compass Monthly Expenses. Log salary only when received. Review essential bills car installment and credit card minimums before other spending. No financial details are shared through this calendar.
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:Record your salary in Market Compass when received
+END:VALARM
+END:VEVENT
+END:VCALENDAR
