@@ -4,7 +4,8 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useInterpretLocalCommand } from '@workspace/api-client-react';
+import VoiceAssistant from '@/components/VoiceAssistant';
+import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
@@ -804,38 +805,27 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
 }
 
 function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
-  const [text, setText] = useState('');
-  const [reply, setReply] = useState<AssistantCommand | null>(null);
-  const interpret = useInterpretLocalCommand();
-  const [error, setError] = useState('');
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setError(''); setReply(null);
-    if (!text.trim()) return;
-    interpret.mutate({ data: { text: text.trim() } }, { onSuccess: (command) => {
-      setReply(command);
-      setData((old) => ({ ...old, queue: [{ ...command, id: crypto.randomUUID(), status: 'pending', createdAt: new Date().toISOString(), originalText: text.trim() }, ...old.queue] }));
-      setText('');
-    }, onError: () => setError('The local command could not be interpreted right now. Your text has not been queued; try again.') });
+  const [, navigate] = useLocation();
+  const context: CompassCommandContext = {
+    currency: data.currency,
+    accounts: data.accounts,
+    monthlyExtra: data.monthlyExtra,
+    privateBudget: data.privateBudget ?? emptyPrivateBudget,
+    marketCache: data.marketCache,
+    draftCount: data.drafts.filter(d => d.status === 'pending').length,
   };
-  const remove = (id: string) => setData((old) => ({ ...old, queue: old.queue.filter((item) => item.id !== id) }));
   return <>
-    <PageIntro eyebrow="Supported commands only" title="Local assistant" description="A small command interpreter for market lookups and debt summaries. No generative replies, trading, or voice controls." trailing={<StatusTag tone="good">No AI service</StatusTag>} />
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(290px,.9fr)]">
-      <div className="space-y-4">
-        <Panel title="Ask a supported question" action={<span className="text-[10px] text-muted-foreground">Up to 500 characters</span>}>
-          <form onSubmit={submit} className="p-5"><label className="block"><span className="sr-only">Command</span><textarea data-testid="input-assistant-command" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={4} placeholder={'Try “help”, “summarize my debt”, or “analyze MSFT”'} className="w-full resize-y rounded-lg border border-input bg-background p-3 text-[12px] leading-5 outline-none focus:ring-2 focus:ring-ring/30" /></label><div className="mt-3 flex items-center justify-between gap-3"><span className="mono text-[10px] text-muted-foreground">{text.length} / 500</span><ActionButton type="submit" disabled={!text.trim() || interpret.isPending}>{interpret.isPending ? <LoaderCircle className="animate-spin" size={14} /> : <ArrowRight size={14} />}{interpret.isPending ? 'Interpreting' : 'Interpret command'}</ActionButton></div></form>
-        </Panel>
-        {error && <div role="alert" className="rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3 text-[11px] leading-5 text-destructive">{error}</div>}
-        {reply && <Panel title="Interpreter response" action={<StatusTag tone={reply.requiresNetwork ? 'warn' : 'good'}>{reply.requiresNetwork ? 'Network-dependent' : 'Local'}</StatusTag>}><div className="p-5"><div className="mono text-[10px] uppercase tracking-[.13em] text-muted-foreground">{reply.kind.replaceAll('_', ' ')}{reply.symbol ? ` · ${reply.symbol}` : ''}</div><p className="mt-3 text-[13px] leading-6">{reply.reply}</p><div className="mt-4 rounded-lg bg-muted/60 px-3 py-2.5 text-[10px] leading-5 text-muted-foreground">Added to your local pending queue. Instructions are not executed and are never treated as trades.</div></div></Panel>}
-      </div>
-      <div className="space-y-4">
-        <Panel title="What it can understand"><div className="divide-y divide-border">{[{ title: 'Help', example: 'help', detail: 'Lists supported command types.' }, { title: 'Debt summary', example: 'summarize my debt', detail: 'Uses your saved local debt details.' }, { title: 'Symbol analysis', example: 'analyze MSFT', detail: 'May need a network request to fetch market data.' }].map((item) => <div key={item.title} className="flex gap-3 px-5 py-4"><span className="mono mt-0.5 text-[9px] text-muted-foreground">/</span><div className="flex-1"><div className="text-[11px] font-semibold">{item.title}</div><div className="mono mt-1 text-[10px] text-primary">{item.example}</div><p className="mt-1 text-[10px] leading-5 text-muted-foreground">{item.detail}</p></div><button className="self-start rounded-md border border-border p-1.5 text-muted-foreground hover:bg-muted" aria-label={`Use example: ${item.example}`} onClick={() => setText(item.example)}><Plus size={13} /></button></div>)}</div></Panel>
-        <div className="rounded-xl border border-border bg-primary p-5 text-primary-foreground"><div className="flex items-center gap-2 text-[11px] font-semibold"><ShieldCheck size={15} /> A queue, not an automation</div><p className="mt-2 text-[10px] leading-5 text-primary-foreground/70">Interpreted commands remain visibly pending for your reference. The assistant cannot place, approve, or execute trades.</p></div>
-      </div>
-    </div>
-    <Panel className="mt-5" title="Pending local instructions" action={<span className="mono text-[10px] text-muted-foreground">{data.queue.length} queued</span>}>
-      {data.queue.length ? <div className="divide-y divide-border">{data.queue.map((item) => <div key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:px-5"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Clock3 size={15} /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-semibold">{item.originalText}</span><StatusTag tone="warn">pending · not processed</StatusTag></div><p className="mt-1 text-[10px] text-muted-foreground">{item.kind.replaceAll('_', ' ')}{item.symbol ? ` · ${item.symbol}` : ''} · {formatTime(item.createdAt)}</p></div><button onClick={() => remove(item.id)} className="self-end rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-destructive sm:self-auto" aria-label="Remove queued instruction"><Trash2 size={15} /></button></div>)}</div> : <EmptyState icon={ListChecks} title="Queue is clear" description="Interpreted commands you submit will appear here and stay pending until removed." />}
-    </Panel>
+    <VoiceAssistant context={context} onNavigate={navigate} />
+    {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
+      <summary className="cursor-pointer text-[12px] font-semibold">Earlier saved instructions · {data.queue.length}</summary>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These records came from the original command interpreter and remain encrypted in your vault. They are not active instructions, payments or trades.</p>
+      <div className="mt-3 space-y-2">{data.queue.map(item=><div key={item.id} className="flex items-start gap-2 rounded-xl border border-border p-3">
+        <div className="min-w-0 flex-1"><div className="break-words text-[12px] font-medium">{item.originalText}</div>
+          <p className="mt-1 text-[11px] text-muted-foreground">{formatTime(item.createdAt)} · Pending locally only</p></div>
+        <button type="button" aria-label="Remove old instruction" onClick={() => setData(old=>({...old,queue:old.queue.filter(x=>x.id!==item.id)}))}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground"><Trash2 size={16}/></button>
+      </div>)}</div>
+    </details>}
   </>;
 }
 
