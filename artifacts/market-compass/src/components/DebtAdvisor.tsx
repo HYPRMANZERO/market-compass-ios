@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BrainCircuit, CircleAlert, FileUp, ShieldCheck, WifiOff } from 'lucide-react';
 import type { DebtPlan } from '@workspace/api-client-react';
 import { auditDebtDecision } from '@/lib/debtAudit';
+import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 
 export type FinancialBaseline = {
   schema: 'market-compass-financial-baseline-v1';
@@ -68,15 +69,7 @@ export function offlineAdvice(accounts: Account[], budget: PrivateBudget, extra:
     actions, risks, questions: ['Are these amounts confirmed from current statements?', 'Is your selected reserve target sufficient for upcoming bills?']
   };
 }
-function serverUrl(input: string) {
-  try {
-    const u = new URL(input.trim());
-    if (u.protocol !== 'https:' || u.username || u.password || u.port || u.pathname !== '/' || u.search || u.hash) return null;
-    // Only explicitly configured private Tailscale hostnames; no public tunnels.
-    if (!u.hostname.endsWith('.ts.net')) return null;
-    return u.origin;
-  } catch { return null; }
-}
+const serverUrl = privateTailnetOrigin;
 type Props = {
   accounts: Account[]; currency: string; baseline: FinancialBaseline | null; budget: PrivateBudget;
   onBudgetChange: (v: PrivateBudget) => void; onImport: (v: FinancialBaseline) => void;
