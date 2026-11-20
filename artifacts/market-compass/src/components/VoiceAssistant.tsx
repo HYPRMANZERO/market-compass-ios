@@ -328,9 +328,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory operation returned HTTP ' + response.status);
-      const body = await response.json() as {ok?:boolean;archived?:{added:number;unchanged:number;documents:number;warnings:string[]}};
+      const body = await response.json() as {ok?:boolean;stats?:CompactMemoryStatus;archived?:{added:number;unchanged:number;documents:number;warnings:string[]}};
       if (body.ok !== true) throw Error('The desktop did not confirm the operation.');
       setMemoryError('');
+      if (body.stats) setMemoryInfo(body.stats);
       setStatus(method === 'POST'
         ? 'Encrypted file archive updated: ' + (body.archived?.added ?? 0) + ' added or updated; ' +
           (body.archived?.unchanged ?? 0) + ' unchanged. Only permitted local files are included.'
