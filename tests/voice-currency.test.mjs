@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { interpretCompassCommand } from '../artifacts/market-compass/src/lib/compassCommands.ts';
 import { approximateLocalValue, fxKey } from '../artifacts/market-compass/src/lib/fxRates.ts';
+import { privateTailnetOrigin } from '../artifacts/market-compass/src/lib/privateTailnetUrl.ts';
 
 const data = {
   currency:'ZAR', monthlyExtra:'1000',
@@ -54,4 +55,12 @@ test('FX display uses a dated pair only, never relabels USD as ZAR',()=>{
   assert.equal(approximateLocalValue(10,'USD','EUR',fx),null);
   assert.equal(approximateLocalValue(10,'USD','USD',fx),10);
   assert.equal(approximateLocalValue(NaN,'USD','ZAR',fx),null);
+});
+
+test('mobile AI accepts a private tailnet hostname without protocol', () => {
+  assert.equal(privateTailnetOrigin('hyprbox.tail4c4b.ts.net'), 'https://hyprbox.tail4c4b.ts.net');
+  assert.equal(privateTailnetOrigin('https://hyprbox.tail4c4b.ts.net/'), 'https://hyprbox.tail4c4b.ts.net');
+  for (const invalid of ['http://hyprbox.tail4c4b.ts.net', 'https://somewhere.example', 'https://user:password@hyprbox.tail4c4b.ts.net/', 'https://hyprbox.tail4c4b.ts.net/path', 'https://hyprbox.tail4c4b.ts.net/?token=bad', 'https://hyprbox.tail4c4b.ts.net:444/']) {
+    assert.equal(privateTailnetOrigin(invalid), null, `Rejected unsafe address: ${invalid}`);
+  }
 });
