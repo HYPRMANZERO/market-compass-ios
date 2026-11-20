@@ -36,6 +36,11 @@ export function validateBaseline(raw: unknown): FinancialBaseline {
 }
 type Account = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type Advisory = { summary: string; actions: string[]; risks: string[]; questions: string[]; mode: 'offline' | 'ollama' };
+type SyntheticStress = {
+  available: boolean; abstained?: boolean; stressRiskScore?: number | null;
+  disagreement?: number; reason?: string;
+  challengers?: { logisticSyntheticScore: number; treeSyntheticScore: number };
+};
 const format = (v: number) => new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(v);
 function validNumber(v: string) { return v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 1e11; }
 /** Guaranteed available without a network, but NOT a trained language model. */
@@ -83,6 +88,7 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
   const [endpoint, setEndpoint] = useState('');
   const [token, setToken] = useState('');
   const [answer, setAnswer] = useState<Advisory | null>(null);
+  const [stress, setStress] = useState<SyntheticStress | null>(null);
   const [running, setRunning] = useState(false);
   const ready = currency === 'ZAR' && accounts.length > 0 && accounts.length <= 50 &&
     accounts.every(a => a.name.trim() && validNumber(a.balance) && validNumber(a.apr) && Number(a.apr) <= 200 && validNumber(a.minimumPayment)) &&
@@ -97,13 +103,13 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
     liquidFunds:Number(budget.liquidFunds), reserveTarget:Number(budget.reserveTarget),
     proposedExtra:Number(monthlyExtra || 0)
   }) : null;
-  const value = (key: keyof PrivateBudget, text: string) => { onBudgetChange({ ...budget, [key]: text, verifiedAt: '' }); setConfirmedFingerprint(null); setAnswer(null); };
+  const value = (key: keyof PrivateBudget, text: string) => { onBudgetChange({ ...budget, [key]: text, verifiedAt: '' }); setConfirmedFingerprint(null); setAnswer(null); setStress(null); };
   async function importBaseline(file: File) {
     if (file.size > 100000) { setNotice('Only small private baseline exports are accepted (under 100 KB).'); return; }
     try {
       const parsed = validateBaseline(JSON.parse(await file.text()));
       if (!window.confirm(`Import historical data from ${parsed.sourceDate}? It may be outdated. You will review balances before any calculations. No current data will be assumed.`)) return;
-      onImport(parsed); setConfirmedFingerprint(null); setAnswer(null);
+      onImport(parsed); setConfirmedFingerprint(null); setAnswer(null); setStress(null);
       setNotice('Historical baseline imported to your unlocked workspace. Review all balances and cash inputs; no values were verified current.');
     } catch(e) { setNotice(e instanceof Error ? e.message : 'Could not import baseline'); }
   }
@@ -112,6 +118,7 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
   </label>;
   function prepareOffline() {
     if (!ready || !confirmed) { setNotice('Confirm current debt balances and enter income, essentials, liquid funds, and reserve first.'); return; }
+    setStress(null);
     setAnswer(offlineAdvice(accounts, budget, Number(monthlyExtra || 0), plan));
     setNotice('This offline output uses deterministic rules, not Ollama or a trained prediction model.');
   }
@@ -136,11 +143,13 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
         })
       });
       if (!response.ok) throw Error(`Private Ollama server returned ${response.status}.`);
-      const payload = await response.json() as { ok: boolean; narrative?: Omit<Advisory, 'mode'> };
+      const payload = await response.json() as { ok: boolean; narrative?: Omit<Advisory, 'mode'>; stress?: SyntheticStress };
       if (!payload.ok || !payload.narrative || !Array.isArray(payload.narrative.actions)) throw Error('Private AI returned an invalid response.');
       setAnswer({ ...payload.narrative, mode: 'ollama' });
+      setStress(payload.stress ?? { available: false, reason: 'No desktop stress model result returned' });
       setNotice('Ollama advisory received. This is narrative advice, not a payment authorization or verified forecast.');
     } catch(e) {
+      setStress(null);
       setNotice(`Ollama unavailable: ${e instanceof Error ? e.message : 'Network error'}. Your offline planner remains available.`);
     } finally { clearTimeout(timer); setRunning(false); }
   }
@@ -196,6 +205,16 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
         <button type="button" className="ml-2 mt-3 rounded-lg border border-border px-3 py-2 text-[11px]" onClick={() => {setToken('');setEndpoint('');}}>Disconnect</button>
       </details>
       {notice && <p role="status" className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-5">{notice}</p>}
+      {stress && <div className="rounded-lg border border-border bg-muted/45 p-4 text-[11px] leading-5">
+        <div className="font-semibold">Desktop scikit-learn challenger verification</div>
+        {!stress.available ? <p className="mt-1 text-muted-foreground">Optional private model not running: {stress.reason || 'Unavailable'}. Offline cashflow rules still apply.</p> : stress.abstained
+          ? <p className="mt-1 font-semibold">ABSTAINED — challengers disagreed or data was outside their synthetic training range. No machine-learning score has been issued.</p>
+          : typeof stress.stressRiskScore === 'number'
+            ? <p className="mt-1">Synthetic scenario stress score: <strong>{(stress.stressRiskScore * 100).toFixed(1)}%</strong>. This is not an actual probability of missing a loan payment.</p>
+            : <p className="mt-1">No usable model score; deterministic budget checks remain authoritative.</p>}
+        {stress.challengers && <p className="mt-2 text-muted-foreground">Independent synthetic challenger outputs: logistic {(stress.challengers.logisticSyntheticScore*100).toFixed(1)}% · decision tree {(stress.challengers.treeSyntheticScore*100).toFixed(1)}% · difference {((stress.disagreement ?? 0)*100).toFixed(1)} percentage points.</p>}
+        <p className="mt-2 text-muted-foreground">The model was trained on generated adverse-cashflow scenarios and has not been validated against personal debt outcomes. Never authorize a payment based on this percentage.</p>
+      </div>}
       {answer && <div className="rounded-lg border border-border p-4 text-[12px] leading-6">
         <div className="mb-2 flex items-center gap-2 font-semibold"><ShieldCheck size={15}/>{answer.mode === 'ollama' ? 'Private Ollama explanation' : 'Offline deterministic guidance'}</div>
         <p>{answer.summary}</p>
