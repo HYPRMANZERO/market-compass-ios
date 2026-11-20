@@ -376,6 +376,11 @@ function Overview({ data }: { data: WorkspaceData }) {
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
   return <>
+    <div className="lg:hidden">
+      <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
+        pendingDrafts={openDrafts} market={feed} />
+    </div>
+    <div className="hidden lg:block">
     <PageIntro eyebrow="A clearer view, at your pace" title="Your compass" description="A quiet place to see what is known, what is estimated, and what still needs your attention." trailing={<div className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-[11px] text-muted-foreground"><span className="mono mr-2 text-foreground">TODAY</span>{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>} />
     <div className="grid gap-4 md:grid-cols-3">
       <div className="relative overflow-hidden rounded-xl bg-primary px-5 py-5 text-primary-foreground md:col-span-2 md:px-7 md:py-6">
@@ -390,7 +395,7 @@ function Overview({ data }: { data: WorkspaceData }) {
     </div>
     <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
       <Panel title="Market feed" action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Open markets <ArrowRight className="ml-1 inline" size={13} /></Link>}>
-        {feed ? <div className="p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="mono text-[20px] font-medium">{feed.symbol}</div><div className="mt-1 text-[11px] text-muted-foreground">Source: {feed.source || 'Not specified'} · {feed.currency}</div></div><StatusTag tone="warn">Saved local copy</StatusTag></div><div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-[11px] text-muted-foreground"><span>{feed.candles.length} candle records · not live</span><span>Latest completed day {utcCandleDate(feed.asOf)} UTC</span></div>{feed.notice && <p className="mt-3 rounded-lg bg-muted/70 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{feed.notice}</p>}</div> : <EmptyState icon={Database} title="No market feed selected" description="Choose a ticker on the markets page to request provider data. No prices are filled in until then." action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Choose a ticker <ArrowRight className="ml-1 inline" size={13} /></Link>} />}
+        {feed ? <div className="p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="mono text-[20px] font-medium">{feed.symbol}</div><div className="mt-1 text-[11px] text-muted-foreground">Source: {feed.source || 'Not specified'} · {feed.currency}</div></div><StatusTag tone="warn">Saved local copy</StatusTag></div><div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-[11px] text-muted-foreground"><span>{feed.candles.length} candle records · not live</span><span>Last saved candle {utcCandleDate(feed.candles.at(-1)?.date ?? feed.asOf)} UTC</span></div>{feed.notice && <p className="mt-3 rounded-lg bg-muted/70 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{feed.notice}</p>}</div> : <EmptyState icon={Database} title="No market feed selected" description="Choose a ticker on the markets page to request provider data. No prices are filled in until then." action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Choose a ticker <ArrowRight className="ml-1 inline" size={13} /></Link>} />}
       </Panel>
       <Panel title="Local items needing a look">
         <div className="divide-y divide-border">
@@ -401,6 +406,7 @@ function Overview({ data }: { data: WorkspaceData }) {
     </div>
     <div className="mt-5 grid gap-4 sm:grid-cols-3">
       {[{ n: '01', title: 'Observe', text: 'Market data can be delayed, incomplete, or revised.' }, { n: '02', title: 'Compare', text: 'Debt scenarios are deterministic, based only on your inputs.' }, { n: '03', title: 'Decide', text: 'Nothing here sends an order or moves money.' }].map((item) => <div key={item.n} className="flex gap-4 border-t border-border pt-4"><span className="mono text-[10px] text-muted-foreground">{item.n}</span><div><div className="text-[12px] font-semibold">{item.title}</div><p className="mt-1 text-[11px] leading-5 text-muted-foreground">{item.text}</p></div></div>)}
+    </div>
     </div>
   </>;
 }
