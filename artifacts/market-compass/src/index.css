@@ -1,7 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap');
-@import 'tailwindcss';
-/* Explicitly scan the existing Market Compass React UI in this monorepo. */
-@source "./";
+/* Pin Tailwind v4 source scanning to THIS app, not the pnpm monorepo CWD. */
+@import "tailwindcss" source("../src");
+/* Keep these explicit sources for pnpm/Vite/Windows builds. */
+@source "./App.tsx";
+@source "./components";
+@source "./lib";
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
