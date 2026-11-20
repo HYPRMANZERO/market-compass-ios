@@ -26,6 +26,22 @@ export default function SalaryPush({settings}:Props){
     }).catch(()=>{});
     return()=>{live=false};
   },[available,privateOrigin]);
+  async function sendTest(){
+    setBusy(true);setMessage('');
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.getSubscription();
+      if(!sub)throw Error('Enable private reminders before testing.');
+      const response=await fetch('/api/push/test',{
+        method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+settings.token},
+        body:JSON.stringify({subscription:sub.toJSON()})
+      });
+      const data=await response.json() as {error?:string};
+      if(!response.ok)throw Error(data.error||'Test notification could not be submitted.');
+      setMessage('Test submitted to the push provider. Check your iPhone Notification Center; delivery must be confirmed on the device.');
+    }catch(error){setMessage(error instanceof Error?error.message:'Push test failed.');}
+    finally{setBusy(false);}
+  }
   async function change(enable:boolean){
     if(!available || !privateOrigin)return;
     setBusy(true);setMessage('');
@@ -84,6 +100,10 @@ export default function SalaryPush({settings}:Props){
         {enabled?<BellOff size={15}/>:<Bell size={15}/>}
         {busy?'Updating…':enabled?'Disable private push reminder':'Enable private push reminder'}
       </button>
+      {enabled&&<button type="button" disabled={busy} onClick={()=>void sendTest()}
+        className="mt-2 min-h-11 rounded-xl border border-border bg-background px-3 text-[12px] font-semibold disabled:opacity-50">
+        Send test notification now
+      </button>}
     </>}
     {message&&<p role="status" className="mt-2 text-[11px]">{message}</p>}
     <p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck size={13}/> No personal expenses are uploaded to the notification service.</p>
