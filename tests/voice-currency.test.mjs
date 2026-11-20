@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { interpretCompassCommand } from '../artifacts/market-compass/src/lib/compassCommands.ts';
 import { approximateLocalValue, fxKey } from '../artifacts/market-compass/src/lib/fxRates.ts';
 import { privateTailnetOrigin } from '../artifacts/market-compass/src/lib/privateTailnetUrl.ts';
+import { DEFAULT_DESKTOP_AI, hasSavedDesktopAi, validateDesktopAiSettings } from '../artifacts/market-compass/src/lib/desktopAiSettings.ts';
 
 const data = {
   currency:'ZAR', monthlyExtra:'1000',
@@ -63,4 +64,20 @@ test('mobile AI accepts a private tailnet hostname without protocol', () => {
   for (const invalid of ['http://hyprbox.tail4c4b.ts.net', 'https://somewhere.example', 'https://user:password@hyprbox.tail4c4b.ts.net/', 'https://hyprbox.tail4c4b.ts.net/path', 'https://hyprbox.tail4c4b.ts.net/?token=bad', 'https://hyprbox.tail4c4b.ts.net:444/']) {
     assert.equal(privateTailnetOrigin(invalid), null, `Rejected unsafe address: ${invalid}`);
   }
+});
+
+test('persistent AI settings permit only private HTTPS and long tokens', () => {
+  const configured = validateDesktopAiSettings({
+    url: 'hyprbox.taila14c4b.ts.net', token: 'z'.repeat(64),
+    enabled: true, shareFinancialContext: false, speakReplies: true,
+  });
+  assert.equal(configured.url, 'https://hyprbox.taila14c4b.ts.net/');
+  assert.equal(configured.enabled, true);
+  assert.equal(configured.shareFinancialContext, false);
+  assert.ok(hasSavedDesktopAi(configured));
+  assert.equal(hasSavedDesktopAi(DEFAULT_DESKTOP_AI), false);
+  assert.equal(hasSavedDesktopAi({ ...configured, enabled: false }), false);
+  assert.throws(() => validateDesktopAiSettings({ ...configured, url: 'http://bad.ts.net' }), /private HTTPS/);
+  assert.throws(() => validateDesktopAiSettings({ ...configured, token: 'abc' }), /48/);
+  assert.throws(() => validateDesktopAiSettings({ ...configured, url: 'https://example.com/' }), /private HTTPS/);
 });
