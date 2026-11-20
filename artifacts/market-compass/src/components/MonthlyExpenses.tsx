@@ -1,5 +1,3 @@
-import PrivatePushReminders from './PrivatePushReminders';
-import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Bell, ChevronLeft, ChevronRight, CircleAlert, Edit2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { localDate } from '@/lib/dailyBackup';
@@ -13,7 +11,6 @@ import {
 
 type DebtAccount = {id:string;name:string;balance:string};
 type Props = {
-  desktopAi?: DesktopAiSettings;
   entries:ExpenseEntry[];
   settings:ExpenseSettings;
   currency:string;
@@ -229,7 +226,6 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
       <div className="mt-4"><SalaryPush settings={desktopAi}/></div>
       {reminderNote&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">{reminderNote}</p>
     </section>
-    <PrivatePushReminders ai={desktopAi} />
     <section id="mc-expense-form" className="scroll-mt-24 rounded-2xl border border-border bg-card p-4">
       <h2 className="text-[15px] font-bold">{editingId?'Edit payment':'Record a payment or salary'}</h2>
       <form onSubmit={save} className="mt-3 space-y-3">
