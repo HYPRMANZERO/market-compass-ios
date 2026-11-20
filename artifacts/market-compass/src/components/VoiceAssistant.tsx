@@ -52,6 +52,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [secret, setSecret] = useState(settings.token);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
+  const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const microphone = useRef<BrowserRecognition | null>(null);
@@ -155,7 +156,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       window.removeEventListener('offline', whenOffline);
       document.removeEventListener('visibilitychange', whenVisible);
     };
-  }, [settings.enabled, settings.url, settings.token]);
+  }, [settings.enabled, settings.url, settings.token, reconnectNonce]);
 
   function speak(answer: string) {
     if (!settings.speakReplies || !voiceAvailable()) return;
@@ -177,6 +178,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       onSettingsChange(saved);
       setHost(saved.url);
       setSecret(saved.token);
+      setReconnectNonce(n => n + 1);
       setStatus('Private AI settings stored in the encrypted vault. The app will check your desktop automatically whenever you unlock it.');
     } catch (err) { setFormError(explainError(err)); }
   }
@@ -367,7 +369,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
     </section>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm" open={!settings.enabled ? undefined : false}>
+    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Desktop Ollama · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
@@ -400,9 +402,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         <RefreshCw size={17}/> Save &amp; reconnect automatically
       </button>
       {formError && <p role="alert" className="mt-2 rounded-lg bg-destructive/10 p-3 text-[12px] text-destructive">{formError}</p>}
-      {settings.enabled ? <div className="mt-2 flex gap-2">
-        <button type="button" onClick={pauseConnection} className="min-h-11 flex-1 rounded-xl border border-border px-3 text-[12px] font-semibold">Pause connection</button>
-        <button type="button" onClick={forgetConnection} className="min-h-11 flex-1 rounded-xl border border-border px-3 text-[12px] font-semibold">Forget credentials</button>
+      {settings.enabled ? <div className="mt-2 grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => setReconnectNonce(n => n + 1)} className="col-span-2 min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold"><RefreshCw size={14} className="mr-1 inline"/> Check connection now</button>
+        <button type="button" onClick={pauseConnection} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Pause connection</button>
+        <button type="button" onClick={forgetConnection} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Forget credentials</button>
       </div> : settings.url ? <button type="button" onClick={()=>onSettingsChange({...settings, enabled:true})} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">Resume automatic connection</button> : null}
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
         <CircleHelp size={14} className="mt-0.5 shrink-0"/>
