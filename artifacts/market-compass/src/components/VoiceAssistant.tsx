@@ -284,6 +284,69 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     };
   }, [connected, settings.url, settings.token, sourceRefresh]);
 
+  async function readCompactMemory(loadHistory = false) {
+    if (!connected) return;
+    const origin = privateTailnetOrigin(settings.url);
+    if (!origin) return;
+    setMemoryBusy(true);
+    try {
+      const response = await fetch(origin + '/api/memory', {
+        method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
+        headers: { Authorization: 'Bearer ' + settings.token },
+      });
+      if (!response.ok) throw Error('Desktop memory returned HTTP ' + response.status);
+      const body = await response.json() as { ok?: boolean; stats?: CompactMemoryStatus; recent?: CompactExchange[] };
+      if (body.ok !== true || !body.stats || !Array.isArray(body.recent)) throw Error('Invalid desktop memory response.');
+      setMemoryInfo(body.stats);
+      setMemoryError('');
+      if (loadHistory) {
+        const history = body.recent.flatMap(entry => [
+          {id:'memory-'+entry.id+'-question', source:'owner' as const, text:entry.question},
+          {id:'memory-'+entry.id+'-reply', source:'ollama' as const, text:entry.reply},
+        ]);
+        setMessages([{
+          id:'welcome', source:'local', text:'Your saved private desktop conversations are available below.',
+        }, ...history].slice(-45));
+        setStatus('Loaded saved desktop AI history. Your encrypted vault stays on HYPRBOX.');
+      }
+    } catch (error) {
+      setMemoryError('Compact Vault unavailable: ' + explainError(error) + '. Update and restart HYPRBOX if necessary.');
+    } finally { setMemoryBusy(false); }
+  }
+
+  async function changeCompactMemory(method: 'POST' | 'DELETE') {
+    if (!connected) return;
+    if (method === 'DELETE' && !window.confirm(
+      'Permanently clear the encrypted desktop conversation history AND archived documents? Your original financial source files will not be deleted.'
+    )) return;
+    const origin = privateTailnetOrigin(settings.url);
+    if (!origin) return;
+    setMemoryBusy(true);
+    try {
+      const response = await fetch(origin + (method === 'POST' ? '/api/memory/archive' : '/api/memory'), {
+        method, mode:'cors', credentials:'omit', cache:'no-store',
+        headers: { Authorization: 'Bearer ' + settings.token },
+      });
+      if (!response.ok) throw Error('Desktop memory operation returned HTTP ' + response.status);
+      const body = await response.json() as {ok?:boolean;archived?:{added:number;unchanged:number;documents:number;warnings:string[]}};
+      if (body.ok !== true) throw Error('The desktop did not confirm the operation.');
+      setMemoryError('');
+      setStatus(method === 'POST'
+        ? 'Encrypted file archive updated: ' + (body.archived?.added ?? 0) + ' added or updated; ' +
+          (body.archived?.unchanged ?? 0) + ' unchanged. Only permitted local files are included.'
+        : 'Encrypted desktop memory and document archive cleared.');
+      if (method === 'DELETE') setMessages([]);
+    } catch (error) { setMemoryError(explainError(error)); }
+    finally { setMemoryBusy(false); }
+  }
+
+  useEffect(() => {
+    if (!connected) { setMemoryInfo(null); return; }
+    // Read-only snapshot when a user unlocks and connects. No polling of history.
+    void readCompactMemory(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, settings.url, settings.token]);
+
   function speak(answer: string) {
     if (!settings.speakReplies || !voiceAvailable()) return;
     try {
