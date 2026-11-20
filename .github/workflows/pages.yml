@@ -42,6 +42,8 @@ jobs:
       
       - name: Test offline voice commands and local currency conversion
         run: node --experimental-strip-types --test tests/voice-currency.test.mjs
+      - name: Test salary-cycle boundaries and secure local expense accounting
+        run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs
 
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
