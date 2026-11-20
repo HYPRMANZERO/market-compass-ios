@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import PrivatePushControls from './PrivatePushControls';
 import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
@@ -685,6 +686,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         <button type="button" onClick={pauseConnection} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Pause connection</button>
         <button type="button" onClick={forgetConnection} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Forget credentials</button>
       </div> : settings.url ? <button type="button" onClick={()=>onSettingsChange({...settings, enabled:true})} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">Resume automatic connection</button> : null}
+      <PrivatePushControls settings={settings} connected={connected} />
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
         <CircleHelp size={14} className="mt-0.5 shrink-0"/>
         Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run Ollama or continuously listen in the background when closed.
