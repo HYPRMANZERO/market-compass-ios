@@ -29,6 +29,8 @@ jobs:
           NODE_ENV: production
         run: pnpm --filter @workspace/market-compass run build
       - run: node scripts/prepare-offline-shell.mjs
+      - name: Verify generated Tailwind layout CSS
+        run: node scripts/verify-private-ui-css.mjs
       - name: Verify compiled shell
         run: |
           test -f artifacts/market-compass/dist/public/index.html
@@ -67,4 +69,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Windows Vite build failed' }
           node scripts/prepare-offline-shell.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Offline shell failed' }
+          node scripts/verify-private-ui-css.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows production CSS missing Tailwind layout utilities' }
           if (-not (Test-Path 'artifacts/market-compass/dist/public/index.html')) { throw 'No built index.html' }
