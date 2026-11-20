@@ -75,6 +75,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const protectedSameOrigin = typeof window !== 'undefined' &&
     /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
       ? privateTailnetOrigin(window.location.origin) : null;
+  const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
   const [secret, setSecret] = useState(settings.token);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
@@ -664,6 +665,21 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         </div>
         {connectionMessage && <p className="mt-1 text-muted-foreground">{connectionMessage}</p>}
       </div>
+      {publicPagesEdition && (
+        <p role="note" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] leading-5">
+          <strong>This Home Screen icon is the public GitHub Pages edition ({window.location.hostname}).</strong>
+          {' '}It cannot connect directly to the protected ngrok AI; this cross-site connection is blocked to keep the token and financial data private.
+          On iPhone, open the Google-protected ngrok address in Safari, sign in, and choose Share → Add to Home Screen.
+          Keep this original icon and export its encrypted backup before restoring on the private app.
+        </p>
+      )}
+      {protectedSameOrigin && (
+        <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
+          You are on the protected website: <strong>{window.location.hostname}</strong>.
+          {' '}For private AI, use the exact same HTTPS origin (not a GitHub Pages or Tailscale URL).
+          {privateTailnetOrigin(host) !== protectedSameOrigin && ' Tap “Use this protected website for AI” below to save the correct address without changing your token.'}
+        </p>
+      )}
       <label className="mt-4 block text-[12px] font-semibold">Private AI HTTPS URL (Tailscale or this protected website)
         <input type="url" value={host} onChange={e=>setHost(e.target.value)}
           onBlur={() => {const url=privateTailnetOrigin(host); if(url)setHost(url+'/');}}
