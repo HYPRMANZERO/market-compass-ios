@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useInterpretLocalCommand } from '@workspace/api-client-react';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
+import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
 import { CURRENCIES, REGIONS, detectRegion, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
 import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
@@ -27,9 +28,9 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; merchantRequests: MerchantRequestRecord[]; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 const initialRegion = detectRegion();
-const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, merchantRequests: [], marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -642,6 +643,15 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
       </div>
     </form>
     <div className="mt-6"><DebtPaymentHandoff accounts={accounts} currency={data.currency} region={selectedRegion(data.region)} /></div>
+    <div className="mt-4">
+      <OzowMerchantGateway currency={data.currency} region={selectedRegion(data.region)}
+        records={data.merchantRequests ?? []}
+        onCreate={record => setData(old => ({ ...old, merchantRequests: [record, ...(old.merchantRequests ?? [])].slice(0, 30) }))}
+        onUpdate={(localId, fields) => setData(old => ({
+          ...old, merchantRequests: (old.merchantRequests ?? []).map(item => item.localId === localId ? { ...item, ...fields } : item)
+        }))}
+      />
+    </div>
   </>;
 }
 
