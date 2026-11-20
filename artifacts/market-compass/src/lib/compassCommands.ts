@@ -13,6 +13,7 @@ export type CompassCommandContext = {
 export type CompassCommandResult = {
   type: 'answer' | 'navigate' | 'unknown';
   reply: string;
+  needsHistoricalSources?: boolean;
   destination?: '/' | '/markets' | '/debt' | '/drafts' | '/assistant';
 };
 
@@ -50,25 +51,25 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
   const complete = ctx.accounts.filter(a=>a.name.trim() && number(a.balance)!==null && number(a.apr)!==null && number(a.minimumPayment)!==null);
   const known = complete.length === ctx.accounts.length;
   if (/\b(total debt|total balance|debt balance|how much (?:do i owe|debt)|what do i owe|owed|my debts|debt summary)\b/.test(q)) {
-    if (!complete.length) return { type:'answer', reply:'I do not have any verified debt balances entered. Open Debt Plan to add accounts or import your Financial Advisor baseline, then review the amounts.' };
-    if (!known) return { type:'answer', reply:'Some of your accounts have missing values. Finish those entries in Debt Plan so the total is not misleading.' };
+    if (!complete.length) return { type:'answer', needsHistoricalSources:true, reply:'I do not have any verified debt balances entered. Open Debt Plan to add accounts or import your Financial Advisor baseline, then review the amounts.' };
+    if (!known) return { type:'answer', needsHistoricalSources:true, reply:'Some of your accounts have missing values. Finish those entries in Debt Plan so the total is not misleading.' };
     const total = complete.reduce((a,b)=>a+Number(b.balance),0);
     return { type:'answer', reply:`Your entered debt balance is ${currency(total,ctx.currency)} across ${complete.length} ${complete.length===1?'account':'accounts'}. These are values you entered, not independently verified bank balances.` };
   }
   if (/\b(highest (?:interest|apr|rate)|most expensive debt|which debt first|avalanche)\b/.test(q)) {
     const sorted = complete.filter(a=>Number(a.balance)>0).sort((a,b)=>Number(b.apr)-Number(a.apr));
-    if (!sorted.length || !known) return { type:'answer', reply:'Enter and review each current debt balance and annual interest rate in Debt Plan first.' };
+    if (!sorted.length || !known) return { type:'answer', needsHistoricalSources:true, reply:'Enter and review each current debt balance and annual interest rate in Debt Plan first.' };
     return { type:'answer', reply:`Based on your entries, ${sorted[0].name} has the highest listed annual rate, ${Number(sorted[0].apr).toFixed(2)} percent. An avalanche plan considers that debt first for affordable extra payments, after minimums and essentials. Confirm lender terms before acting.` };
   }
   if (/\b(minimum (?:payments|repayments|instalments|installments)|monthly debt payments|debt minimums)\b/.test(q)) {
-    if (!complete.length || !known) return { type:'answer', reply:'Add the current minimum monthly payment for each account in Debt Plan.' };
+    if (!complete.length || !known) return { type:'answer', needsHistoricalSources:true, reply:'Add the current minimum monthly payment for each account in Debt Plan.' };
     const total = complete.reduce((a,b)=>a+Number(b.minimumPayment),0);
     return { type:'answer', reply:`Your entered minimum payments total ${currency(total,ctx.currency)} per month. These are your entries, not bank-confirmed due amounts.` };
   }
   if (/\b(extra|surplus|afford|headroom|cash flow|cashflow|budget)\b/.test(q)) {
     const b=ctx.privateBudget;
     if (!b || !known || !complete.length || [b.monthlyIncome,b.monthlyEssentials,b.liquidFunds,b.reserveTarget].some(x=>number(x)===null)) {
-      return { type:'answer', reply:'To estimate extra repayment capacity, open Debt Plan and enter current income, essential spending, available liquid funds and reserve target. Review the figures before relying on them.' };
+      return { type:'answer', needsHistoricalSources:true, reply:'To estimate extra repayment capacity, open Debt Plan and enter current income, essential spending, available liquid funds and reserve target. Review the figures before relying on them.' };
     }
     const minimums=complete.reduce((sum,a)=>sum+Number(a.minimumPayment),0);
     const headroom=Number(b.monthlyIncome)-Number(b.monthlyEssentials)-minimums;
