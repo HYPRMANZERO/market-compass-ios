@@ -2,6 +2,8 @@ name: Validate Safari launch branch
 on:
   push:
     branches: [feature/ios-safari-launch-2026-11-26]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
