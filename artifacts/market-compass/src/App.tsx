@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useInterpretLocalCommand } from '@workspace/api-client-react';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
+import MobileOverview from '@/components/MobileOverview';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
 import { CURRENCIES, REGIONS, detectRegion, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
@@ -229,75 +230,113 @@ const navItems = [
 ];
 
 function InstallHelp() {
-  const [show, setShow] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [details, setDetails] = useState(false);
-  const [prompt, setPrompt] = useState<Event | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<(Event & { prompt?: () => Promise<void> }) | null>(null);
+  const ios = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
   useEffect(() => {
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    setShow(!standalone && !sessionStorage.getItem('mc-install-dismissed'));
-    const listener = (e: Event) => { e.preventDefault(); setPrompt(e); };
-    window.addEventListener('beforeinstallprompt', listener);
-    return () => window.removeEventListener('beforeinstallprompt', listener);
+    const installed = window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setVisible(!installed && !localStorage.getItem('mc-install-dismissed-v3'));
+    const onInstall = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as Event & { prompt?: () => Promise<void> });
+    };
+    window.addEventListener('beforeinstallprompt', onInstall);
+    return () => window.removeEventListener('beforeinstallprompt', onInstall);
   }, []);
-  if (!show) return null;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  return <div className="border-b border-border bg-muted/50 px-5 py-3 text-[12px]">
-    <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3">
-      <span>Install Market Compass on your phone's Home Screen.</span>
-      <div className="flex items-center gap-3">
-        {ios ? <button className="font-semibold text-primary underline" onClick={() => setDetails(!details)}>iPhone instructions</button> : prompt ? <button className="font-semibold text-primary underline" onClick={async () => { await (prompt as Event & { prompt?: () => Promise<void> }).prompt?.(); setPrompt(null); }}>Install</button> : <span className="text-muted-foreground">Use browser installation menu</span>}
-        <button aria-label="Dismiss install guide" onClick={() => { sessionStorage.setItem('mc-install-dismissed', '1'); setShow(false); }}>Dismiss</button>
+  if (!visible || (!ios && !installPrompt)) return null;
+  return <section className="mx-4 mt-3 rounded-2xl border border-[hsl(39,30%,80%)] bg-[hsl(43,48%,92%)] p-3 sm:mx-6 lg:mx-10 lg:max-w-lg" aria-label="Install Market Compass">
+    <div className="flex items-start gap-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Compass size={19}/></span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-bold">Make it an app on your Home Screen</div>
+        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{ios ? 'Open this page in Safari and choose Share → Add to Home Screen to launch it without the browser toolbar.' : 'Install Market Compass from your browser to open it as a standalone app.'}</p>
+        {ios ? <button type="button" onClick={() => setDetails(!details)} className="mt-2 min-h-9 text-[12px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Show iPhone steps'}</button> :
+          <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="mt-2 min-h-9 rounded-lg bg-primary px-4 text-[12px] font-semibold text-primary-foreground">Install app</button>}
       </div>
+      <button type="button" onClick={() => { localStorage.setItem('mc-install-dismissed-v3','1'); setVisible(false); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={18}/></button>
     </div>
-    {details && <p className="mx-auto mt-2 max-w-[1440px]">Open in Safari, tap Share, select Add to Home Screen, then tap Add.</p>}
-  </div>;
+    {details && <p className="mt-2 rounded-lg bg-white/60 p-3 text-[12px] leading-5">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
+  </section>;
 }
 
 function AppShell({ children, pending }: { children: ReactNode; pending: number }) {
   const [path] = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  return (
-    <div className="min-h-[100dvh] bg-background text-foreground lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-      <aside className={`${mobileOpen ? 'fixed inset-0 z-40 flex' : 'hidden'} bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:flex-col`}>
-        <div className="flex h-full w-[270px] flex-col border-r border-sidebar-border px-5 py-6 lg:w-auto">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="group flex items-center gap-3" onClick={() => setMobileOpen(false)}>
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><Compass size={21} strokeWidth={1.8} /></span>
-              <span><span className="serif block text-[21px] leading-none">Market Compass</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">Personal workspace</span></span>
-            </Link>
-            <button aria-label="Close menu" className="rounded-md p-2 lg:hidden" onClick={() => setMobileOpen(false)}><X size={18} /></button>
-          </div>
-          <div className="mt-11 px-3 text-[10px] font-semibold uppercase tracking-[.22em] text-sidebar-foreground/40">Your workspace</div>
-          <nav className="mt-3 space-y-1" aria-label="Main navigation">
-            {navItems.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`} onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-3 text-[13px] transition-colors ${path === href ? 'bg-sidebar-accent text-sidebar-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`}>
-                <Icon size={17} strokeWidth={1.7} /><span className="flex-1">{label}</span>
-                {label === 'Drafts' && pending > 0 && <span className="mono rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] font-medium text-sidebar-primary-foreground">{pending}</span>}
-              </Link>
-            ))}
-          </nav>
-          <div className="mt-auto rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-4">
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-sidebar-foreground"><ShieldCheck size={15} className="text-sidebar-primary" /> Deliberate by design</div>
-            <p className="mt-2 text-[11px] leading-[1.65] text-sidebar-foreground/55">No trades are placed here. Market readings may be delayed; calculations use only the details you enter.</p>
-          </div>
-          <div className="mt-5 flex items-center justify-between px-1 text-[10px] text-sidebar-foreground/40"><span>MARKET COMPASS</span><span className="mono">LOCAL / 01</span></div>
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
+  const active = navItems.find((item) => item.href === path) ?? navItems[0];
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
+  }, []);
+  useEffect(() => { window.scrollTo(0, 0); }, [path]);
+  const openSettings = () => {
+    const el = document.getElementById('mc-backup-controls') as HTMLDetailsElement | null;
+    if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  };
+  return <div className="min-h-[100dvh] bg-background text-foreground lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+    <aside className="hidden bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:flex-col" aria-label="Desktop navigation">
+      <div className="flex h-full w-full flex-col border-r border-sidebar-border px-5 py-6">
+        <Link href="/" className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><Compass size={21} strokeWidth={1.8}/></span>
+          <span><span className="serif block text-[21px] leading-none">Market Compass</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">Personal workspace</span></span>
+        </Link>
+        <div className="mt-11 px-3 text-[10px] font-semibold uppercase tracking-[.22em] text-sidebar-foreground/40">Your workspace</div>
+        <nav className="mt-3 space-y-1" aria-label="Desktop main navigation">
+          {navItems.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined}
+            data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
+            className={`flex min-h-11 items-center gap-3 rounded-lg px-3 py-3 text-[13px] transition-colors ${path === href ? 'bg-sidebar-accent text-sidebar-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`}>
+            <Icon size={17} strokeWidth={1.7}/><span className="flex-1">{label}</span>
+            {label === 'Drafts' && pending > 0 && <span className="mono rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] text-sidebar-primary-foreground">{pending}</span>}
+          </Link>)}
+        </nav>
+        <div className="mt-auto rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-4">
+          <div className="flex items-center gap-2 text-[11px] font-semibold"><ShieldCheck size={15} className="text-sidebar-primary"/> Deliberate by design</div>
+          <p className="mt-2 text-[11px] leading-[1.65] text-sidebar-foreground/55">Your workspace stays on this device. Payments and trades always require separate approval.</p>
         </div>
-      </aside>
-      {mobileOpen && <button className="fixed inset-0 z-30 bg-black/30 lg:hidden" aria-label="Dismiss navigation" onClick={() => setMobileOpen(false)} />}
-      <main className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-5 backdrop-blur lg:px-10">
-          <div className="flex items-center gap-3">
-            <button className="rounded-md p-2 text-muted-foreground hover:bg-muted lg:hidden" aria-label="Open menu" onClick={() => setMobileOpen(true)}><Menu size={19} /></button>
-            <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
+        <div className="mt-5 flex items-center justify-between px-1 text-[10px] text-sidebar-foreground/40"><span>MARKET COMPASS</span><span className="mono">LOCAL / 01</span></div>
+      </div>
+    </aside>
+
+    <main className="min-w-0">
+      <header className="mc-mobile-header sticky top-0 z-30 border-b border-white/10 bg-[hsl(165,24%,19%)] px-4 pb-3 pt-3 text-white lg:hidden">
+        <div className="flex min-h-[49px] items-center gap-3">
+          <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[16px] font-bold leading-5">Market Compass</div>
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
+              <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
+              <span>{online ? 'Connected' : 'Offline'} · {active.label}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className="h-1.5 w-1.5 rounded-full bg-[hsl(158,31%,42%)]" /> Offline-first workspace</div>
-        </header>
-        <InstallHelp />
-        <div className="mx-auto max-w-[1440px] px-5 pb-14 pt-8 sm:px-8 lg:px-11 lg:pt-10">{children}</div>
-      </main>
-    </div>
-  );
+          <button type="button" onClick={openSettings} aria-label="Open vault, backups and settings" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><ShieldCheck size={21}/></button>
+        </div>
+      </header>
+      <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
+        <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
+      </header>
+      <InstallHelp/>
+      <div className="mx-auto min-w-0 max-w-[1440px] px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
+    </main>
+    <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)]/98 px-1.5 pt-2 shadow-[0_-6px_20px_rgba(17,39,33,.06)] backdrop-blur-xl lg:hidden">
+      <div className="mx-auto grid max-w-[550px] grid-cols-5 gap-1">
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const selected = href === path;
+          const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label;
+          return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
+            data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
+            className={`relative flex min-h-[57px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:scale-[.96] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+            <Icon size={22} strokeWidth={selected ? 2.3 : 1.8}/>
+            <span className="text-[10px] font-semibold leading-none">{short}</span>
+            {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
+          </Link>;
+        })}
+      </div>
+    </nav>
+  </div>;
 }
 
 function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string; title: string; description: string; trailing?: ReactNode }) {
