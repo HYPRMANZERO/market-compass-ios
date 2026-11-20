@@ -10,7 +10,8 @@ import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
-import { CURRENCIES, REGIONS, detectRegion, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
+import { CURRENCIES, REGIONS, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
+import { approximateLocalValue, fetchFxReference, fxKey, type FxReference } from '@/lib/fxRates';
 import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
@@ -32,9 +33,11 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
-const initialRegion = detectRegion();
-const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+// The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
+// All new installations start in ZAR; the user can change country and currency explicitly.
+const initialRegion = 'ZA';
+const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
