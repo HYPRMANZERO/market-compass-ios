@@ -876,7 +876,7 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
         cycleLimit:stats.budget,flags:stats.flags.slice(0,4),
         categories:stats.byCategory.slice(0,6).map(v=>({category:v.label,amount:v.amount})),
         paymentMethods:stats.byPaymentMethod.slice(0,5).map(v=>({
-          app:v.app.replace(/\\d{6,}/g,'[masked]').slice(0,60),
+          app:v.app.replace(/\d{6,}/g,'[masked]').slice(0,60),
           amount:v.amount,count:v.count
         }))};
     })(),
