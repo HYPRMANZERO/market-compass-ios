@@ -71,6 +71,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [status, setStatus] = useState('');
   const [formError, setFormError] = useState('');
   const [host, setHost] = useState(settings.url || (typeof window !== 'undefined' ? privateTailnetOrigin(window.location.origin) || '' : ''));
+  // Owner-only ngrok app: suggest the current same origin, never any cross-site address.
+  const protectedSameOrigin = typeof window !== 'undefined' &&
+    /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
+      ? privateTailnetOrigin(window.location.origin) : null;
   const [secret, setSecret] = useState(settings.token);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
@@ -358,11 +362,11 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     } catch { setStatus('Audio playback is unavailable; the reply is still available as text.'); }
   }
 
-  function saveConnection() {
+  function saveConnection(urlOverride?: string) {
     setFormError('');
     try {
       const saved = validateDesktopAiSettings({
-        url: host, token: secret, enabled: true, shareFinancialContext,
+        url: urlOverride ?? host, token: secret, enabled: true, shareFinancialContext,
         speakReplies: settings.speakReplies,
       });
       onSettingsChange(saved);
@@ -666,6 +670,12 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
           placeholder="https://your-private-host.example.com/"
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
+      {protectedSameOrigin && privateTailnetOrigin(host) !== protectedSameOrigin && (
+        <button type="button" onClick={() => saveConnection(protectedSameOrigin)}
+          className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 text-[12px] font-semibold text-primary">
+          <ShieldCheck size={16}/> Use this protected website for AI
+        </button>
+      )}
       <label className="mt-3 block text-[12px] font-semibold">Desktop AI token · encrypted in vault
         <input type="password" autoComplete="off" value={secret} onChange={e=>setSecret(e.target.value)}
           placeholder="Paste the separate 48+ character desktop token"
@@ -675,7 +685,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         <input type="checkbox" checked={shareFinancialContext} onChange={e=>setShareFinancialContext(e.target.checked)}/>
         Share entered financial figures with my own desktop when asking open-ended questions
       </label>
-      <button type="button" onClick={saveConnection}
+      <button type="button" onClick={() => saveConnection()}
         className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground">
         <RefreshCw size={17}/> Save &amp; reconnect automatically
       </button>
