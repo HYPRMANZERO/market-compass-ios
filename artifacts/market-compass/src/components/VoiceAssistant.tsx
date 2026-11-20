@@ -551,6 +551,45 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       </div>
     </section>
 
+    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Encrypted desktop conversation memory">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[14px] font-bold">Compact Vault · private memory</h2>
+        <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
+          disabled={!connected || memoryBusy} onClick={() => void readCompactMemory(false)}>
+          <RefreshCw size={14} className="mr-1 inline"/> Refresh
+        </button>
+      </div>
+      {memoryInfo?.enabled ? <div className="mt-3 text-[12px] leading-5 text-muted-foreground">
+        <p><strong className="text-foreground">{memoryInfo.exchanges}</strong> saved conversations · <strong className="text-foreground">{memoryInfo.documents}</strong> archived files</p>
+        <p>{memoryInfo.algorithm}. Encrypted archive: {(memoryInfo.archiveBytes / 1024).toFixed(1)} KB.</p>
+        {memoryInfo.storageSavedPercent !== null && <p>Measured reduction versus stored JSON: {memoryInfo.storageSavedPercent}% (varies by contents).</p>}
+        <p className="mt-1">The AI retrieves relevant history and documents. This does not retrain Qwen's model weights.</p>
+      </div> : <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
+        {connected ? 'Checking encrypted desktop memory. Update and restart HYPRBOX if unavailable.' : 'Connect your private desktop to access conversation memory.'}
+      </p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={!connected || memoryBusy || !memoryInfo?.enabled}
+          onClick={() => void readCompactMemory(true)} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40">
+          Load saved conversations
+        </button>
+        <button type="button" disabled={!connected || memoryBusy || !memoryInfo?.enabled}
+          onClick={() => void changeCompactMemory('POST')} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40">
+          Archive desktop files securely
+        </button>
+        <button type="button" disabled={!connected || memoryBusy || !memoryInfo?.enabled}
+          onClick={() => void changeCompactMemory('DELETE')} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold text-destructive disabled:opacity-40">
+          Forget stored history &amp; archive
+        </button>
+      </div>
+      {memoryBusy && <p className="mt-2 text-[11px] text-muted-foreground">Processing encrypted desktop memory…</p>}
+      {memoryError && <p role="status" className="mt-2 text-[11px] text-muted-foreground">{memoryError}</p>}
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+        Only successful desktop AI conversations are saved. Offline questions are not synchronized.
+        Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
+        Compression is measured; no fixed ratio is guaranteed.
+      </p>
+    </section>
+
     <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Private financial sources">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
