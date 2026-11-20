@@ -279,7 +279,7 @@ function InstallHelp() {
   </section>;
 }
 
-function AppShell({ children, pending }: { children: ReactNode; pending: number }) {
+function AppShell({ children, pending, currency }: { children: ReactNode; pending: number; currency: string }) {
   const [path] = useLocation();
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const active = navItems.find((item) => item.href === path) ?? navItems[0];
@@ -326,7 +326,7 @@ function AppShell({ children, pending }: { children: ReactNode; pending: number 
             <div className="truncate text-[16px] font-bold leading-5">Market Compass</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
-              <span>{online ? 'Connected' : 'Offline'} · {active.label}</span>
+              <span>{online ? 'Connected' : 'Offline'} · {active.label} · {currency}</span>
             </div>
           </div>
           <button type="button" onClick={openSettings} aria-label="Open vault, backups and settings" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><ShieldCheck size={21}/></button>
@@ -406,7 +406,7 @@ function Overview({ data }: { data: WorkspaceData }) {
   return <>
     <div className="lg:hidden">
       <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
-        pendingDrafts={openDrafts} market={feed} />
+        pendingDrafts={openDrafts} market={feed} fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
     </div>
     <div className="hidden lg:block">
     <PageIntro eyebrow="A clearer view, at your pace" title="Your compass" description="A quiet place to see what is known, what is estimated, and what still needs your attention." trailing={<div className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-[11px] text-muted-foreground"><span className="mono mr-2 text-foreground">TODAY</span>{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>} />
@@ -956,7 +956,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
 function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const { data, setData } = vault;
   const pending = data.drafts.filter((draft) => draft.status === 'pending').length;
-  return <RoutedErrorBoundary><AppShell pending={pending}><OfflineOnlyBanner /><BackupControls vault={vault} /><Switch>
+  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><BackupControls vault={vault} /><Switch>
     <Route path="/"><Overview data={data} /></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
