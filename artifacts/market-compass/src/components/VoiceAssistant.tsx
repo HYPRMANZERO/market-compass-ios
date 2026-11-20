@@ -409,6 +409,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         monthlyEssentials: context.privateBudget?.monthlyEssentials ?? '',
         liquidFunds: context.privateBudget?.liquidFunds ?? '',
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
+        expenseSummary: context.expenseSummary,
       } : undefined;
       const response = await fetch(url + '/api/chat', {
         method: 'POST', mode: 'cors', credentials: 'omit', cache: 'no-store',
