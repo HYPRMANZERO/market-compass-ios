@@ -89,12 +89,20 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch(url + '/health', { mode:'cors', credentials:'omit', cache:'no-store', signal:controller.signal });
+      const res = await fetch(url + '/api/session', {
+        mode:'cors', credentials:'omit', cache:'no-store', signal:controller.signal,
+        headers:{ Authorization:`Bearer ${token}` },
+      });
       const result: unknown = await res.json();
+      if (res.status === 401) throw Error('The private desktop access token was rejected. Enter the MC_AI_TOKEN from the desktop server session.');
       if (!res.ok || !result || typeof result !== 'object' || !('ok' in result) || result.ok !== true ||
-        !('configured' in result) || result.configured !== true) throw Error('Private AI bridge is offline or not configured.');
+        !('authorized' in result) || result.authorized !== true) throw Error('Private AI bridge is offline or not authorized.');
+      if (!('modelAvailable' in result) || result.modelAvailable !== true) {
+        const reason = 'reason' in result && typeof result.reason === 'string' ? result.reason : 'Configured Ollama model is unavailable.';
+        throw Error(reason);
+      }
       setDesktopHealthy(true); setDesktopEnabled(true);
-      setStatus('Desktop bridge reachable over private HTTPS. Send an open-ended question to test Ollama. This does not verify the model is loaded.');
+      setStatus('Private connection authenticated and local Ollama model detected. You can now send open-ended questions to your desktop AI.');
     } catch (error) {
       setDesktopHealthy(false); setDesktopEnabled(false);
       setStatus(`Unable to connect to your desktop: ${formatError(error)}. Check Node, Tailscale Serve and the iPhone Tailscale VPN. Local commands still work.`);
@@ -206,7 +214,7 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
           {speechEnabled ? <Speaker size={20}/> : <VolumeX size={20}/>}
         </button>
       </div>
-      <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75"><WifiOff size={16}/> Offline commands ready <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">{desktopReady ? 'Bridge reachable' : 'Local mode'}</span></div>
+      <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75"><WifiOff size={16}/> Offline commands ready <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">{desktopReady ? 'Ollama ready' : 'Local mode'}</span></div>
     </section>
 
     <section className="rounded-[20px] border border-border bg-card shadow-sm">
@@ -246,7 +254,7 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
     </section>
 
     <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
-      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Connect private desktop Ollama <span className="ml-auto text-[11px] font-normal text-muted-foreground">{desktopReady ? 'Private bridge reachable' : 'Optional'}</span></summary>
+      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Connect private desktop Ollama <span className="ml-auto text-[11px] font-normal text-muted-foreground">{desktopReady ? 'Ollama model detected' : 'Optional'}</span></summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">For open-ended questions, connect to the Financial Advisor server running on your desktop through Tailscale Serve private HTTPS. The iPhone still answers supported commands offline without it. This does not create a Siri wake word or keep the microphone active in the background.</p>
       <label className="mt-4 block text-[12px] font-semibold">Your private Tailscale HTTPS URL
         <input type="url" value={desktopUrl} onChange={e => {setDesktopUrl(e.target.value);setDesktopHealthy(false);setDesktopEnabled(false);}} placeholder="https://desktop.your-tailnet.ts.net/"
