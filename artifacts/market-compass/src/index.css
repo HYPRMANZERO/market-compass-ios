@@ -406,7 +406,19 @@ select:focus-visible, textarea:focus-visible {
 #mc-backup-controls { scroll-margin-top: calc(94px + env(safe-area-inset-top)); }
 .mc-mobile-tabbar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 @media (display-mode: standalone) and (max-width: 1023px) {
+  /* Keep the iPhone system status area the same green as Market Compass's header. */
+  html, body { background-color: hsl(165 24% 19%); }
   .mc-mobile-header { padding-top: calc(12px + env(safe-area-inset-top)); }
+  .mc-mobile-header::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    background-color: hsl(165 24% 19%);
+    pointer-events: none;
+  }
 }
 @media (max-width: 1023px) {
   :root { --app-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
