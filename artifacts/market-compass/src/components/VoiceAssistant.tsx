@@ -324,7 +324,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setQuery(''); setStatus('');
     add('owner', question);
     const result = interpretCompassCommand(question, context);
-    if (result.type !== 'unknown') {
+    // If the browser's debt inputs are missing, consult dated desktop
+    // evidence before asking the owner to retype their whole financial history.
+    // Deterministic safeguards and navigation still take priority.
+    if (result.type !== 'unknown' && !(connected && result.needsHistoricalSources)) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
