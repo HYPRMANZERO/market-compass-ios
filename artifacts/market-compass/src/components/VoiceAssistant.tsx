@@ -49,13 +49,15 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
   const [desktopUrl, setDesktopUrl] = useState('');
   const [token, setToken] = useState('');
   const [desktopEnabled, setDesktopEnabled] = useState(false);
+  const [desktopHealthy, setDesktopHealthy] = useState(false);
+  const [testingDesktop, setTestingDesktop] = useState(false);
   const [allowFinancialContext, setAllowFinancialContext] = useState(false);
   const [busy, setBusy] = useState(false);
   const microphone = useRef<BrowserRecognition | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
   const requestId = useRef(0);
   const submitRef = useRef<(text: string) => void>(() => {});
-  const desktopReady = desktopEnabled && Boolean(privateUrl(desktopUrl)) && token.length >= 48;
+  const desktopReady = desktopEnabled && desktopHealthy && Boolean(privateUrl(desktopUrl)) && token.length >= 48;
   const add = (source: Message['source'], text: string) => setMessages(old => [...old, { id: crypto.randomUUID(), source, text, at: new Date().toISOString() }].slice(-35));
 
   useEffect(() => {
@@ -77,6 +79,26 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
       speech.pitch = 1;
       window.speechSynthesis.speak(speech);
     } catch { setStatus('Spoken replies are unavailable on this device. Answers remain visible as text.'); }
+  }
+
+  async function testDesktopConnection() {
+    if (desktopReady) { setDesktopEnabled(false); setDesktopHealthy(false); setStatus('Disconnected desktop Ollama. Offline commands remain available.'); return; }
+    const url = privateUrl(desktopUrl);
+    if (!url || token.length < 48) { setStatus('Enter your private HTTPS .ts.net address and a 48+ character access token first.'); return; }
+    setTestingDesktop(true); setStatus('Checking the private AI bridge on your desktop…');
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(url + '/health', { mode:'cors', credentials:'omit', cache:'no-store', signal:controller.signal });
+      const result: unknown = await res.json();
+      if (!res.ok || !result || typeof result !== 'object' || !('ok' in result) || result.ok !== true ||
+        !('configured' in result) || result.configured !== true) throw Error('Private AI bridge is offline or not configured.');
+      setDesktopHealthy(true); setDesktopEnabled(true);
+      setStatus('Desktop bridge reachable over private HTTPS. Send an open-ended question to test Ollama. This does not verify the model is loaded.');
+    } catch (error) {
+      setDesktopHealthy(false); setDesktopEnabled(false);
+      setStatus(`Unable to connect to your desktop: ${formatError(error)}. Check Node, Tailscale Serve and the iPhone Tailscale VPN. Local commands still work.`);
+    } finally { window.clearTimeout(timer); setTestingDesktop(false); }
   }
 
   async function askDesktop(original: string, id: number) {
@@ -108,6 +130,7 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
       setStatus('Response from your privately hosted Ollama model. Verify any financial claims against your saved calculations.');
     } catch (error) {
       if (id !== requestId.current) return;
+      setDesktopHealthy(false); setDesktopEnabled(false);
       setStatus(`Desktop Ollama unavailable: ${formatError(error)}. Offline commands remain available.`);
       const fallback = 'Your private desktop AI could not be reached. Try an offline command, such as “What is my total debt?” or “Open Debt Plan.”';
       add('local', fallback);
@@ -183,7 +206,7 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
           {speechEnabled ? <Speaker size={20}/> : <VolumeX size={20}/>}
         </button>
       </div>
-      <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75"><WifiOff size={16}/> Offline commands ready <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">{desktopReady ? 'Ollama linked' : 'Local mode'}</span></div>
+      <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75"><WifiOff size={16}/> Offline commands ready <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">{desktopReady ? 'Bridge reachable' : 'Local mode'}</span></div>
     </section>
 
     <section className="rounded-[20px] border border-border bg-card shadow-sm">
@@ -223,22 +246,22 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
     </section>
 
     <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
-      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Connect private desktop Ollama <span className="ml-auto text-[11px] font-normal text-muted-foreground">{desktopReady ? 'Connected settings' : 'Optional'}</span></summary>
+      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Connect private desktop Ollama <span className="ml-auto text-[11px] font-normal text-muted-foreground">{desktopReady ? 'Private bridge reachable' : 'Optional'}</span></summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">For open-ended questions, connect to the Financial Advisor server running on your desktop through Tailscale Serve private HTTPS. The iPhone still answers supported commands offline without it. This does not create a Siri wake word or keep the microphone active in the background.</p>
       <label className="mt-4 block text-[12px] font-semibold">Your private Tailscale HTTPS URL
-        <input type="url" value={desktopUrl} onChange={e => setDesktopUrl(e.target.value)} placeholder="https://desktop.your-tailnet.ts.net/"
+        <input type="url" value={desktopUrl} onChange={e => {setDesktopUrl(e.target.value);setDesktopHealthy(false);setDesktopEnabled(false);}} placeholder="https://desktop.your-tailnet.ts.net/"
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
       <label className="mt-3 block text-[12px] font-semibold">Separate AI access token (48+ characters)
-        <input type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} placeholder="Private AI token, not vault password"
+        <input type="password" autoComplete="off" value={token} onChange={e => {setToken(e.target.value);setDesktopHealthy(false);setDesktopEnabled(false);}} placeholder="Private AI token, not vault password"
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-[12px]"><input type="checkbox" checked={allowFinancialContext} onChange={e => setAllowFinancialContext(e.target.checked)}/>
         Share my entered financial summary with my own desktop only when I ask Ollama
       </label>
-      <button type="button" onClick={() => { setDesktopEnabled(v => !v); setStatus(''); }} disabled={!privateUrl(desktopUrl) || token.length < 48}
+      <button type="button" onClick={() => { void testDesktopConnection(); }} disabled={testingDesktop || (!desktopReady && (!privateUrl(desktopUrl) || token.length < 48))}
         className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground disabled:opacity-40">
-        <BrainCircuit size={17}/>{desktopEnabled ? 'Disconnect desktop AI' : 'Enable private desktop AI'}
+        <BrainCircuit size={17}/>{desktopReady ? 'Disconnect desktop AI' : testingDesktop ? 'Checking private bridge…' : 'Test and connect desktop AI'}
       </button>
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><CircleHelp size={14} className="mt-0.5 shrink-0"/>The server and Ollama model must actually be running on your computer. Configuring a URL here does not automatically start them. The access token is only held in page memory, not saved to the vault.</p>
     </details>
