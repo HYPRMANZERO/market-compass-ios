@@ -37,6 +37,9 @@ jobs:
       - name: Test payment gateway (mock provider only)
         run: node --test workers/payment-gateway/gateway.test.mjs
 
+      - name: Test offline finance and market research assurance
+        run: node --experimental-strip-types --test tests/model-assurance.test.mjs
+
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
 
