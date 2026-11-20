@@ -387,3 +387,34 @@
     inset: -1px;
   }
 }
+
+
+/* Market Compass: native-feeling small-screen application shell. */
+html { -webkit-text-size-adjust: 100%; }
+#root { min-height: 100dvh; }
+button, a, summary { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+#mc-backup-controls { scroll-margin-top: calc(94px + env(safe-area-inset-top)); }
+.mc-mobile-tabbar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+@media (display-mode: standalone) and (max-width: 1023px) {
+  .mc-mobile-header { padding-top: calc(12px + env(safe-area-inset-top)); }
+}
+@media (max-width: 1023px) {
+  :root { --app-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+  body { overflow-x: hidden; }
+  /* Safari zooms the viewport on focus for inputs smaller than 16px. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select, textarea { font-size: 16px !important; }
+  input, textarea, select { max-width: 100%; }
+  input[type='date'], input[type='time'] { min-width: 0; }
+  .mc-mobile-tabbar { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  .mc-mobile-header { -webkit-backdrop-filter: blur(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise-in { animation: none !important; }
+  html { scroll-behavior: auto !important; }
+}
