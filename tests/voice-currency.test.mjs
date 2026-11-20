@@ -81,3 +81,13 @@ test('persistent AI settings permit only private HTTPS and long tokens', () => {
   assert.throws(() => validateDesktopAiSettings({ ...configured, token: 'abc' }), /48/);
   assert.throws(() => validateDesktopAiSettings({ ...configured, url: 'https://example.com/' }), /private HTTPS/);
 });
+
+test('missing vault figures are eligible for dated private historical source lookup', () => {
+  const missing=interpretCompassCommand('What is my total debt?',{...data,accounts:[]});
+  assert.equal(missing.type,'answer');
+  assert.equal(missing.needsHistoricalSources,true);
+  const guarded=interpretCompassCommand('Transfer my funds to a bank account',{...data,accounts:[]});
+  assert.equal(guarded.needsHistoricalSources,undefined);
+  const existing=interpretCompassCommand('What is my total debt?',data);
+  assert.equal(existing.needsHistoricalSources,undefined);
+});
