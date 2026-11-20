@@ -30,6 +30,12 @@ type SourceInventory = {
   bankOAuthConnected:boolean; bankVerifiedCurrentBalance:boolean;
   missing:string[];warnings:string[];
 };
+type CompactMemoryStatus = {
+  enabled: boolean; exchanges:number; documents:number; archiveBytes:number;
+  originalFileBytes:number; uncompressedJsonBytes:number;
+  storageSavedPercent:number|null; algorithm:string;storedOn:string;modelTrained:boolean;
+};
+type CompactExchange = {id:string;at:string;question:string;reply:string};
 type LunoStatus = {
   provider:string; connected:boolean; reason?:string; retrievedAt?:string;
   wallets?:{asset:string;balance:number;reserved:number;available:number;currencyUnit:string}[];
@@ -76,6 +82,9 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [sourceError, setSourceError] = useState('');
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceRefresh, setSourceRefresh] = useState(0);
+  const [memoryInfo, setMemoryInfo] = useState<CompactMemoryStatus | null>(null);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryError, setMemoryError] = useState('');
   const microphone = useRef<BrowserRecognition | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
   const messageSerial = useRef(0);
@@ -366,10 +375,11 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setQuery(''); setStatus('');
     add('owner', question);
     const result = interpretCompassCommand(question, context);
-    // If the browser's debt inputs are missing, consult dated desktop
-    // evidence before asking the owner to retype their whole financial history.
-    // Deterministic safeguards and navigation still take priority.
-    if (result.type !== 'unknown' && !(connected && result.needsHistoricalSources)) {
+    // Safeguards and navigation remain local, but a private Luno balance must
+    // not be confused with a historical cryptocurrency market candle.
+    const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
+      /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
+    if (result.type !== 'unknown' && !(connected && (result.needsHistoricalSources || asksLiveWallet))) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
