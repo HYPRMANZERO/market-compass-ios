@@ -354,20 +354,30 @@ function AppShell({ children, pending }: { children: ReactNode; pending: number 
 }
 
 function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string; title: string; description: string; trailing?: ReactNode }) {
-  return <div className="mb-8 flex flex-col justify-between gap-5 border-b border-border pb-7 sm:flex-row sm:items-end"><div><div className="mb-3 text-[10px] font-semibold uppercase tracking-[.2em] text-muted-foreground">{eyebrow}</div><h1 className="serif text-[36px] leading-[1.05] tracking-[-.025em] sm:text-[42px]">{title}</h1><p className="mt-3 max-w-[620px] text-[13px] leading-6 text-muted-foreground">{description}</p></div>{trailing}</div>;
+  return <div className="mb-5 flex flex-col justify-between gap-3 border-b border-border pb-5 sm:mb-8 sm:gap-5 sm:pb-7 sm:flex-row sm:items-end">
+    <div><div className="mb-2 text-[11px] font-semibold uppercase tracking-[.16em] text-muted-foreground sm:mb-3">{eyebrow}</div>
+      <h1 className="serif text-[30px] leading-[1.08] tracking-[-.025em] sm:text-[42px]">{title}</h1>
+      <p className="mt-2 max-w-[620px] text-[13px] leading-6 text-muted-foreground sm:mt-3">{description}</p>
+    </div>
+    {trailing && <div className="flex items-center">{trailing}</div>}
+  </div>;
 }
 
 function Panel({ children, className = '', title, action }: { children: ReactNode; className?: string; title?: string; action?: ReactNode }) {
-  return <section className={`rounded-xl border border-border bg-card ${className}`}>{(title || action) && <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-[12px] font-semibold tracking-[.01em]">{title}</h2>{action}</div>}<div>{children}</div></section>;
+  return <section className={`min-w-0 overflow-hidden rounded-2xl border border-border bg-card ${className}`}>
+    {(title || action) && <div className="flex min-h-12 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+      <h2 className="text-[13px] font-semibold tracking-[.01em]">{title}</h2>{action}
+    </div>}<div>{children}</div>
+  </section>;
 }
 
 function EmptyState({ icon: Icon, title, description, action }: { icon: typeof Search; title: string; description: string; action?: ReactNode }) {
-  return <div className="flex min-h-[205px] flex-col items-center justify-center px-6 py-9 text-center"><span className="grid h-11 w-11 place-items-center rounded-full bg-muted text-muted-foreground"><Icon size={19} strokeWidth={1.6} /></span><h3 className="mt-4 text-[13px] font-semibold">{title}</h3><p className="mt-1 max-w-[330px] text-[12px] leading-5 text-muted-foreground">{description}</p>{action && <div className="mt-4">{action}</div>}</div>;
+  return <div className="flex min-h-[165px] flex-col items-center justify-center px-5 py-6 text-center sm:min-h-[205px] sm:py-9"><span className="grid h-11 w-11 place-items-center rounded-full bg-muted text-muted-foreground"><Icon size={19} strokeWidth={1.6} /></span><h3 className="mt-3 text-[13px] font-semibold">{title}</h3><p className="mt-1 max-w-[330px] text-[12px] leading-5 text-muted-foreground">{description}</p>{action && <div className="mt-4">{action}</div>}</div>;
 }
 
 function ActionButton({ children, onClick, type = 'button', variant = 'primary', disabled = false }: { children: ReactNode; onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'quiet' | 'danger'; disabled?: boolean }) {
   const variantClass = variant === 'primary' ? 'bg-primary text-primary-foreground hover:opacity-90' : variant === 'danger' ? 'border border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10' : 'border border-border bg-card text-foreground hover:bg-muted';
-  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-[12px] font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${variantClass}`}>{children}</button>;
+  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-[13px] font-semibold transition-opacity active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50 ${variantClass}`}>{children}</button>;
 }
 
 function StatusTag({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'good' | 'warn' | 'bad' }) {
@@ -649,7 +659,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
 }
 
 function Field({ label, value, onChange, placeholder, type = 'text', step, min }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; step?: string; min?: string }) {
-  return <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-muted-foreground">{label}</span><input type={type} step={step} min={min} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none focus:ring-2 focus:ring-ring/30" /></label>;
+  return <label className="block"><span className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">{label}</span><input type={type} step={step} min={min} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>;
 }
 
 function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
@@ -847,7 +857,7 @@ function OfflineOnlyBanner() {
 function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const [dailyOpen, setDailyOpen] = useState(false);
   const settings = vault.backupSettings;
-  return <details id="mc-backup-controls" className="group mx-4 mt-3 rounded-2xl border border-border bg-card shadow-sm sm:mx-7 lg:mx-11 lg:mt-5" aria-label="Encrypted vault and backup settings">
+  return <details id="mc-backup-controls" className="group mb-4 rounded-2xl border border-border bg-card shadow-sm lg:mb-7" aria-label="Encrypted vault and backup settings">
     <summary className="flex min-h-[55px] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(165,19%,91%)] text-primary"><ShieldCheck size={18}/></span>
       <span className="min-w-0 flex-1">
