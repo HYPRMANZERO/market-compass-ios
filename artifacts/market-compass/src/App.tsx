@@ -843,6 +843,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
     settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
     currency={data.currency}
     debtAccounts={data.accounts}
+    desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
     onSave={(entry,syncDebtBalance)=>setData(old=>({
       ...old,
       expenseEntries:[
