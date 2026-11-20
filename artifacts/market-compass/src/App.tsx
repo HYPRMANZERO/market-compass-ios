@@ -202,21 +202,35 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<void>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
-  return <main className="min-h-[100dvh] bg-background px-5 py-12 text-foreground">
-    <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-7 shadow-sm">
-      <div className="mb-4 flex items-center gap-3"><ShieldCheck className="text-primary" size={29} /><h1 className="serif text-3xl">Market Compass Vault</h1></div>
-      <p className="text-sm leading-6 text-muted-foreground">Your local workspace uses adaptive gzip compression (only when smaller) followed by AES-256-GCM encryption. It is stored on this device, not on a hosting server.</p>
-      <p className="mt-3 text-xs text-muted-foreground">Your password is never saved. If it is lost, your data cannot be recovered without a backup and its password.</p>
-      {vault.hasLegacy && !vault.hasVault && <p className="mt-4 rounded-lg bg-muted p-3 text-xs">Existing unencrypted workspace data was detected. Creating a vault will migrate it and remove the old localStorage entry after the encrypted save succeeds.</p>}
-      {vault.error && <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{vault.error}</p>}
-      {vault.initializing ? <p className="mt-6">Opening local storage…</p> : <>
-        <label className="mt-6 block text-xs font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Create a password (12+ characters)'}</label>
-        <input id="vault-password" type="password" autoComplete="off" className="mt-2 w-full rounded-lg border border-input bg-background p-3" value={entered} onChange={(e) => setEntered(e.target.value)} />
-        <button disabled={busy || !entered} className="mt-4 w-full rounded-lg bg-primary p-3 text-sm font-semibold text-primary-foreground disabled:opacity-40" onClick={() => run(() => vault.hasVault ? vault.unlock(entered) : vault.create(entered))}>{busy ? 'Working…' : vault.hasVault ? 'Unlock workspace' : 'Create encrypted workspace'}</button>
-        <label className="mt-6 block text-xs font-semibold">Restore an encrypted backup</label>
-        <input aria-label="Import encrypted vault backup" type="file" accept=".json,application/json" className="mt-2 w-full text-xs" disabled={busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void run(() => vault.importBackup(file, entered)); e.currentTarget.value = ''; }} />
-        <p className="mt-2 text-xs text-muted-foreground">Enter the backup's password above before importing. Import replaces the vault on this device.</p>
-      </>}
+  return <main className="flex min-h-[100dvh] flex-col bg-[hsl(165,24%,19%)] px-4 pb-[calc(26px+env(safe-area-inset-bottom))] pt-[calc(32px+env(safe-area-inset-top))] text-white sm:justify-center">
+    <div className="mx-auto w-full max-w-[430px]">
+      <div className="mb-7 flex items-center gap-3 px-1">
+        <span className="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={27}/></span>
+        <div><h1 className="serif text-[27px] leading-none">Market Compass</h1><p className="mt-1 text-[11px] uppercase tracking-[.17em] text-white/60">Your private finance app</p></div>
+      </div>
+      <div className="rounded-[26px] bg-[hsl(44,33%,99%)] p-5 text-foreground shadow-[0_20px_60px_rgba(0,0,0,.12)] sm:p-7">
+        <div className="mb-4 flex items-center gap-2"><ShieldCheck className="text-primary" size={23}/><h2 className="text-[21px] font-bold">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
+        <p className="text-[13px] leading-6 text-muted-foreground">Debt plans, saved markets and notes are stored encrypted on this device. No bank sign-in is required.</p>
+        {vault.hasLegacy && !vault.hasVault && <p className="mt-3 rounded-xl bg-muted p-3 text-[12px] leading-5">Older unencrypted workspace detected. Creating a vault will encrypt it and remove the old local copy once saved.</p>}
+        {vault.error && <p role="alert" className="mt-3 rounded-xl bg-destructive/10 p-3 text-[12px] text-destructive">{vault.error}</p>}
+        {vault.initializing ? <p className="mt-6 text-[13px]">Opening your encrypted storage…</p> : <>
+          <label className="mt-5 block text-[13px] font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Choose a password (12+ characters)'}</label>
+          <input id="vault-password" type="password" autoComplete="off" value={entered} onChange={e => setEntered(e.target.value)}
+            className="mt-2 h-13 w-full rounded-xl border border-input bg-background px-4 text-[16px]" placeholder="Enter your private password" />
+          <button type="button" disabled={busy || !entered} onClick={() => { void run(() => vault.hasVault ? vault.unlock(entered) : vault.create(entered)); }}
+            className="mt-4 flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[14px] font-bold text-primary-foreground disabled:opacity-40">
+            <ShieldCheck size={17}/>{busy ? 'Opening…' : vault.hasVault ? 'Unlock Market Compass' : 'Create encrypted workspace'}
+          </button>
+          <details className="mt-5 rounded-xl border border-border bg-muted/30 p-3 text-[12px]">
+            <summary className="cursor-pointer font-semibold">Restore from encrypted backup</summary>
+            <p className="mt-2 leading-5 text-muted-foreground">Enter the backup password above. Restoring replaces the saved vault on this device.</p>
+            <input aria-label="Import encrypted vault backup" type="file" accept=".json,application/json" disabled={busy}
+              className="mt-3 w-full max-w-full text-[12px]" onChange={e => { const file = e.target.files?.[0]; if (file) void run(() => vault.importBackup(file, entered)); e.currentTarget.value=''; }} />
+          </details>
+        </>}
+      </div>
+      <div className="mt-5 flex items-center justify-center gap-2 text-center text-[11px] text-white/70"><ShieldCheck size={14}/> Encrypted on your device · Offline-ready</div>
+      <p className="mt-2 text-center text-[11px] leading-5 text-white/55">If your password is lost, the vault cannot be recovered without a backup and its password.</p>
     </div>
   </main>;
 }
