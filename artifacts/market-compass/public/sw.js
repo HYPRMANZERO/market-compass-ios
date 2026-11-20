@@ -67,51 +67,28 @@ self.addEventListener('fetch', event => {
 });
 
 
-// The only push listener: privacy-preserving generic notifications.
-self.addEventListener('push', event => {
-  let data = {};
-  try { data = event.data?.json() || {}; } catch { /* fallback */ }
-  event.waitUntil(self.registration.showNotification('Market Compass reminder', {
-    body:'Open Market Compass to review your salary-cycle expenses.',
-    tag: typeof data.tag==='string' ? data.tag.slice(0,80) : 'mc-reminder',
-    icon:new URL('icons/icon-192.png',self.registration.scope).href,
-    data:{url:new URL('expenses',self.registration.scope).href}
-  }));
-});
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  const target=new URL('expenses',self.registration.scope).href;
-  event.waitUntil((async()=>{
-    const windows=await clients.matchAll({type:'window',includeUncontrolled:true});
-    const existing=windows.find(client=>client.url.startsWith(self.registration.scope));
-    if(existing){await existing.navigate(target);return existing.focus();}
-    return clients.openWindow(target);
-  })());
-});
-
-// Browser push works only for explicitly subscribed installed Home Screen apps.
-// Never include amounts, account identifiers, or lender names on lock screens.
+// One privacy-preserving push handler. Never expose financial amounts on the lock screen.
 self.addEventListener('push', event => {
   let payload = {};
-  try { payload = event.data ? event.data.json() : {}; } catch { /* generic fallback */ }
-  const title = typeof payload.title === 'string' ? payload.title.slice(0, 100) : 'Market Compass reminder';
-  const body = typeof payload.body === 'string' ? payload.body.slice(0, 170) : 'Review your private budget.';
-  const url = typeof payload.url === 'string' && /^\/market-compass-ios\/(?:expenses)?$/.test(payload.url)
-    ? payload.url : '/market-compass-ios/expenses';
-  event.waitUntil(self.registration.showNotification(title, {
-    body, tag: typeof payload.tag === 'string' ? payload.tag.slice(0, 100) : 'mc-reminder',
+  try { payload = event.data?.json() || {}; } catch { /* generic fallback */ }
+  const tag = typeof payload.tag === 'string' ? payload.tag.slice(0, 80) : 'mc-reminder';
+  event.waitUntil(self.registration.showNotification('Market Compass reminder', {
+    body: 'Open Market Compass to review your private expenses.',
+    tag,
     icon: new URL('icons/icon-192.png', self.registration.scope).href,
-    data: { url },
+    data: { url: new URL('expenses', self.registration.scope).href },
   }));
 });
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const target = new URL((event.notification.data && event.notification.data.url) || '/market-compass-ios/expenses', self.location.origin);
-  if(target.origin !== self.location.origin || !target.pathname.startsWith('/market-compass-ios/')) return;
-  event.waitUntil(self.clients.matchAll({ type:'window', includeUncontrolled:true }).then(async clients => {
-    for (const client of clients) {
-      if (new URL(client.url).origin===target.origin) { await client.focus(); return; }
+  const target = new URL('expenses', self.registration.scope);
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = windows.find(client => client.url.startsWith(self.registration.scope));
+    if (existing) {
+      await existing.navigate(target.href);
+      return existing.focus();
     }
     return self.clients.openWindow(target.href);
-  }));
+  })());
 });
