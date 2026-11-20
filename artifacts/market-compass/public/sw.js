@@ -88,3 +88,30 @@ self.addEventListener('notificationclick', event => {
     return clients.openWindow(target);
   })());
 });
+
+// Browser push works only for explicitly subscribed installed Home Screen apps.
+// Never include amounts, account identifiers, or lender names on lock screens.
+self.addEventListener('push', event => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { /* generic fallback */ }
+  const title = typeof payload.title === 'string' ? payload.title.slice(0, 100) : 'Market Compass reminder';
+  const body = typeof payload.body === 'string' ? payload.body.slice(0, 170) : 'Review your private budget.';
+  const url = typeof payload.url === 'string' && /^\/market-compass-ios\/(?:expenses)?$/.test(payload.url)
+    ? payload.url : '/market-compass-ios/expenses';
+  event.waitUntil(self.registration.showNotification(title, {
+    body, tag: typeof payload.tag === 'string' ? payload.tag.slice(0, 100) : 'mc-reminder',
+    icon: new URL('icons/icon-192.png', self.registration.scope).href,
+    data: { url },
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || '/market-compass-ios/expenses', self.location.origin);
+  if(target.origin !== self.location.origin || !target.pathname.startsWith('/market-compass-ios/')) return;
+  event.waitUntil(self.clients.matchAll({ type:'window', includeUncontrolled:true }).then(async clients => {
+    for (const client of clients) {
+      if (new URL(client.url).origin===target.origin) { await client.focus(); return; }
+    }
+    return self.clients.openWindow(target.href);
+  }));
+});
