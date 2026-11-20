@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Send, ShieldCheck, Speaker, SpeakerX, WifiOff, X } from 'lucide-react';
+import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 
 type RecognitionResult = { 0: { transcript: string }; isFinal: boolean };
@@ -180,7 +180,7 @@ export default function VoiceAssistant({ context, onNavigate }: Props) {
         <button type="button" aria-label={speechEnabled ? 'Turn off spoken answers' : 'Turn on spoken answers'} aria-pressed={speechEnabled}
           onClick={() => { if (voiceSupported) { if (speechEnabled) window.speechSynthesis.cancel(); setSpeechEnabled(v => !v); } }}
           disabled={!voiceSupported} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 disabled:opacity-40">
-          {speechEnabled ? <Speaker size={20}/> : <SpeakerX size={20}/>}
+          {speechEnabled ? <Speaker size={20}/> : <VolumeX size={20}/>}
         </button>
       </div>
       <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75"><WifiOff size={16}/> Offline commands ready <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">{desktopReady ? 'Ollama linked' : 'Local mode'}</span></div>
