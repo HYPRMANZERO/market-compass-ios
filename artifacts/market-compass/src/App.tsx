@@ -462,7 +462,23 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   const [candlesError, setCandlesError] = useState(false);
   const [backtesting, setBacktesting] = useState(false);
   const requestSerial = useRef(0);
+  const [fxError, setFxError] = useState('');
   const activeSeries = series ?? (localCached ? data.marketCache : null);
+  const fxPair = activeSeries && activeSeries.currency !== data.currency ? fxKey(activeSeries.currency, data.currency) : '';
+  const fxQuote = fxPair ? data.fxRates?.[fxPair] ?? null : null;
+  useEffect(() => {
+    const base = activeSeries?.currency;
+    const local = data.currency;
+    if (!base || base === local || !navigator.onLine) return;
+    if (fxQuote && Number.isFinite(Date.parse(fxQuote.fetchedAt)) &&
+      Date.now() - Date.parse(fxQuote.fetchedAt) < 24 * 60 * 60 * 1000) return;
+    const controller = new AbortController();
+    setFxError('');
+    void fetchFxReference(base, local, controller.signal)
+      .then(rate => setData(old => ({...old,fxRates:{...(old.fxRates ?? {}),[fxKey(base,local)]:rate}})))
+      .catch(error => { if (!controller.signal.aborted) setFxError(error instanceof Error ? error.message : 'Reference FX rate unavailable.'); });
+    return () => controller.abort();
+  }, [activeSeries?.currency, data.currency, fxQuote?.fetchedAt, setData]);
   const activeAnalysis = analysis ?? (localCached && data.analysisCache?.symbol === activeSeries?.symbol ? data.analysisCache : null);
   const lastSavedCandleDate = activeSeries?.candles?.at(-1)?.date ?? activeSeries?.asOf;
   const marketCacheDateMismatch = Boolean(activeSeries?.asOf && lastSavedCandleDate &&
@@ -581,6 +597,16 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
         The saved feed contains inconsistent timestamps: its earlier source label does not match the last stored candle. The chart shows the dates on its candles. Request fresh provider data to reconcile the feed before relying on analysis.
       </div>}
       {activeSeries.notice && !marketCacheDateMismatch && <div className="mb-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-[11px] leading-5 text-muted-foreground">{activeSeries.notice}</div>}
+      {activeSeries.currency !== data.currency && <div className="mb-4 rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between gap-3"><span className="text-[12px] font-bold">Approximate price in {data.currency}</span><span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold">{data.currency}</span></div>
+        {fxQuote && typeof price === 'number' && approximateLocalValue(price,activeSeries.currency,data.currency,fxQuote)!==null
+          ? <>
+            <div className="mt-2 text-[27px] font-bold">{money(approximateLocalValue(price,activeSeries.currency,data.currency,fxQuote)!,data.currency)}</div>
+            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Original closing price: {money(price,activeSeries.currency)}. FX reference: 1 {activeSeries.currency} = {fxQuote.rate.toFixed(5)} {data.currency} on {fxQuote.rateDate}. {fxQuote.source} public daily reference data; not a bank or executable FX quote.</p>
+          </> :
+          <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{fxError || 'Fetching public daily currency reference rate. An internet connection is needed the first time; the last verified rate will then be kept in your encrypted workspace.'}</p>}
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">The chart, indicators and all earlier candles remain in {activeSeries.currency}. This is a snapshot conversion of the latest saved close, not a historical currency-adjusted backtest.</p>
+      </div>}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(270px,.8fr)]">
         <Panel title={`${activeSeries.symbol} · Candles`} action={<span className="mono text-[10px] text-muted-foreground">{loadedRange ?? 'CSV'} · {activeSeries.candles.length} days</span>}>
           {activeSeries.candles.length ? <HistoricalCandleChart candles={activeSeries.candles} currency={activeSeries.currency} /> : <EmptyState icon={Activity} title="No candles returned" description="The provider returned no candle records for this request." />}
