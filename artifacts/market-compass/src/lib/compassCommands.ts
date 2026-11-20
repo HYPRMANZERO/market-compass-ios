@@ -9,12 +9,13 @@ export type CompassCommandContext = {
   privateBudget?: { monthlyIncome: string; monthlyEssentials: string; liquidFunds: string; reserveTarget: string } | null;
   marketCache?: { symbol: string; currency: string; candles?: { date: string; close: number }[] } | null;
   draftCount: number;
+  expenseSummary?: {cycleStart:string;cycleEnd:string;income:number;expenses:number;debtPayments:number;transfers:number;recordedDifference:number;entryCount:number;cycleLimit:number|null;flags:string[]};
 };
 export type CompassCommandResult = {
   type: 'answer' | 'navigate' | 'unknown';
   reply: string;
   needsHistoricalSources?: boolean;
-  destination?: '/' | '/markets' | '/debt' | '/drafts' | '/assistant';
+  destination?: '/' | '/markets' | '/debt' | '/expenses' | '/drafts' | '/assistant';
 };
 
 function currency(value: number, code: string): string {
@@ -35,6 +36,7 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
   const navigations: { regex: RegExp; to: CompassCommandResult['destination']; response: string }[] = [
     { regex: /^(?:open|show|go to|take me to|navigate to|view)\s+(?:my\s+)?(?:debt|debts|debt plan|debt payoff|loan|loans)(?:\s+page)?$/, to: '/debt', response: 'Opening Debt Plan.' },
     { regex: /^(?:open|show|go to|take me to|navigate to|view)\s+(?:my\s+)?(?:markets|market|market research|prices)(?:\s+page)?$/, to: '/markets', response: 'Opening Markets.' },
+    { regex: /^(?:open|show|go to|take me to|navigate to|view)\s+(?:my\s+)?(?:expenses|expense tracker|spending|monthly expenses|payments)(?:\s+page)?$/, to: '/expenses', response: 'Opening Monthly Expenses.' },
     { regex: /^(?:open|show|go to|take me to|navigate to|view)\s+(?:my\s+)?(?:drafts|orders|trade drafts)(?:\s+page)?$/, to: '/drafts', response: 'Opening your local Drafts.' },
     { regex: /^(?:open|show|go to|take me to|navigate to|view)\s+(?:my\s+)?(?:home|overview|dashboard)(?:\s+page)?$/, to: '/', response: 'Opening Home.' },
     { regex: /^(?:open|show|go to|take me to|navigate to|view)\s+(?:my\s+)?(?:assistant|ai|voice assistant)(?:\s+page)?$/, to: '/assistant', response: 'Opening the assistant.' },
@@ -42,8 +44,18 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
   const path = navigations.find(p => p.regex.test(q));
   if (path) return { type:'navigate', destination:path.to, reply:path.response };
 
+  const spentQuery=/\b(how much|what|total|summary|overview)\b/.test(q) &&
+    /\b(spent|spending|expenses|salary cycle|monthly expenses|repayments)\b/.test(q);
+  if (spentQuery && ctx.expenseSummary) {
+    const e=ctx.expenseSummary;
+    return {type:'answer',reply:'For '+e.cycleStart+' through '+e.cycleEnd+', your entered records show '+
+      currency(e.income,ctx.currency)+' income, '+currency(e.expenses,ctx.currency)+' expenses and '+
+      currency(e.debtPayments,ctx.currency)+' debt repayments across '+e.entryCount+
+      ' entries. Internal transfers of '+currency(e.transfers,ctx.currency)+
+      ' are tracked separately. These are manually entered figures, not verified bank balances.'};
+  }
   if (/\b(help|what can you do|commands|how do i use you)\b/.test(q)) {
-    return { type:'answer', reply:'You can ask: What is my total debt? Which debt has the highest APR? What are my minimum payments? How much extra can I afford? What market data is saved? Or say open Debt Plan, Markets, Drafts or Home. I can speak replies aloud, but never initiate payments or trades.' };
+    return { type:'answer', reply:'You can ask: What is my total debt? Which debt has the highest APR? What are my minimum payments? How much extra can I afford? What market data is saved? Or say open Expenses, Debt Plan, Markets, Drafts or Home. I can speak replies aloud, but never initiate payments or trades.' };
   }
   if (/\b(date|today|what day)\b/.test(q)) {
     return { type:'answer', reply:`Today is ${new Date().toLocaleDateString('en-ZA', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}. Your market data may be historical.` };
