@@ -225,7 +225,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
         </div>
       </div>
       <div className="mt-4"><SalaryPush settings={desktopAi}/></div>
-      {reminderNote&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">{reminderNote}</p>
+      {reminderNote&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">{reminderNote}</p>}
     </section>
     <section id="mc-expense-form" className="scroll-mt-24 rounded-2xl border border-border bg-card p-4">
       <h2 className="text-[15px] font-bold">{editingId?'Edit payment':'Record a payment or salary'}</h2>
