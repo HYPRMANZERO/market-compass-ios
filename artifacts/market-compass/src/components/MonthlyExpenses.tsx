@@ -126,7 +126,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           });
           else if(live && !/iphone|ipad|ipod/i.test(navigator.userAgent))
             new Notification('Market Compass: salary-day check-in',{body:'Record your salary and upcoming bills.'});
-        }else if(live && !/iphone|ipad|ipod/i.test(navigator.userAgent)){
+        }else if(live){
           new Notification('Market Compass: salary-day check-in',{body:'Record your salary and upcoming bills.'});
         }
         if(live)onSettingsChange({...settings,lastSalaryReminderCycle:activeRange.start});
