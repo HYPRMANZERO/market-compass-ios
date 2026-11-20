@@ -18,7 +18,7 @@ test('adversarial income shock triggers review rather than automatic approval', 
   assert.equal(a.budgetPass, true);
   assert.equal(a.stressPass, false);
   assert.equal(a.verdict, 'review_required');
-  assert.ok(a.reasons.some(x => x.includes('disagree')));
+  assert.ok(a.reasons.some(x => x.includes('fails the stated adverse cashflow check')));
 });
 test('a cash shortfall, missing reserve or corrupt number fails safely', () => {
   assert.equal(auditDebtDecision({...cash, monthlyIncome: 6500}).verdict, 'unaffordable');
