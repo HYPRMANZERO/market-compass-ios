@@ -1,4 +1,4 @@
-import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
+import { privateTailnetOrigin } from './privateTailnetUrl.ts';
 
 export type DesktopAiSettings = {
   url: string;
