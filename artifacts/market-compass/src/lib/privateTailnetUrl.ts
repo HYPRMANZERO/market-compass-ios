@@ -1,4 +1,9 @@
-/** Only private Tailnet HTTPS URLs or the current owner's same-origin Access app. */
+/**
+ * Validate a private AI origin. Prefer a .ts.net Tailscale Serve URL.
+ * On an Access-protected Cloudflare-hosted copy of Market Compass, the
+ * gateway lives at the same HTTPS origin as the web app. This deliberately
+ * does NOT permit entering arbitrary public AI endpoints from GitHub Pages.
+ */
 export function privateTailnetOrigin(raw: string): string | null {
   try {
     const entered = raw.trim();
@@ -12,14 +17,13 @@ export function privateTailnetOrigin(raw: string): string | null {
       if (!prefix || prefix.split('.').some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) return null;
       return url.origin;
     }
-    // Only the current exact HTTPS origin is eligible; arbitrary tunnel URLs
-    // cannot be saved into the public GitHub Pages edition.
-    if (typeof window === 'undefined' || window.location.protocol !== 'https:' ||
-        window.location.hostname.endsWith('.github.io') ||
-        window.location.hostname.endsWith('.ts.net') ||
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        url.origin !== window.location.origin) return null;
-    return url.origin;
+    // Cloudflare Access-hosted deployment: browser credentials stay first-party.
+    // Never weaken the GitHub Pages copy to accept an arbitrary public tunnel.
+    if (typeof window !== 'undefined' &&
+        url.origin === window.location.origin &&
+        !/\.github\.io$/i.test(url.hostname) &&
+        !/^(localhost|127\.0\.0\.1)$/i.test(url.hostname) &&
+        url.hostname.includes('.')) return url.origin;
+    return null;
   } catch { return null; }
 }
