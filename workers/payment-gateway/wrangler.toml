@@ -1,0 +1,21 @@
+name = "market-compass-payment-gateway"
+main = "index.mjs"
+compatibility_date = "2026-11-20"
+workers_dev = true
+
+# This worker is separate from GitHub Pages. Deployment is intentionally MANUAL.
+# Do not enable live payments without Ozow merchant approval and tested verification.
+[vars]
+MC_ALLOWED_ORIGIN = "https://hyprmanzero.github.io"
+MC_RETURN_URL = "https://hyprmanzero.github.io/market-compass-ios/"
+OZOW_ENV = "staging"
+PAYMENTS_ENABLED = "false"
+ALLOW_LIVE_PAYMENTS = "false"
+MC_MAX_ZAR = "5000"
+
+# Never put any Ozow credential or MC_OPERATOR_PASSPHRASE in [vars].
+# Configure these using wrangler secret put:
+#   OZOW_CLIENT_ID
+#   OZOW_CLIENT_SECRET
+#   OZOW_SITE_CODE
+#   MC_OPERATOR_PASSPHRASE
