@@ -13,6 +13,7 @@ import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
+import { localMarketResearch } from '@/lib/marketResearch';
 import type { AssistantCommand, BacktestResult, Candle, DebtPlan, MarketAnalysis, MarketSeries } from '@workspace/api-client-react';
 import {
   Activity, ArrowDownRight, ArrowLeftRight, ArrowRight, ArrowUpRight, Check, ChevronDown,
@@ -428,6 +429,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     setData((old) => ({ ...old, drafts: [draft, ...old.drafts] }));
   };
   const analysisError = false;
+  const research = activeSeries && activeSeries.candles.length >= 10 ? localMarketResearch(activeSeries.candles) : null;
 
   async function importCsv(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -524,6 +526,35 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
           <div className="grid grid-cols-2 gap-x-6 px-5 py-2"><Metric label="Balanced accuracy" value={activeAnalysis.model.balancedAccuracy == null ? '—' : `${(activeAnalysis.model.balancedAccuracy * 100).toFixed(1)}%`} note="Historical evaluation" /><Metric label="Positive probability" value={activeAnalysis.model.positiveProbability == null ? '—' : `${(activeAnalysis.model.positiveProbability * 100).toFixed(1)}%`} note="Model output, not certainty" /></div>
         </div>
         {activeAnalysis.caveats.length > 0 && <div className="border-t border-border bg-muted/35 px-5 py-4"><div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.14em] text-muted-foreground"><CircleAlert size={13} /> Caveats</div><ul className="space-y-1.5">{activeAnalysis.caveats.map((caveat, i) => <li key={`${i}-${caveat}`} className="text-[11px] leading-5 text-muted-foreground">— {caveat}</li>)}</ul></div>}
+      </Panel>}
+      {research && <Panel className="mt-4" title="Noise, Markov & extrema research" action={<StatusTag tone="warn">historical · non-executable</StatusTag>}>
+        <div className="grid gap-4 p-5 sm:grid-cols-3">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Causal Kalman filter</div>
+            <div className="mono mt-2 text-[17px]">{money(research.noise.lastFiltered, activeSeries.currency)}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">Filtered daily close · {research.noise.filteredDirection}</div>
+            <div className="mt-1 text-[10px] text-muted-foreground">Original: {money(research.noise.lastRaw, activeSeries.currency)} · smoothing lags price</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Markov holdout</div>
+            <div className="mono mt-2 text-[17px]">{research.markov.accuracy === null ? 'Not enough data' : `${(research.markov.accuracy * 100).toFixed(1)}%`}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">Next-state accuracy · {research.markov.observations} held-out observations</div>
+            {research.markov.majorityBaselineAccuracy !== null && <div className="mt-1 text-[10px] text-muted-foreground">Simple baseline: {(research.markov.majorityBaselineAccuracy * 100).toFixed(1)}%</div>}
+            {research.markov.testPeriod && <div className="mt-1 text-[10px] text-muted-foreground">Test: {research.markov.testPeriod} (UTC)</div>}
+            {research.markov.nextStateFrequencies && <div className="mt-1 text-[10px] text-muted-foreground">Historical transitions from {research.markov.lastState}: ↑ {(research.markov.nextStateFrequencies.up*100).toFixed(0)}% · ↓ {(research.markov.nextStateFrequencies.down*100).toFixed(0)}% · → {(research.markov.nextStateFrequencies.flat*100).toFixed(0)}%</div>}
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Confirmed extrema</div>
+            <div className="mono mt-2 text-[17px]">{research.extrema.pivots} delayed pivots</div>
+            {research.extrema.latest ? <div className="mt-1 text-[11px] leading-5 text-muted-foreground">Latest {research.extrema.latest.kind.replace('_',' ')} on {utcCandleDate(research.extrema.latest.date)} (UTC); first confirmable on {utcCandleDate(research.extrema.latest.confirmedAt)} (UTC).</div> : <div className="mt-1 text-[11px] text-muted-foreground">No extrema confirmed in this history.</div>}
+            <div className="mt-1 text-[10px] text-muted-foreground">A pivot needs three later completed candles before it can be confirmed.</div>
+          </div>
+        </div>
+        <details className="border-t border-border p-4 text-[11px] leading-5 text-muted-foreground">
+          <summary className="cursor-pointer font-semibold">Research limitations and validation</summary>
+          <p className="mt-2">Kalman estimates use only current/past data; Markov frequencies use the first 70% of observed states and report accuracy on the last 30%. Extrema are marked only when their confirmation lag has passed. None of these is a calibrated trading model or a guarantee against errors.</p>
+          <ul className="mt-2 list-disc pl-5">{research.warnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul>
+        </details>
       </Panel>}
       {activeSeries && !fetching && <Panel className="mt-4" title="Window backtest" action={backtest ? <StatusTag tone={backtest.strategyReturn > backtest.benchmarkReturn ? 'good' : 'warn'}>computed</StatusTag> : <span className="mono text-[10px] text-muted-foreground">SMA crossover</span>}>
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end sm:p-5">
