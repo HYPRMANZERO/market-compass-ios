@@ -218,6 +218,9 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
       <div className="rounded-[26px] bg-[hsl(44,33%,99%)] p-5 text-foreground shadow-[0_20px_60px_rgba(0,0,0,.12)] sm:p-7">
         <div className="mb-4 flex items-center gap-2"><ShieldCheck className="text-primary" size={23}/><h2 className="text-[21px] font-bold">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
         <p className="text-[13px] leading-6 text-muted-foreground">Debt plans, saved markets and notes are stored encrypted on this device. No bank sign-in is required.</p>
+        {!vault.hasVault && <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
+          Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
+        </p>}
         {vault.hasLegacy && !vault.hasVault && <p className="mt-3 rounded-xl bg-muted p-3 text-[12px] leading-5">Older unencrypted workspace detected. Creating a vault will encrypt it and remove the old local copy once saved.</p>}
         {vault.error && <p role="alert" className="mt-3 rounded-xl bg-destructive/10 p-3 text-[12px] text-destructive">{vault.error}</p>}
         {vault.initializing ? <p className="mt-6 text-[13px]">Opening your encrypted storage…</p> : <>
