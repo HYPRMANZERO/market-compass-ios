@@ -442,7 +442,8 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     // not be confused with a historical cryptocurrency market candle.
     const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
       /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
-    if (result.type !== 'unknown' && !(connected && (result.needsHistoricalSources || asksLiveWallet))) {
+    const asksPublicResearch = /^(?:search public (?:reference|information|info)|research (?:public )?(?:topic|information)|search wikipedia for)\b/i.test(question);
+    if (result.type !== 'unknown' && !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch))) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
@@ -583,6 +584,9 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       </div>
       {memoryBusy && <p className="mt-2 text-[11px] text-muted-foreground">Processing encrypted desktop memory…</p>}
       {memoryError && <p role="status" className="mt-2 text-[11px] text-muted-foreground">{memoryError}</p>}
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+        For general topics, try: "search public info about compound interest." This searches public Wikipedia references only and sends no private financial context.
+      </p>
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
         Only successful desktop AI conversations are saved. Offline questions are not synchronized.
         Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
