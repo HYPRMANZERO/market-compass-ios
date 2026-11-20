@@ -57,3 +57,28 @@ self.addEventListener('fetch', event => {
     return live;
   })());
 });
+
+/* All push payloads are generic reminders; no balance or financial record appears
+   in the notification. Notification clicks open the installed expense page. */
+self.addEventListener('push', event => {
+  let message = {};
+  try { message = event.data ? event.data.json() : {}; } catch { /* generic fallback */ }
+  const title = 'Market Compass check-in';
+  const body = 'Open Market Compass to review your salary-cycle budget.';
+  const target = new URL('./expenses', self.registration.scope).href;
+  event.waitUntil(self.registration.showNotification(title, {
+    body, tag: typeof message.tag === 'string' ? message.tag.slice(0, 80) : 'mc-check-in',
+    icon: new URL('./icons/icon-192.png', self.registration.scope).href,
+    data: { target }
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = event.notification.data?.target || new URL('./expenses', self.registration.scope).href;
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({type:'window', includeUncontrolled:true});
+    const existing = clients.find(client => new URL(client.url).origin === new URL(target).origin);
+    if (existing) { await existing.focus(); existing.navigate(target); return; }
+    await self.clients.openWindow(target);
+  })());
+});
