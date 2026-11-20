@@ -6,7 +6,7 @@ import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import {
   type ExpenseEntry, type ExpenseKind, type ExpenseCategory, type ExpenseSettings,
   EXPENSE_CATEGORIES, EXPENSE_KINDS, cycleAnalysis, cycleEntries, parseMoneyAmount,
-  salaryCycle, shiftSalaryCycle, validateExpenseEntry,
+  salaryCycle, shiftSalaryCycle, validateExpenseEntry, cycleSpendingTrends,
 } from '@/lib/monthlyExpenses';
 
 type DebtAccount = {id:string;name:string;balance:string};
@@ -53,6 +53,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const active=selected.start===activeRange.start;
   const allEntries=Array.isArray(entries)?entries:[];
   const analysis=cycleAnalysis(allEntries,cycleStart,currency,settings.cycleBudget);
+  const historicalTrends=cycleSpendingTrends(allEntries,cycleStart,today,currency);
   const selectedEntries=cycleEntries(allEntries,cycleStart,currency)
     .slice().sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
   const currentSalaryEntered=cycleEntries(allEntries,activeRange.start,currency)
@@ -293,6 +294,21 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
         <h3 className="text-[12px] font-semibold">Largest categories (excluding transfers)</h3>
         <div className="mt-2 space-y-2">{analysis.byCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>
       </div>}
+      {analysis.byPaymentMethod.length>0&&<div className="mt-4 border-t border-border pt-3">
+        <h3 className="text-[12px] font-semibold">Payment apps and methods used</h3>
+        <div className="mt-2 space-y-2">{analysis.byPaymentMethod.map(item=><div key={item.app} className="flex justify-between gap-3 text-[12px]">
+          <span>{item.app} <span className="text-muted-foreground">({item.count})</span></span>
+          <strong>{cash(item.amount,currency)}</strong>
+        </div>)}</div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Only manually recorded spending and debt repayments. Internal transfers excluded.</p>
+      </div>}
+      <div className="mt-4 border-t border-border pt-3">
+        <h3 className="text-[12px] font-semibold">Completed salary-cycle trends</h3>
+        {historicalTrends.available?<div className="mt-2 space-y-2">
+          {historicalTrends.highlights.map((item,i)=><p key={i} className="text-[12px] leading-5">{item}</p>)}
+        </div>:<p className="mt-2 text-[12px] text-muted-foreground">{historicalTrends.message}</p>}
+        <p className="mt-2 text-[11px] text-muted-foreground">Partial cycles are not compared as complete months. Categories are spending observations, not proof of waste.</p>
+      </div>
       {analysis.latestBalances.length>0&&<div className="mt-4 border-t border-border pt-3">
         <h3 className="text-[12px] font-semibold">Latest manually entered debt balances</h3>
         {analysis.latestBalances.map(x=><p key={x.account} className="mt-2 text-[12px]">{x.account}: <strong>{cash(x.balance,currency)}</strong> <span className="text-muted-foreground">({readable(x.date)}; unverified)</span></p>)}
