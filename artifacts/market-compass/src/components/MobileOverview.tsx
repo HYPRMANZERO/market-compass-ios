@@ -1,6 +1,7 @@
 import { Activity, ArrowRight, Compass, FileClock, Landmark, ShieldCheck, WalletCards } from 'lucide-react';
 import { Link } from 'wouter';
 import type { MarketSeries } from '@workspace/api-client-react';
+import { approximateLocalValue, type FxReference } from '@/lib/fxRates';
 
 type Props = {
   currency: string;
@@ -8,6 +9,7 @@ type Props = {
   accountsCount: number;
   pendingDrafts: number;
   market: MarketSeries | null;
+  fxQuote?: FxReference | null;
 };
 const money = (amount: number, currency: string) => {
   try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount); }
@@ -20,7 +22,9 @@ const latestDay = (market: MarketSeries) => {
   return Number.isNaN(date.getTime()) ? last : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 };
 
-export default function MobileOverview({ currency, totalDebt, accountsCount, pendingDrafts, market }: Props) {
+export default function MobileOverview({ currency, totalDebt, accountsCount, pendingDrafts, market, fxQuote }: Props) {
+  const nativeClose = market?.candles?.at(-1)?.close;
+  const localClose = typeof nativeClose === 'number' && market ? approximateLocalValue(nativeClose, market.currency, currency, fxQuote) : null;
   return <div className="space-y-4 pb-3" data-testid="mobile-home">
     <section className="relative overflow-hidden rounded-[24px] bg-[hsl(165,24%,20%)] px-5 pb-6 pt-5 text-[hsl(43,35%,96%)]">
       <div className="pointer-events-none absolute -right-12 -top-8 h-52 w-52 rounded-full border border-white/10" />
@@ -81,6 +85,11 @@ export default function MobileOverview({ currency, totalDebt, accountsCount, pen
           <span className="text-[11px] text-muted-foreground">{market.currency}</span>
         </div>
         <div className="mt-1 text-[12px] text-muted-foreground">{market.candles?.length ?? 0} saved daily candles · last day {latestDay(market)} UTC</div>
+        {localClose !== null && <div className="mt-3 rounded-xl bg-muted/65 p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">{market.currency===currency ? 'Last saved close' : 'Approximate local value'}</div>
+          <div className="mt-1 text-[22px] font-bold tracking-tight">{money(localClose,currency)}</div>
+          {market.currency !== currency && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Converted from {money(nativeClose!,market.currency)} at the {fxQuote?.rateDate} daily reference rate; not live or executable.</p>}
+        </div>}
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">This is an offline copy, not a live trading quote. Refresh under Markets when connected.</p>
       </div> : <p className="mt-3 text-[12px] leading-5 text-muted-foreground">No market data saved yet. Choose a symbol when you're connected; saved candles can be inspected offline.</p>}
       <Link href="/markets" className="mt-4 flex min-h-11 items-center justify-between rounded-xl border border-border px-4 text-[13px] font-semibold">
