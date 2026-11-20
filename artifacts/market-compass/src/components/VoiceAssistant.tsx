@@ -305,7 +305,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
           {id:'memory-'+entry.id+'-reply', source:'ollama' as const, text:entry.reply},
         ]);
         setMessages([{
-          id:'welcome', source:'local', text:'Your saved private desktop conversations are available below.',
+          id:'welcome', source:'local' as const, text:'Your saved private desktop conversations are available below.',
         }, ...history].slice(-45));
         setStatus('Loaded saved desktop AI history. Your encrypted vault stays on HYPRBOX.');
       }
