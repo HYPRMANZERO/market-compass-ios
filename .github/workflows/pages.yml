@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test payment gateway (mock provider only)
+        run: node --test workers/payment-gateway/gateway.test.mjs
+
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
 
