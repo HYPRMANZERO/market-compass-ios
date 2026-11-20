@@ -55,7 +55,9 @@ self.addEventListener('fetch', event => {
     const cached = await caches.match(req);
     if (cached) return cached;
     const live = await fetch(req);
-    if (live.ok && live.type === 'basic' && !url.pathname.endsWith('/sw.js') &&
+    if (live.ok && !live.redirected && live.type === 'basic' &&
+        !live.headers.get('Content-Type')?.includes('text/html') &&
+        !url.pathname.endsWith('/sw.js') &&
         (url.pathname.includes('/assets/') || /\.(?:png|svg|webp|woff2|css|js)$/.test(url.pathname))) {
       const cache = await caches.open(CACHE);
       await cache.put(req, live.clone());
