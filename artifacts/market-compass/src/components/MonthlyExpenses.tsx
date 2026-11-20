@@ -26,6 +26,7 @@ const readable=(date:string)=>new Date(date+'T12:00:00').toLocaleDateString('en-
 const suggestCategory=(kind:ExpenseKind):ExpenseCategory=>kind==='income'?'salary':kind==='debt-payment'?'credit-card':kind==='transfer'?'savings':'groceries';
 export default function MonthlyExpenses({entries,settings,currency,debtAccounts,onSave,onDelete,onSettingsChange}:Props){
   const today=localDate();
+  const calendarUrl = new URL(import.meta.env.BASE_URL + 'salary-reminder.ics',window.location.origin).toString();
   const [cycleStart,setCycleStart]=useState(()=>salaryCycle(today).start);
   const [editingId,setEditingId]=useState('');
   const [date,setDate]=useState(today);
@@ -202,7 +203,24 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
         {settings.salaryReminderEnabled?<button type="button" className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold" onClick={()=>onSettingsChange({...settings,salaryReminderEnabled:false})}>Disable browser reminders</button>:
           <button type="button" className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold" onClick={()=>void enableReminder()}><Bell size={15} className="mr-1 inline"/> Enable browser reminders</button>}
       </div>
-      {reminderNote&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">{reminderNote}</p>}
+      <div className="mt-4 rounded-xl bg-muted/40 p-3">
+        <p className="text-[12px] font-semibold">iPhone alerts when the app is closed</p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          For a free monthly system reminder, subscribe to the Market Compass calendar on your iPhone.
+          In Calendar → Calendars → Add Calendar → Add Subscription Calendar, paste the URL below and enable alerts.
+          This is an Apple Calendar reminder on the 26th, not a live expense-triggered push message.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href={calendarUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-[12px] font-semibold">Open reminder calendar (.ics)</a>
+          <button type="button" className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold"
+            onClick={()=>void navigator.clipboard.writeText(calendarUrl).then(
+              ()=>setReminderNote('Calendar subscription URL copied. Add it to Calendar on your iPhone.'),
+              ()=>setReminderNote('Copy the link from the .ics link using your browser instead.')
+            )}>Copy calendar URL</button>
+        </div>
+      </div>
+      {reminderNote&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">{reminderNote}</p>
     </section>
     <section id="mc-expense-form" className="scroll-mt-24 rounded-2xl border border-border bg-card p-4">
       <h2 className="text-[15px] font-bold">{editingId?'Edit payment':'Record a payment or salary'}</h2>
