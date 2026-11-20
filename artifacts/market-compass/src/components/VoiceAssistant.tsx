@@ -121,20 +121,26 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     }
     let active = true;
     let current: AbortController | null = null;
+    let checking = false;
     async function check() {
-      if (!active) return;
+      // A visibility or online event can arrive while a previous probe is
+      // still pending. Never start a second request that cancels the first.
+      if (!active || checking) return;
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setConnection('offline');
         setConnectionMessage('This device is offline. Saved settings will reconnect when the network returns.');
         return;
       }
+      checking = true;
       const id = ++probeSerial.current;
-      current?.abort();
       const controller = new AbortController();
       current = controller;
       const timer = window.setTimeout(() => controller.abort(), 15000);
-      setConnection('checking');
-      setConnectionMessage('Checking your saved private desktop connection…');
+      // Keep an established connection usable while performing a background
+      // health check. Flipping 'connected' -> 'checking' previously unmounted
+      // the source reader and aborted valid /api/sources and /api/balances
+      // requests in Firefox (NS_BINDING_ABORTED).
+      setConnection(previous => previous === 'connected' ? previous : 'checking');
       try {
         const response = await fetch(url + '/api/session', {
           method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store',
@@ -143,6 +149,16 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         });
         const payload: unknown = await response.json();
         if (response.status === 401) throw Error('Saved desktop access token was rejected. Re-enter the current desktop token and save.');
+        if (response.status === 429) {
+          // The server is busy/rate-limited, not necessarily disconnected.
+          // Keep the previously validated session and retry on the next
+          // scheduled check rather than aborting all source requests.
+          if (active && probeSerial.current === id) {
+            setConnection(previous => previous === 'connected' ? previous : 'offline');
+            setConnectionMessage('Desktop status checks are temporarily rate-limited. Connection will be rechecked automatically.');
+          }
+          return;
+        }
         if (!response.ok || !payload || typeof payload !== 'object' ||
             !('authorized' in payload) || payload.authorized !== true)
           throw Error('The desktop AI service is not responding as an authorized session.');
@@ -158,7 +174,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         if (!active || probeSerial.current !== id || controller.signal.aborted && !navigator.onLine) return;
         setConnection('offline');
         setConnectionMessage(`Auto-reconnect pending: ${explainError(err)}. Offline commands still work.`);
-      } finally { window.clearTimeout(timer); }
+      } finally {
+        checking = false;
+        window.clearTimeout(timer);
+      }
     }
     const whenVisible = () => { if (document.visibilityState === 'visible') void check(); };
     const whenOnline = () => { void check(); };
@@ -183,7 +202,9 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   // a brief inventory and a GET-only Luno balance, never raw emails or statements.
   useEffect(() => {
     if (!connected) {
-      setSourceInventory(null); setLuno(null); setSourceError(''); setSourceLoading(false);
+      // Preserve the last retrieved status for reference while disconnected.
+      // On reconnection, the endpoints are queried again with fresh data.
+      setSourceLoading(false);
       return;
     }
     const origin = privateTailnetOrigin(settings.url);
