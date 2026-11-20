@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Bell, ChevronLeft, ChevronRight, CircleAlert, Edit2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { localDate } from '@/lib/dailyBackup';
+import SalaryPush from './SalaryPush';
+import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import {
   type ExpenseEntry, type ExpenseKind, type ExpenseCategory, type ExpenseSettings,
   EXPENSE_CATEGORIES, EXPENSE_KINDS, cycleAnalysis, cycleEntries, parseMoneyAmount,
@@ -13,6 +15,7 @@ type Props = {
   settings:ExpenseSettings;
   currency:string;
   debtAccounts:DebtAccount[];
+  desktopAi:DesktopAiSettings;
   onSave:(entry:ExpenseEntry,syncDebtBalance:boolean)=>void;
   onDelete:(id:string)=>void;
   onSettingsChange:(settings:ExpenseSettings)=>void;
@@ -24,7 +27,7 @@ const cash=(value:number,code:string)=>{
 };
 const readable=(date:string)=>new Date(date+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'});
 const suggestCategory=(kind:ExpenseKind):ExpenseCategory=>kind==='income'?'salary':kind==='debt-payment'?'credit-card':kind==='transfer'?'savings':'groceries';
-export default function MonthlyExpenses({entries,settings,currency,debtAccounts,onSave,onDelete,onSettingsChange}:Props){
+export default function MonthlyExpenses({entries,settings,currency,debtAccounts,desktopAi,onSave,onDelete,onSettingsChange}:Props){
   const today=localDate();
   const calendarUrl = new URL(import.meta.env.BASE_URL + 'salary-reminder.ics',window.location.origin).toString();
   const [cycleStart,setCycleStart]=useState(()=>salaryCycle(today).start);
@@ -220,6 +223,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
             )}>Copy calendar URL</button>
         </div>
       </div>
+      <div className="mt-4"><SalaryPush settings={desktopAi}/></div>
       {reminderNote&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">{reminderNote}</p>
     </section>
     <section id="mc-expense-form" className="scroll-mt-24 rounded-2xl border border-border bg-card p-4">
