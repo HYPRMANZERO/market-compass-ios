@@ -39,6 +39,9 @@ jobs:
 
       - name: Test offline finance and market research assurance
         run: node --experimental-strip-types --test tests/model-assurance.test.mjs
+      
+      - name: Test offline voice commands and local currency conversion
+        run: node --experimental-strip-types --test tests/voice-currency.test.mjs
 
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
