@@ -23,7 +23,7 @@ export function validateDesktopAiSettings(value: DesktopAiSettings): DesktopAiSe
   if (typeof value.token !== 'string' || value.token.length < 48 || value.token.length > 512) {
     throw Error('Enter the separate 48+ character desktop AI token.');
   }
-  if (!url) throw Error('Enter your private HTTPS connection: Tailscale Serve, or this Access-protected app's HTTPS address.');
+  if (!url) throw Error('Enter your private HTTPS connection: Tailscale Serve, or this Access-protected app\'s HTTPS address.');
   return {
     url: url + '/', token: value.token,
     enabled: value.enabled === true,
