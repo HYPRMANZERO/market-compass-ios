@@ -19,6 +19,22 @@ type RecognitionWindow = Window & {
   SpeechRecognition?: new () => BrowserRecognition;
 };
 type Message = { id: string; source: 'owner' | 'local' | 'ollama'; text: string };
+type SourceInventory = {
+  readOnly: boolean; checkedAt: string;
+  documentSources: {source:string;date:string}[];
+  historicalSnapshotDate: string|null;
+  savedAccountEntries: number;
+  latestLocalAccountEdit: string|null;
+  statements: number; transactions: number; latestStatementDate: string|null;
+  emailExports: number; lunoReadOnlyKeyConfigured:boolean;
+  bankOAuthConnected:boolean; bankVerifiedCurrentBalance:boolean;
+  missing:string[];warnings:string[];
+};
+type LunoStatus = {
+  provider:string; connected:boolean; reason?:string; retrievedAt?:string;
+  wallets?:{asset:string;balance:number;reserved:number;available:number;currencyUnit:string}[];
+};
+
 type ConnectionStatus = 'not-configured' | 'paused' | 'checking' | 'connected' | 'offline';
 type Props = {
   context: CompassCommandContext;
@@ -55,6 +71,11 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
+  const [luno, setLuno] = useState<LunoStatus | null>(null);
+  const [sourceError, setSourceError] = useState('');
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceRefresh, setSourceRefresh] = useState(0);
   const microphone = useRef<BrowserRecognition | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
   const messageSerial = useRef(0);
@@ -157,6 +178,60 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       document.removeEventListener('visibilitychange', whenVisible);
     };
   }, [settings.enabled, settings.url, settings.token, reconnectNonce]);
+
+  // Sensitive source data stays on the private desktop. The UI fetches only
+  // a brief inventory and a GET-only Luno balance, never raw emails or statements.
+  useEffect(() => {
+    if (!connected) {
+      setSourceInventory(null); setLuno(null); setSourceError(''); setSourceLoading(false);
+      return;
+    }
+    const origin = privateTailnetOrigin(settings.url);
+    if (!origin) return;
+    let active = true;
+    let inFlight = false;
+    const controllers = new Set<AbortController>();
+    const request = async (path: string) => {
+      const controller = new AbortController();
+      controllers.add(controller);
+      const timer = window.setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(origin + path, {
+          mode: 'cors', credentials: 'omit', cache: 'no-store', signal: controller.signal,
+          headers: { Authorization: `Bearer ${settings.token}` }
+        });
+        if (!response.ok) throw Error('The desktop source service returned HTTP ' + response.status);
+        return await response.json() as Record<string, unknown>;
+      } finally { clearTimeout(timer); controllers.delete(controller); }
+    };
+    const refresh = async () => {
+      if (!active || inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      setSourceLoading(true);
+      try {
+        const [sources, balances] = await Promise.all([
+          request('/api/sources'), request('/api/balances')
+        ]);
+        if (!active) return;
+        if (sources.ok !== true || !sources.inventory || typeof sources.inventory !== 'object') throw Error('Financial source inventory unavailable.');
+        setSourceInventory(sources.inventory as SourceInventory);
+        if (balances.ok === true && balances.source && typeof balances.source === 'object') {
+          setLuno(balances.source as LunoStatus);
+        }
+        setSourceError('');
+      } catch (error) {
+        if (active) setSourceError('Unable to refresh private sources: ' + explainError(error) + '. The offline planner remains available.');
+      } finally { inFlight = false; if (active) setSourceLoading(false); }
+    };
+    void refresh();
+    const interval=window.setInterval(() => {void refresh();},5*60*1000);
+    const resume=() => { if(document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange',resume);
+    return () => {
+      active=false; controllers.forEach(x=>x.abort()); window.clearInterval(interval);
+      document.removeEventListener('visibilitychange',resume);
+    };
+  }, [connected, settings.url, settings.token, sourceRefresh]);
 
   function speak(answer: string) {
     if (!settings.speakReplies || !voiceAvailable()) return;
@@ -356,6 +431,46 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         {!recognitionSupported && <p className="mt-2 text-[11px] text-muted-foreground">Use your iPhone keyboard microphone for dictation. Offline typed questions still work.</p>}
         {status && <p role="status" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
+    </section>
+
+    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Private financial sources">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[14px] font-bold">My connected financial sources</h2>
+        <button type="button" onClick={() => setSourceRefresh(n => n + 1)} disabled={!connected || sourceLoading}
+          className="flex min-h-10 items-center gap-1.5 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40">
+          <RefreshCw size={15}/> Refresh
+        </button>
+      </div>
+      {sourceLoading && <p className="mt-3 text-[12px] text-muted-foreground">Reading the private source inventory…</p>}
+      {sourceInventory ? <div className="mt-3 space-y-2 text-[12px]">
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Financial Advisor documents</span><strong>{sourceInventory.documentSources.length} local files</strong></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Historic baseline</span><strong>{sourceInventory.historicalSnapshotDate ?? 'Not found'}</strong></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Accounts entered on desktop</span><strong>{sourceInventory.savedAccountEntries} · unverified</strong></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Imported bank statements</span><strong>{sourceInventory.statements} files · {sourceInventory.transactions} entries</strong></div>
+        {sourceInventory.latestStatementDate && <p className="text-[11px] text-muted-foreground">Latest imported statement transaction: {sourceInventory.latestStatementDate}</p>}
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Exported financial emails</span><strong>{sourceInventory.emailExports} messages</strong></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>Direct bank authorization</span><strong>{sourceInventory.bankOAuthConnected ? 'Authorized provider' : 'Not connected'}</strong></div>
+        {sourceInventory.missing.length>0 && <details className="rounded-xl bg-muted/70 p-3">
+          <summary className="cursor-pointer text-[12px] font-semibold">Missing data sources ({sourceInventory.missing.length})</summary>
+          <div className="mt-2 space-y-1 text-[11px] leading-5 text-muted-foreground">{sourceInventory.missing.map(item=><p key={item}>{item}</p>)}</div>
+        </details>}
+        {sourceInventory.warnings.length>0 && <details className="rounded-xl border border-border p-3">
+          <summary className="cursor-pointer text-[12px] font-semibold">Source import warnings ({sourceInventory.warnings.length})</summary>
+          <div className="mt-2 space-y-1 text-[11px] leading-5 text-muted-foreground">{sourceInventory.warnings.slice(0,8).map((w,i)=><p key={i}>{w}</p>)}</div>
+        </details>}
+      </div> : !connected ? <p className="mt-3 text-[12px] leading-5 text-muted-foreground">The desktop must be connected to show which records it has. Local commands remain available offline.</p>
+        : <p className="mt-3 text-[12px] leading-5 text-muted-foreground">No source inventory has been received yet.</p>}
+      {luno && <div className="mt-3 rounded-xl border border-border bg-muted/40 p-3">
+        <div className="flex items-center justify-between gap-2 text-[12px]"><strong>Luno · official read-only API</strong>
+          <span className="text-[11px] text-muted-foreground">{luno.connected ? 'Read-only linked' : 'Not linked'}</span></div>
+        {luno.connected && luno.wallets ? <div className="mt-2 space-y-1 text-[12px]">
+          {luno.wallets.length===0 ? <p>No wallet assets reported by Luno.</p> :
+            luno.wallets.map((w,i)=><div key={i} className="flex justify-between gap-2"><span>{w.asset}</span><strong>{w.available.toLocaleString(undefined,{maximumFractionDigits:8})} {w.currencyUnit} available</strong></div>)}
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Fetched {luno.retrievedAt || 'recently'} · Native asset quantities, not rand valuations. No trades or transfers.</p>
+        </div> : <p className="mt-2 text-[11px] text-muted-foreground">{luno.reason || 'To link, configure an official read-only key on your desktop.'}</p>}
+      </div>}
+      {sourceError && <p role="status" className="mt-3 text-[11px] leading-5 text-muted-foreground">{sourceError}</p>}
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
     </section>
 
     <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
