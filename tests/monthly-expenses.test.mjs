@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+const make=(date,kind,amount,category='other',extras={})=>({
+  id:date+kind+amount,recordedAt:'2026-11-20T12:00:00Z',date,kind,amount,
+  category,description:'Sample payment',paidVia:'Local bank app',currency:'ZAR',...extras,
+});
+test('salary cycles use the inclusive 26th to 25th and year transitions',()=>{
+  assert.deepEqual(salaryCycle('2026-11-20'),{
+    start:'2026-10-26',endExclusive:'2026-11-26',lastDay:'2026-11-25',
+  });
+  assert.equal(salaryCycle('2026-11-26').start,'2026-11-26');
+  assert.equal(salaryCycle('2027-01-25').start,'2026-12-26');
+  assert.equal(salaryCycle('2028-02-29').lastDay,'2028-03-25');
+  assert.equal(shiftSalaryCycle('2026-10-26',1).start,'2026-11-26');
+  assert.equal(shiftSalaryCycle('2026-10-26',-1).start,'2026-09-26');
+  assert.throws(()=>salaryCycle('2026-02-30'),/valid/);
+});
+test('manual ledger distinguishes debt repayment, spending, income and internal transfers',()=>{
+  const entries=[
+    make('2026-10-26','income',9000,'salary'),
+    make('2026-10-26','debt-payment',3552,'car',{accountLabel:'Car finance',remainingBalance:182000}),
+    make('2026-11-19','debt-payment',600,'credit-card',{accountLabel:'Credit card',remainingBalance:19790}),
+    make('2026-11-20','expense',350,'groceries'),
+    make('2026-11-21','transfer',4000,'savings'),
+    make('2026-11-25','expense',200,'fees'),
+    make('2026-11-26','expense',9999,'transport'),
+  ];
+  const analysis=cycleAnalysis(entries,'2026-11-20','ZAR','10000');
+  assert.equal(analysis.income,9000);
+  assert.equal(analysis.debtPayments,4152);
+  assert.equal(analysis.expenses,550);
+  assert.equal(analysis.transfers,4000);
+  assert.equal(analysis.outflow,4702);
+  assert.equal(analysis.count,6);
+  assert.equal(analysis.recordedDifference,4298);
+  assert.equal(analysis.latestBalances[0].balance,19790);
+  assert.equal(analysis.latestBalances[1].balance,182000);
+  assert.equal(cycleEntries(entries,'2026-11-26','ZAR').length,1);
+  assert.equal(cycleEntries(entries,'2026-10-26','USD').length,0);
+  assert.ok(analysis.flags.some(f=>/fees/.test(f)));
+});
+test('payment entries validate debt balance without inventing repayment effect',()=>{
+  assert.equal(validateExpenseEntry(make('2026-11-20','debt-payment',100,'credit-card',{remainingBalance:18000})).remainingBalance,18000);
+  assert.throws(()=>validateExpenseEntry(make('2026-11-20','expense',100,'groceries',{remainingBalance:18000})),/debt repayment/);
+  assert.throws(()=>validateExpenseEntry(make('2026-11-20','expense',-100)),/amount/);
+  assert.throws(()=>validateExpenseEntry(make('2026-11-20','expense',100,'groceries',{paidVia:''})),/payment app/);
+  assert.equal(parseMoneyAmount('0',{zeroAllowed:true}),0);
+  assert.throws(()=>parseMoneyAmount('1.999'),/two decimal/);
+});
