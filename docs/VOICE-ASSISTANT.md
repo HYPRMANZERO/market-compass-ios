@@ -75,7 +75,7 @@ Open **AI → Connect private desktop Ollama**, then:
 1. Enter the Tailscale **HTTPS hostname**, including the trailing slash (accepted hosts must end in `.ts.net`).
 2. Paste your private access token (48+ characters, not saved in the vault or persisted by the app).
 3. Leave **Share my entered financial summary** unchecked unless you explicitly want to send those user-entered details to your own desktop for that conversation.
-4. Tap **Test and connect desktop AI**. A successful health check means the *bridge* is reachable. It does not by itself prove that Ollama has loaded its model.
+4. Tap **Test and connect desktop AI**. The connection test now authenticates your token and checks Ollama's installed-model list. It reports connected only after both pass. The model must still successfully generate a reply to complete end-to-end verification.
 5. Ask an open-ended question, such as **Explain the difference between snowball and avalanche debt repayment**. A reply labeled **Desktop Ollama** confirms the working full pipeline.
 
 If the private connection is lost, a clear error is displayed and the local command engine remains available. CORS only accepts the deployed PWA's HTTPS origin and every chat request requires the separate operator token.
