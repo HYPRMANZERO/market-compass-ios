@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useInterpretLocalCommand } from '@workspace/api-client-react';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
+import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
 import { CURRENCIES, REGIONS, detectRegion, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
 import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
@@ -28,9 +29,9 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; merchantRequests: MerchantRequestRecord[]; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 const initialRegion = detectRegion();
-const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, merchantRequests: [], marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -642,6 +643,27 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
         <div className="rounded-xl border border-border bg-[hsl(42,44%,92%)] p-5"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 shrink-0 text-[hsl(34,52%,42%)]" size={17} /><div><div className="text-[11px] font-semibold">A calculation is not a promise</div><p className="mt-1.5 text-[10px] leading-5 text-muted-foreground">Actual payoff timing depends on your lender’s terms, payment timing, fees, and future rates. Keep an emergency reserve that fits your situation.</p></div></div></div>
       </div>
     </form>
+    <div className="mt-6">
+      <DebtAdvisor accounts={accounts} currency={data.currency} baseline={data.financialBaseline ?? null}
+        budget={data.privateBudget ?? emptyPrivateBudget}
+        onBudgetChange={next => setData(old => ({ ...old, privateBudget: next }))}
+        onImport={historical => {
+          const replaceExisting = !data.accounts.length || window.confirm('You have existing debt accounts. Replace them with this historical Financial Advisor baseline? You MUST review every imported amount before computing any repayment. Choose Cancel to keep existing accounts and store the historical reference only.');
+          setData(old => ({
+            ...old,
+            financialBaseline: historical,
+            currency: replaceExisting ? 'ZAR' : old.currency,
+            region: replaceExisting ? 'ZA' : old.region,
+            currencyReviewRequired: replaceExisting ? true : old.currencyReviewRequired,
+            accounts: replaceExisting ? historical.accounts.map(account => ({
+              id: crypto.randomUUID(), name: account.name,
+              balance: String(account.balance), apr: String(account.apr), minimumPayment: String(account.minimumPayment)
+            })) : old.accounts
+          }));
+        }}
+        monthlyExtra={data.monthlyExtra} plan={plan}
+      />
+    </div>
     <div className="mt-6"><DebtPaymentHandoff accounts={accounts} currency={data.currency} region={selectedRegion(data.region)} /></div>
     <div className="mt-4">
       <OzowMerchantGateway currency={data.currency} region={selectedRegion(data.region)}
