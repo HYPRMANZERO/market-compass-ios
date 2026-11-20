@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BrainCircuit, CircleAlert, FileUp, ShieldCheck, WifiOff } from 'lucide-react';
 import type { DebtPlan } from '@workspace/api-client-react';
+import { auditDebtDecision } from '@/lib/debtAudit';
 
 export type FinancialBaseline = {
   schema: 'market-compass-financial-baseline-v1';
@@ -36,7 +37,7 @@ export function validateBaseline(raw: unknown): FinancialBaseline {
 type Account = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type Advisory = { summary: string; actions: string[]; risks: string[]; questions: string[]; mode: 'offline' | 'ollama' };
 const format = (v: number) => new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(v);
-function validNumber(v: string) { return v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0; }
+function validNumber(v: string) { return v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 1e11; }
 /** Guaranteed available without a network, but NOT a trained language model. */
 export function offlineAdvice(accounts: Account[], budget: PrivateBudget, extra: number, plan: DebtPlan | null): Advisory {
   const income = Number(budget.monthlyIncome), essential = Number(budget.monthlyEssentials);
@@ -78,21 +79,31 @@ type Props = {
 };
 export default function DebtAdvisor({ accounts, currency, baseline, budget, onBudgetChange, onImport, monthlyExtra, plan }: Props) {
   const [notice, setNotice] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmedFingerprint, setConfirmedFingerprint] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState('');
   const [token, setToken] = useState('');
   const [answer, setAnswer] = useState<Advisory | null>(null);
   const [running, setRunning] = useState(false);
-  const ready = currency === 'ZAR' && accounts.length > 0 &&
-    accounts.every(a => a.name.trim() && validNumber(a.balance) && validNumber(a.apr) && validNumber(a.minimumPayment)) &&
+  const ready = currency === 'ZAR' && accounts.length > 0 && accounts.length <= 50 &&
+    accounts.every(a => a.name.trim() && validNumber(a.balance) && validNumber(a.apr) && Number(a.apr) <= 200 && validNumber(a.minimumPayment)) &&
     [budget.monthlyIncome, budget.monthlyEssentials, budget.liquidFunds, budget.reserveTarget, monthlyExtra || '0'].every(validNumber);
-  const value = (key: keyof PrivateBudget, text: string) => { onBudgetChange({ ...budget, [key]: text, verifiedAt: '' }); setConfirmed(false); setAnswer(null); };
+  // Confirmation is bound to exactly these inputs and invalidated automatically
+  // when debts, income, currency or the reserve are changed anywhere in the PWA.
+  const fingerprint = JSON.stringify({ accounts, currency, monthlyExtra, budget, baselineDate: baseline?.sourceDate });
+  const confirmed = confirmedFingerprint === fingerprint;
+  const audit = ready ? auditDebtDecision({
+    accounts: accounts.map(a=>({name:a.name,balance:Number(a.balance),apr:Number(a.apr),minimumPayment:Number(a.minimumPayment)})),
+    monthlyIncome:Number(budget.monthlyIncome), monthlyEssentials:Number(budget.monthlyEssentials),
+    liquidFunds:Number(budget.liquidFunds), reserveTarget:Number(budget.reserveTarget),
+    proposedExtra:Number(monthlyExtra || 0)
+  }) : null;
+  const value = (key: keyof PrivateBudget, text: string) => { onBudgetChange({ ...budget, [key]: text, verifiedAt: '' }); setConfirmedFingerprint(null); setAnswer(null); };
   async function importBaseline(file: File) {
     if (file.size > 100000) { setNotice('Only small private baseline exports are accepted (under 100 KB).'); return; }
     try {
       const parsed = validateBaseline(JSON.parse(await file.text()));
       if (!window.confirm(`Import historical data from ${parsed.sourceDate}? It may be outdated. You will review balances before any calculations. No current data will be assumed.`)) return;
-      onImport(parsed); setConfirmed(false); setAnswer(null);
+      onImport(parsed); setConfirmedFingerprint(null); setAnswer(null);
       setNotice('Historical baseline imported to your unlocked workspace. Review all balances and cash inputs; no values were verified current.');
     } catch(e) { setNotice(e instanceof Error ? e.message : 'Could not import baseline'); }
   }
@@ -156,8 +167,24 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
       <label className="block text-[11px] font-medium">Optional planning notes (no passwords or account numbers)
         <textarea value={budget.ownerNotes} maxLength={600} rows={2} onChange={e => value('ownerNotes', e.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background p-3 text-[12px]" placeholder="Upcoming bills, income uncertainty, lender constraints"/>
       </label>
+      {audit && <div className="rounded-lg border border-border bg-muted/40 p-4 text-[11px] leading-5">
+        <div className="font-semibold">Controllability & independent cashflow checks</div>
+        <p className="mt-1 text-muted-foreground">Both the normal-month budget and an adverse income/expense scenario are checked. Their disagreement triggers review rather than an automatic repayment.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div><div className="text-muted-foreground">Monthly headroom</div><div className="mono font-semibold">{format(audit.baselineHeadroom)}</div></div>
+          <div><div className="text-muted-foreground">Stress headroom</div><div className="mono font-semibold">{format(audit.adverseHeadroom)}</div></div>
+          <div><div className="text-muted-foreground">Above cash reserve</div><div className="mono font-semibold">{format(audit.liquidAboveReserve)}</div></div>
+          <div><div className="text-muted-foreground">Result</div><div className="font-semibold">{audit.verdict === 'within_constraints' ? 'Within stated constraints' : audit.verdict === 'review_required' ? 'Models disagree · review' : 'Fails stated constraints'}</div></div>
+        </div>
+        <details className="mt-3 border-t border-border pt-2">
+          <summary className="cursor-pointer font-semibold">Show adversarial scenarios and limits</summary>
+          <div className="mt-2 space-y-1">{audit.stressCases.map(scenario=><div key={scenario.scenario} className="flex flex-wrap justify-between gap-2"><span>{scenario.scenario}</span><span className="mono">{format(scenario.headroom)} · {scenario.canCoverExtra ? 'passes' : 'fails'}</span></div>)}</div>
+          {audit.reasons.map((reason,index)=><p key={index} className="mt-2 text-muted-foreground">{reason}</p>)}
+          <p className="mt-2 text-muted-foreground">{audit.assumption}</p>
+        </details>
+      </div>}
       <label className="flex items-start gap-2 text-[11px] leading-5">
-        <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-1"/>
+        <input type="checkbox" checked={confirmed} onChange={e => setConfirmedFingerprint(e.target.checked ? fingerprint : null)} className="mt-1"/>
         <span>I checked the current account balances, minimum payments, interest estimates and available cash. These are my own confirmed inputs, not the old Financial Advisor snapshot.</span>
       </label>
       <button type="button" className="rounded-lg bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-40" onClick={prepareOffline} disabled={!ready || !confirmed}>Generate offline debt guidance</button>
