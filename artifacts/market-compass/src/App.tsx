@@ -866,6 +866,7 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
   </>;
 }
 
+type SpendSection='documents'|'activity'|'plan';
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
