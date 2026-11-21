@@ -1,4 +1,5 @@
 import { privateTailnetOrigin } from './privateTailnetUrl.ts';
+import type { VoicePace } from './speechVoices.ts';
 
 export type DesktopAiSettings = {
   url: string;
@@ -6,6 +7,9 @@ export type DesktopAiSettings = {
   enabled: boolean;
   shareFinancialContext: boolean;
   speakReplies: boolean;
+  /** Device-local speech playback settings, retained inside the existing encrypted vault. */
+  voiceURI?: string;
+  voicePace?: VoicePace;
 };
 
 export const DEFAULT_DESKTOP_AI: DesktopAiSettings = {
@@ -14,6 +18,8 @@ export const DEFAULT_DESKTOP_AI: DesktopAiSettings = {
   enabled: false,
   shareFinancialContext: false,
   speakReplies: false,
+  voiceURI: '',
+  voicePace: 'natural',
 };
 
 /** Only a well-formed HTTPS tailnet address and an independent long token can be enabled. */
@@ -37,6 +43,9 @@ export function validateDesktopAiSettings(value: DesktopAiSettings): DesktopAiSe
     enabled: value.enabled === true,
     shareFinancialContext: value.shareFinancialContext === true,
     speakReplies: value.speakReplies === true,
+    voiceURI: typeof value.voiceURI==='string' && value.voiceURI.length<=200 &&
+      !/[\u0000-\u001f<>]/.test(value.voiceURI) ? value.voiceURI : '',
+    voicePace: value.voicePace==='calm' || value.voicePace==='brisk' ? value.voicePace : 'natural',
   };
 }
 
