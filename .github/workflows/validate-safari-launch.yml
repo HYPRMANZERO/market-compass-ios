@@ -21,6 +21,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node --experimental-strip-types --test tests/owner-budget-view.test.mjs tests/ios-speech-voices.test.mjs tests/owner-budget-draft.test.mjs tests/offline-agent-queue.test.mjs
       - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs tests/financial-source-health.test.mjs
+      - run: node --test tests/iphone-mobile-shell.test.mjs
       - run: pnpm run typecheck:libs
       - run: pnpm --filter @workspace/market-compass run typecheck
       - name: Build static iPhone PWA
