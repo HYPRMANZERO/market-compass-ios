@@ -45,6 +45,9 @@ jobs:
       - name: Test salary-cycle boundaries and secure local expense accounting
         run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs
 
+      - name: Validate financial document extraction, review, and mobile planning
+        run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/mobile-spend-workspace.test.mjs tests/financial-readiness.test.mjs tests/local-launch-guideline.test.mjs
+
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
 
