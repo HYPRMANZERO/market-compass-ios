@@ -54,7 +54,19 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
       </div>
       <p>Salary-only listed difference: <strong>{range(saved.salaryOnlyDifferenceMin,saved.salaryOnlyDifferenceMax)}</strong>. This is not verified spendable cash.</p>
       <p className="font-medium">Recorded entries: {saved.recurring.length} monthly cost lines, {saved.scheduledMonths.length} month-specific exceptions, {saved.historicalCycles.length} incomplete historical snapshots.</p>
-      <p className="text-muted-foreground">Incentive is not guaranteed; hourly earnings may already be included in payroll. Credit-card figure is not confirmed as a balance or limit.</p>
+      <p className="text-muted-foreground">Incentive is conditional and hourly pay may already be in payroll. Any credit-card outstanding figure is owner-reported only, not lender-verified or spendable cash.</p>
+      {saved.creditCardFigureStatus==='owner_reported_outstanding_balance' && saved.creditCardFigure!==null &&
+        <p><strong>Credit-card outstanding debt reported by owner: {money(saved.creditCardFigure)}.</strong> Do not add the debt principal to normal monthly card repayments.</p>}
+      {saved.creditCardFigureStatus==='unknown_balance_or_limit' && saved.creditCardFigure!==null &&
+        <button type="button" className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold"
+          onClick={()=>{
+            if(!profile?.creditCardFigure)return;
+            if(!window.confirm('Confirm this amount is outstanding credit-card debt, NOT the credit limit? This remains owner-reported and lender-unverified.'))return;
+            onSave({...profile,creditCardFigure:{amount:profile.creditCardFigure.amount,meaning:'owner_reported_outstanding_balance'}});
+            setMessage('Card amount classified as owner-reported outstanding debt in this local encrypted workspace. Wait for auto-save and export a new backup.');
+          }}>
+          Confirm card amount is outstanding debt
+        </button>}
     </div> : <p className="mt-3 rounded-xl bg-muted/50 p-3 text-[12px]">
       No owner budget draft has been saved here yet. This does not mean zero salary or zero expenses.
     </p>}
