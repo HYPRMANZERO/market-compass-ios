@@ -6,6 +6,10 @@ import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktop
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
 import { parseOwnerBudgetView, type OwnerBudgetView } from '@/lib/ownerBudgetView';
 import OwnerBudgetPanel from '@/components/OwnerBudgetPanel';
+import {
+  eligibleToSendQueuedQuestion,isReadOnlyOfflineQuestion,validateQueuedQuestion,
+  type QueuedReadOnlyQuestion
+} from '@/lib/offlineAgentQueue';
 
 type RecognitionResult = { 0: { transcript: string }; isFinal: boolean };
 type RecognitionEvent = { results: ArrayLike<RecognitionResult>; resultIndex: number };
@@ -60,6 +64,9 @@ type Props = {
   onNavigate: (path: string) => void;
   settings: DesktopAiSettings;
   onSettingsChange: (settings: DesktopAiSettings) => void;
+  queuedReadOnlyQuestions: QueuedReadOnlyQuestion[];
+  onQueueReadOnlyQuestion:(question:string)=>QueuedReadOnlyQuestion;
+  onRemoveQueuedReadOnlyQuestion:(id:string)=>void;
 };
 const ideas = [
   'What is my total debt?',
@@ -72,7 +79,10 @@ const micAvailable = () => typeof window !== 'undefined' && Boolean((window as R
 const voiceAvailable = () => typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 const explainError = (error: unknown) => error instanceof Error ? error.message : 'The private desktop is unreachable.';
 
-export default function VoiceAssistant({ context, onNavigate, settings, onSettingsChange }: Props) {
+export default function VoiceAssistant({
+  context,onNavigate,settings,onSettingsChange,
+  queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion
+}: Props) {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', source: 'local',
     text: 'Welcome back. I can help with your saved debt plan, affordable surplus and market history. Ask a question or tap one of the suggestions below.'
@@ -463,7 +473,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setStatus('Saved desktop connection forgotten. Existing encrypted backups may still contain earlier settings.');
   }
 
-  async function askDesktop(prompt: string, id: number) {
+  async function askDesktop(prompt: string, id: number, queuedId?:string) {
     const url = privateTailnetOrigin(settings.url);
     if (!url || !settings.token || !connected) return;
     const controller = new AbortController();
@@ -488,7 +498,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         expenseSummary: context.expenseSummary,
       } : undefined;
       const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
-      const useAgent = agentMode && agentIntent;
+      const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
       const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
@@ -526,6 +536,9 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
               ? 'Read-only Luno source checked. Balances require verified, current API data.'
               : 'Answered by a private, read-only assistant function.');
       }
+      // Only retire a pending offline question after the authenticated bridge
+      // has returned a strictly validated successful read-only response.
+      if (queuedId) onRemoveQueuedReadOnlyQuestion(queuedId);
     } catch (error) {
       if (messageSerial.current !== id) return;
       setConnection('offline');
@@ -559,16 +572,38 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       return;
     }
     if (!connected) {
-      const answer = settings.enabled
-        ? 'Your saved desktop AI is not reachable at the moment. I will retry automatically while Market Compass is open and unlocked. Offline debt and market commands remain available.'
-        : result.reply;
-      add('local', answer); speak(answer);
+      if(isReadOnlyOfflineQuestion(question)){
+        try{
+          onQueueReadOnlyQuestion(question);
+          const saved='Read-only question placed in your unlocked iPhone workspace. Check that the encrypted vault auto-save finishes. It will NOT contact HYPRBOX until the phone reconnects and you tap Send now. Safari cannot deliver requests while truly offline.';
+          add('local',saved);setStatus('Queued locally · not sent or scheduled.');speak(saved);
+        }catch(e){
+          const msg=e instanceof Error?e.message:'Could not queue this request.';
+          add('local',msg);setStatus(msg);
+        }
+      }else{
+        const msg='Offline, I can only queue short read-only questions. I cannot execute, schedule, or queue actions that change money, files or devices. Try “Review my budget” or “Explain my debts”.';
+        add('local',msg);setStatus(msg);
+      }
       return;
     }
     setBusy(true);
     void askDesktop(question, id);
   }
   sendRef.current = submit;
+
+  function sendPendingQuestion(item:QueuedReadOnlyQuestion){
+    if(busy||!connected||!eligibleToSendQueuedQuestion(item)){
+      setStatus('A queued question can be sent only while the private HYPRBOX connection is live and the question is under seven days old.');
+      return;
+    }
+    if(!window.confirm('Send this saved read-only question to your authenticated HYPRBOX agent now? It cannot make payments, run commands, edit records or control devices.'))return;
+    const id=++messageSerial.current;
+    setLastAgent(null);setBusy(true);add('owner',item.question);
+    void askDesktop(item.question,id,item.id);
+  }
+  const reviewedQueue=queuedReadOnlyQuestions.map(validateQueuedQuestion)
+    .filter((x):x is QueuedReadOnlyQuestion=>x!==null);
 
   function toggleMic() {
     if (listening) { microphone.current?.stop(); setListening(false); return; }
@@ -661,6 +696,35 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}
         <div ref={bottom}/>
       </div>
+      {reviewedQueue.length>0 && <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/40 p-3" aria-label="Encrypted offline agent questions">
+        <h3 className="text-[12px] font-bold">Offline questions · {reviewedQueue.length} pending</h3>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          Saved in this iPhone's encrypted vault. No remote job has been created.
+          Reconnect through the authorised private gateway, then explicitly review and send.
+          Safari cannot guarantee background delivery when closed or without internet.
+        </p>
+        <div className="mt-3 space-y-2">
+          {reviewedQueue.map(item=><div key={item.id} className="rounded-lg border border-border bg-background p-3">
+            <p className="break-words text-[12px]">{item.question}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Queued {new Date(item.createdAt).toLocaleString('en-ZA')} ·
+              {eligibleToSendQueuedQuestion(item)?' awaiting manual send':' expired, not sendable'}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={!connected||busy||!eligibleToSendQueuedQuestion(item)}
+                onClick={()=>sendPendingQuestion(item)}
+                className="min-h-10 rounded-lg border border-border px-3 text-[12px] font-semibold disabled:opacity-40">
+                Send now · read-only
+              </button>
+              <button type="button"
+                onClick={()=>{if(window.confirm('Remove this unsent offline question from this encrypted workspace?'))onRemoveQueuedReadOnlyQuestion(item.id);}}
+                className="min-h-10 rounded-lg border border-border px-3 text-[12px] font-semibold">
+                Remove
+              </button>
+            </div>
+          </div>)}
+        </div>
+      </section>}
       {lastAgent && (
         <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/35 p-3" aria-label="Agent execution trace">
           <div className="flex flex-wrap items-center justify-between gap-2">
