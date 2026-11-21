@@ -67,7 +67,7 @@ export function buildLocalLaunchGuideline(input:FinancialReadinessInputs,now=new
         'Based solely on entered figures, monthly essentials and minimum debt payments exceed reported income by '+money(-preliminaryHeadroom)+'. Prioritize necessities, verify missing costs, and discuss hardship options with lenders rather than adding extra repayments.':
         'Entered income minus listed essentials and debt minimums is '+money(preliminaryHeadroom)+
         ' per month before missing or irregular costs; this is NOT verified spendable money. '+
-        (reserveGap!>0?'The entered reserve target exceeds reported liquid cash by '+money(reserveGap!)+'. Protect liquidity first.':'The entered reserve target appears met, but neither cash nor spending is bank verified.')},
+        (reserveGap !== null && reserveGap > 0?'The entered reserve target exceeds reported liquid cash by '+money(reserveGap!)+'. Protect liquidity first.':'The entered reserve target appears met, but neither cash nor spending is bank verified.')},
     {period:'Days 31–60',title:'Review a non-executable debt strategy',
       detail:canCalculate?
         'Confirm each lender balance, APR, minimum and due date. Compare an interest-rate-first (avalanche) payoff scenario with cash-buffer needs. Total entered principal is '+money(debts!)+
