@@ -77,8 +77,8 @@ export function maskDocumentPII(text:string):string{
   return text
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email]')
     .replace(/(?:\+27|0)\d(?:[\s-]?\d){8,10}/g,'[phone]')
-    .replace(/\b(?:account(?:\s+(?:number|no|nr|#))?|a\/c|acc|id(?:entity)?(?:\s+(?:number|no|nr))?|passport(?:\s+(?:number|no))?)\s*[:#-]?\s*[A-Z0-9][A-Z0-9\s-]{5,30}/gi,
-      (value)=>value.replace(/\b[A-Z0-9][A-Z0-9\s-]{5,30}$/i,'[redacted identifier]'))
+    .replace(/\b((?:account(?:\s+(?:number|no|nr|#))?|a\/c|acc|id(?:entity)?(?:\s+(?:number|no|nr))?|passport(?:\s+(?:number|no))?))\s*[:#-]?\s*((?:\d[\d\s-]{5,24}|[A-Z]{1,3}\d[\dA-Z\s-]{5,24}))\b/gi,
+      (_whole,prefix:string)=>prefix+' [redacted identifier]')
     .replace(/\b\d(?:[\s-]?\d){7,18}\b/g,'[redacted number]')
     .replace(/\b(?:https?:\/\/|www\.)\S+/gi,'[link]')
     .replace(/[\x00-\x1f<>]/g,' ').replace(/\s+/g,' ').trim();
