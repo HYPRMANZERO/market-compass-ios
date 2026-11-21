@@ -6,7 +6,7 @@
  * encrypted spending ledger. Candidates are unapproved until owner review.
  * Source identifiers, credentials and full account numbers are NOT persisted.
  */
-import {bankStatementDate,parseBankStatementText,type BankStatementLine} from './bankStatementParser.ts';
+import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
 export type FinancialSource='bank-statement-pdf'|'bank-statement-text'|'bank-api-readonly';
 export type FinancialDirection='incoming'|'outgoing'|'unclassified';
 export type FinancialCandidate={
@@ -43,7 +43,7 @@ const validBalance=(value:unknown):value is number=>typeof value==='number'&&
   Number.isFinite(value)&&Math.abs(value)<=10_000_000;
 const amountRound=(value:number)=>Math.round(value*100)/100;
 function candidate(source:FinancialSource, institution:string, accountLabel:string,
-  input:{date:string;description:string;amount:number;runningBalance?:number;status:'posted'|'pending-bank'}
+  input:{date:string;description:string;amount:number;runningBalance?:number;direction?:FinancialDirection;status:'posted'|'pending-bank'}
 ):FinancialCandidate|null {
   const date=dateOnly(input.date);
   const description=clean(input.description,130);
@@ -57,7 +57,7 @@ function candidate(source:FinancialSource, institution:string, accountLabel:stri
   const result:FinancialCandidate={
     source,institution:safeInstitution,accountLabel:safeAccountLabel,
     date,description,amount,currency:'ZAR',
-    direction:amount<0?'outgoing':amount>0?'incoming':'unclassified',
+    direction:input.direction??(amount<0?'outgoing':amount>0?'incoming':'unclassified'),
     matchHint:[safeAccountLabel.toLowerCase(),date,description.toLowerCase(),amount.toFixed(2)].join('|'),
     approval:'pending-owner-review',status:input.status
   };
@@ -77,7 +77,7 @@ export function normalizeStatementCandidates(
     if(row.semanticRole!=='transaction'||!row.date||!validAmount(row.amount)){unresolved++;continue;}
     const v=candidate(source,institution,accountLabel,{
       date:row.date,description:row.label,amount:row.amount,
-      runningBalance:row.runningBalance,status:'posted'
+      runningBalance:row.runningBalance,direction:row.direction,status:'posted'
     });
     if(v)candidates.push(v);
     else unresolved++;
