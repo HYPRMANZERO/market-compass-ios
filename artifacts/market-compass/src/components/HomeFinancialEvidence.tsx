@@ -4,6 +4,7 @@ import type {ExpenseEntry,ExpenseSettings} from '@/lib/monthlyExpenses';
 import {DEFAULT_EXPENSE_SETTINGS,cycleAnalysis,salaryCycle} from '@/lib/monthlyExpenses';
 import type {PrivateBudget} from '@/components/DebtAdvisor';
 import {localDate} from '@/lib/dailyBackup';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
 
 type Props={
   documents:LocalFinanceDocument[];
@@ -89,7 +90,7 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
           <div className="mt-2 space-y-2">
             {safeDocs.slice(0,3).map(d=><details key={d.id} className="rounded-lg bg-muted/40 p-2">
               <summary className="cursor-pointer text-[11px] font-semibold">
-                {d.label} · {d.lines.length} lines
+                {maskDocumentPII(d.label)} · {d.lines.length} lines
               </summary>
               <p className="mt-1 text-[10px] text-muted-foreground">
                 Imported {d.importedAt.slice(0,10)} · partial, owner-reviewed evidence
@@ -97,7 +98,7 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
               <ul className="mt-2 space-y-1">
                 {d.lines.slice(0,5).map((line,index)=><li key={index}
                   className="flex flex-wrap justify-between gap-2 text-[11px]">
-                  <span className="min-w-0 break-words">{line.date??'Undated'} · {line.label}</span>
+                  <span className="min-w-0 break-words">{line.date??'Undated'} · {maskDocumentPII(line.label)}</span>
                   <span className="font-semibold">{line.amount===null?'Unspecified':money(line.amount,currency)}</span>
                 </li>)}
               </ul>

@@ -1,6 +1,9 @@
 import {useRef,useState} from 'react';
 import ReviewedDocumentLedger from './ReviewedDocumentLedger';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
+import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
+import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
@@ -10,6 +13,16 @@ import {
 const money=(n:number|null)=>n===null?'Amount unavailable':
   new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',
     minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const financeLabel=(kind:string|undefined)=>kind==='absa-vehicle-finance'?'ABSA vehicle finance · financing evidence':
+  kind==='vehicle-finance'?'Vehicle-finance contract · financing evidence':'Financial document · owner review';
+const roleLabel=(role:string|undefined)=>role==='contract-term'?'Contract term, NOT a payment':
+  role==='balance-reference'?'Historical/reference balance, NOT spendable cash':
+  role==='rate-reference'?'Quoted rate, NOT a payment':
+  role==='transaction'?'Possible completed payment — verify':'Unclassified · owner review';
+const lineDateLabel=(line:{date:string|null;semanticRole?:string})=>
+  (line.semanticRole==='contract-term'||line.semanticRole==='balance-reference')?
+  (line.date?'Reference/effective date '+line.date:'Reference date not identified'):
+  (line.date??'Transaction date not confirmed');
 type Props={
   documents:LocalFinanceDocument[];
   onAdd:(value:LocalFinanceDocument)=>void;
@@ -29,6 +42,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const [label,setLabel]=useState('');
   const passwordInput=useRef<HTMLInputElement>(null);
   const [reading,setReading]=useState(false);
+  const [progress,setProgress]=useState<{page:number;total:number;stage:string}>({page:0,total:0,stage:'reading'});
+  const readController=useRef<AbortController|null>(null);
   const [preview,setPreview]=useState<LocalFinanceDocument|null>(null);
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
@@ -40,24 +55,35 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     const pdf=/\.pdf$/i.test(file.name);
     const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
     if(!file.size||file.size>limit){
-      setError(pdf?'Choose a PDF smaller than 2 MB. Nothing was saved.':
-        'Choose a CSV, TXT or JSON file smaller than 256 KB. Nothing was saved.');
+      setError(pdf?'PDF exceeds on-device memory safety capacity. Nothing was saved.':
+        'The file exceeds on-device text processing capacity. Nothing was saved.');
       return;
     }
     setReading(true);
+    setProgress({page:0,total:0,stage:'reading'});
+    const controller=new AbortController();
+    readController.current=controller;
     // The password is passed only to the local PDF reader. It never enters
     // React state, IndexedDB, settings, requests, logs or saved document data.
     let temporaryPassword=oneTimePassword;
     try{
-      const data=pdf?await extractLocalPdfText(file,temporaryPassword):await file.text();
+      const data=pdf?await extractLocalPdfText(file,temporaryPassword,{
+        signal:controller.signal,
+        onProgress:next=>setProgress(next)
+      }):await file.text();
+      if(controller.signal.aborted)throw Error('Document processing cancelled; nothing was saved.');
+      setProgress(old=>({...old,stage:'classifying'}));
       const privateLabel=label.trim() || 'iPhone financial export';
       const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
       setPreview(draft);
-      setFeedback('Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
+      setFeedback(draft.documentKind&&draft.documentKind!=='unclassified'?
+        'Vehicle-finance document recognised locally. Review the labelled terms and reference values below; they are NOT posted as payments. The original document and PDF password are not stored or uploaded.':
+        'Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
     }catch(e){
       setError(e instanceof Error?e.message:'Could not read this financial file privately.');
     }finally{
       temporaryPassword='';
+      readController.current=null;
       setReading(false);
     }
   }
@@ -84,8 +110,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
       <summary className="min-h-9 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-        CSV, TXT, transaction JSON and text-based PDF. PDF limit: 2 MB, 12 pages;
-        other files: 256 KB. Only up to 60 recognised lines are stored.
+        CSV, TXT, transaction JSON and selectable-text PDF. Multi-page PDFs
+        are processed across all pages with visible progress; a 64 MB on-device
+        memory ceiling remains to prevent Safari crashes. Source evidence is
+        bounded for encrypted storage and any truncation is disclosed.
         Scanned PDFs, photographs, Word and Excel need a separate local extractor.
         The original file stays on your phone. Do not use online converters for
         private financial documents.
@@ -126,7 +154,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           void selected(selectedFile,oneTimePassword);
         }}
         className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px] disabled:opacity-40"/>
-      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading locally…</span>}
+      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading and classifying locally…</span>}
     </label>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
       Next: inspect dates and amounts, then tap Save reviewed excerpts. To
@@ -134,8 +162,21 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[12px] font-semibold">
-        Review {preview.lines.length} extracted lines · {preview.label}
+        Review {preview.lines.length} extracted lines · {maskDocumentPII(preview.label)}
       </p>
+      <p className="rounded-lg border border-primary/20 bg-background p-3 text-[12px] font-semibold">
+        Document classification: {preview.accountProfile?.category.replaceAll('-',' ')??financeLabel(preview.documentKind)}
+        <span className="mt-1 block font-normal text-muted-foreground">
+          Account label: {preview.accountProfile?.name??'Unidentified account'} ·
+          {preview.accountProfile?.confidence==='matched-terms'?' Matched document terms':' Needs owner verification'}
+        </span>
+      </p>
+      {preview.documentKind&&preview.documentKind!=='unclassified'&&
+        <p className="text-[11px] leading-5 text-muted-foreground">
+          The importer recognises contractual instalments, residuals, financing principals,
+          settlement quotations and quoted rates separately. An effective date is NOT a debit date.
+          Nothing is assumed paid, outstanding today or verified by ABSA.
+        </p>}
       <p className="text-[11px] leading-5 text-muted-foreground">
         Excerpts can contain private financial information. Verify the date,
         labels, positive/negative sign and amounts. The parser does not claim a
@@ -146,14 +187,15 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       <div className="max-h-72 space-y-2 overflow-y-auto">
         {preview.lines.map((line,index)=><div key={index} className="rounded-lg bg-background p-2 text-[11px]">
           <div className="flex flex-wrap justify-between gap-2">
-            <span className="break-words font-medium">{line.label}</span>
+            <span className="break-words font-medium">{maskDocumentPII(line.label)}</span>
             <strong>{money(line.amount)}</strong>
           </div>
-          <p className="text-muted-foreground">{line.date??'Date not identified'} · {line.direction==='unclassified'?'Direction unconfirmed':line.direction}</p>
+          <p className="text-muted-foreground">{lineDateLabel(line)} · {roleLabel(line.semanticRole)}</p>
+          {line.ratePercent!==undefined&&<p className="font-semibold">Quoted rate {line.ratePercent}%</p>}
         </div>)}
       </div>
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
-        Import was limited to the first 60 recognised lines. This is not the full file.
+        The saved excerpt is partial. The original remains in iPhone Files; review further source entries separately.
       </p>}
       <button type="button" onClick={save}
         className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
@@ -173,8 +215,13 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       </div>
       {safe.map(document=><details key={document.id} className="rounded-xl border border-border bg-background p-3">
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">
-          {document.label} · {document.lines.length} lines
+          {maskDocumentPII(document.label)} · {document.lines.length} lines
         </summary>
+        <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+          {document.accountProfile?
+            document.accountProfile.name+' · '+document.accountProfile.category.replaceAll('-',' '):
+            financeLabel(document.documentKind??detectFinanceDocument(document.lines.map(l=>l.label).join(' '),document.label))}
+        </p>
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
           Owner-selected on {new Date(document.importedAt).toLocaleDateString('en-ZA')}.
           This is not a full document or verified bank record. Only reviewed
@@ -183,10 +230,18 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         </p>
         <ul className="mt-2 max-h-56 space-y-2 overflow-auto text-[11px]">
           {document.lines.map((line,index)=><li key={index} className="flex flex-wrap justify-between gap-2">
-            <span>{line.date??'Unspecified date'} · {line.label}</span>
+            <span>{lineDateLabel(line)} · {maskDocumentPII(line.label)}<span className="block text-[10px] text-muted-foreground">{roleLabel(line.semanticRole)}</span></span>
             <strong>{money(line.amount)}</strong>
           </li>)}
         </ul>
+        {documentAppliedIndices(document,ledgerEntries).size>0&&
+          document.lines.some((line,i)=>documentAppliedIndices(document,ledgerEntries).has(i)&&
+            (isFinanceReferenceLabel(line.label)||line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'))&&
+          <p role="alert" className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-[11px] leading-5 text-destructive">
+            Existing Spend entries include loan terms or reference values. They may have been
+            classified as payments in an earlier version. Inspect them under Spend → Activity.
+            No existing entry has been silently removed or changed.
+          </p>}
         <ReviewedDocumentLedger key={document.id} document={document}
           entries={ledgerEntries} currency={currency}
           currencyReviewRequired={currencyReviewRequired}
@@ -203,5 +258,28 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       wait for the encrypted auto-save to finish, then choose Export encrypted backup.
       Keep the original files separately; only bounded excerpts are stored.
     </p>
+    {reading&&<div role="dialog" aria-modal="true" aria-labelledby="mc-processing-title"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/65 p-5">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-xl">
+        <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" aria-hidden="true"/>
+        <h2 id="mc-processing-title" className="text-center text-[17px] font-bold">Processing your document</h2>
+        <p className="mt-2 text-center text-[12px] leading-5 text-muted-foreground" role="status" aria-live="polite">
+          {progress.stage==='reading'?'Opening the document privately…':
+            progress.stage==='classifying'?'Identifying account and financial fields…':
+            'Reading page '+progress.page+' of '+progress.total}
+        </p>
+        {progress.total>0&&<div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-primary transition-all"
+            style={{width:Math.max(1,Math.round(progress.page/progress.total*100))+'%'}}/>
+        </div>}
+        <p className="mt-3 text-center text-[11px] text-muted-foreground">
+          Text is processed on this iPhone. Raw PDFs and passwords are not sent to HYPRBOX.
+        </p>
+        <button type="button" onClick={()=>readController.current?.abort()}
+          className="mt-4 min-h-11 w-full rounded-xl border border-border text-[12px] font-semibold">
+          Cancel processing
+        </button>
+      </div>
+    </div>}
   </section>;
 }

@@ -24,6 +24,8 @@ jobs:
       - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs
       - run: node --experimental-strip-types --test tests/home-financial-evidence.test.mjs tests/historical-recurring-insights.test.mjs
       - run: node --test tests/home-document-upload.test.mjs
+      - run: node --experimental-strip-types --test tests/document-intelligence.test.mjs
+      - run: node --experimental-strip-types --test tests/vehicle-finance-classification.test.mjs
       - run: node --experimental-strip-types --test tests/private-ai-origin.test.mjs
       - run: node --experimental-strip-types --test tests/financial-source-health.test.mjs
       - run: node --experimental-strip-types --test tests/live-crypto-quotes.test.mjs

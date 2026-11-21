@@ -7,6 +7,8 @@
  * Entry IDs are stable for retries and edits, preventing accidental reimport.
  */
 import {validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
+import {isFinanceReferenceLabel} from './vehicleFinance.ts';
+import {maskDocumentPII} from './documentIntelligence.ts';
 import {
   validateExpenseEntry,EXPENSE_CATEGORIES,
   type ExpenseEntry,type ExpenseKind,type ExpenseCategory
@@ -60,6 +62,11 @@ export function applyReviewedDocumentToLedger(
       throw Error('Invalid or repeated document row. No entries were added.');
     chosen.add(choice.lineIndex);
     const line=doc.lines[choice.lineIndex];
+    if(line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
+       line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label))
+      throw Error('A finance quote, instalment schedule, interest rate or reference balance is not proof of a payment. Record only an actual dated transaction.');
+    if(doc.documentKind&&doc.documentKind!=='unclassified'&&line.semanticRole!=='transaction')
+      throw Error('This finance contract row is not an explicit completed payment. Do not post it to Spend.');
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
     if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||
@@ -77,7 +84,7 @@ export function applyReviewedDocumentToLedger(
       recordedAt:now.toISOString(),
       kind:choice.kind,
       category:choice.category,
-      description:line.label.slice(0,100),
+      description:maskDocumentPII(line.label).slice(0,100),
       paidVia:'Owner-reviewed document',
       amount:Math.round(Math.abs(line.amount)*100)/100,
       currency:'ZAR',

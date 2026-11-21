@@ -1,4 +1,6 @@
 import {useState} from 'react';
+import {isFinanceReferenceLabel} from '@/lib/vehicleFinance';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {
   EXPENSE_CATEGORIES,EXPENSE_KINDS,
@@ -77,6 +79,10 @@ export default function ReviewedDocumentLedger({
       To update your Spend ledger, select each relevant line, verify its date and
       amount against the original file, then choose its type and category.
       PDF columns may be merged or incomplete. Do not select uncertain rows.
+      Loan contract terms, scheduled instalments, rates and settlement quotations
+      are reference evidence only and cannot be posted as payments. Previous
+      entries are never silently deleted or changed; inspect any already posted
+      finance reference in the Activity ledger to correct it manually.
       Existing manually entered transactions must be checked to avoid double counting.
     </p>
     {currency!=='ZAR'||currencyReviewRequired?
@@ -87,7 +93,10 @@ export default function ReviewedDocumentLedger({
     <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
-        const unusable=line.amount===null||line.amount===0;
+        const referenceOnly=line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
+          line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||
+          (document.documentKind&&document.documentKind!=='unclassified'&&line.semanticRole!=='transaction');
+        const unusable=line.amount===null||line.amount===0||Boolean(referenceOnly);
         const row=draft[index]??{
           checked:false,date:line.date??'',kind:'' as const,category:'' as const
         };
@@ -98,9 +107,9 @@ export default function ReviewedDocumentLedger({
               disabled={already||unusable||!canApply} checked={already||row.checked}
               onChange={e=>change(index,{checked:e.target.checked})}/>
             <span className="min-w-0 break-words">
-              Line {index+1}: {line.label} · {showMoney(line.amount)}
+              Line {index+1}: {maskDocumentPII(line.label)} · {showMoney(line.amount)}
               <span className="block text-[11px] font-normal text-muted-foreground">
-                {already?'Already added to Spend':unusable?'Amount unknown or zero':
+                {already?(referenceOnly?'Previously posted — review: may be a loan reference, not a payment':'Already added to Spend'):referenceOnly?'Reference figure only — not a completed payment':unusable?'Amount unknown or zero':
                   'Source direction: '+(line.direction==='unclassified'?'unconfirmed':line.direction)}
               </span>
             </span>

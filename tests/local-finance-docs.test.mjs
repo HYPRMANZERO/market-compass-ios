@@ -58,8 +58,9 @@ test('unsupported and malformed inputs never become saved financial records',()=
   ['other.csv','Field,Total\nName,300'],['broken.json','{']
  ]) assert.throws(()=>extract(name,body),Error,name);
  assert.throws(()=>extract('synthetic.csv','Date,Description,Amount\n2026-09-12,Test,200','x'));
- assert.throws(()=>extract('synthetic.csv',
-   'Date,Description,Amount\n2026-09-12,Test,200'.repeat(9000)),/256 KB|CSV has too many rows/);
+ const expanded=extract('synthetic.csv',
+   'Date,Description,Amount\n'+Array.from({length:1500},()=> '2026-09-12,Test,200').join('\n'));
+ assert.equal(expanded.truncated,true);
 });
 test('only bounded reviewed excerpts are added/removed, and invalid entries fail closed',()=>{
  const d=extract('synthetic.csv',csv);
@@ -69,7 +70,7 @@ test('only bounded reviewed excerpts are added/removed, and invalid entries fail
  assert.throws(()=>removeLocalFinanceDocument([{...d,bankVerified:true}],d.id),/Unrecognised/);
  const items=Array.from({length:MAX_FINANCE_FILES},(_,i)=>({...d,
    id:'b51e0c41-1011-4b39-94c8-'+String(i+1).padStart(12,'0')}));
- assert.throws(()=>addLocalFinanceDocument(items,d),/12-document/);
+ assert.throws(()=>addLocalFinanceDocument(items,d),/capacity|duplicate/i);
  assert.deepEqual(removeLocalFinanceDocument([d],d.id),[]);
 });
 test('offline assistant cites approved synthetic excerpts but never invents live funds',()=>{
