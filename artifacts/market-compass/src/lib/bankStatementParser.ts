@@ -64,6 +64,34 @@ const VALID_DESCRIPTION=/[A-Za-z]{3,}/;
  * as a payment. A row without an explicit date is never a transaction.
  */
 export function parseBankStatementRow(raw:string):BankStatementLine|null{
+  // Preserve explicit PDF geometry: Date|Description|Payments|Deposits|Balance.
+  // Deposits and payments are disjoint columns; do not guess direction from
+  // an unsigned amount. The running balance is never the transaction amount.
+  if(raw.startsWith('STDBANK|')){
+    const cells=raw.split('|');
+    if(cells.length!==6)return null;
+    const [,dateText,desc,paymentText,depositText,balanceText]=cells;
+    const cleaned=desc.replace(/\s+/g,' ').trim();
+    const found=bankStatementDate(dateText);
+    const balance=statementMoney(balanceText);
+    if(balance===null)return null;
+    if(!dateText.trim()&&!paymentText.trim()&&!depositText.trim()&&
+       BALANCE_ONLY.test(cleaned)){
+      return {label:cleaned.slice(0,130),amount:balance,date:null,
+        direction:'unclassified',semanticRole:'balance-reference',
+        semanticField:'statement-balance'};
+    }
+    if(!found||found.matched!==dateText.trim()||!VALID_DESCRIPTION.test(cleaned)||
+       BALANCE_ONLY.test(cleaned)||Boolean(paymentText.trim())===Boolean(depositText.trim()))return null;
+    const payment=paymentText.trim()!==''?statementMoney(paymentText):null;
+    const deposit=depositText.trim()!==''?statementMoney(depositText):null;
+    const amount=payment!==null?payment:deposit;
+    if(amount===null||amount===0)return null;
+    return {label:cleaned.slice(0,130),date:found.date,
+      amount:payment!==null?-Math.abs(amount):Math.abs(amount),
+      direction:payment!==null?'outgoing':'incoming',
+      semanticRole:'transaction',runningBalance:balance};
+  }
   const line=raw.replace(/[\t\u00a0]+/g,' ').replace(/\s+/g,' ').trim();
   if(line.length<7||line.length>1800||HEADING.test(line))return null;
   const date=bankStatementDate(line);
