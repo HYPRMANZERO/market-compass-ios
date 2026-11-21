@@ -8,6 +8,7 @@
  */
 import {validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
 import {isFinanceReferenceLabel} from './vehicleFinance.ts';
+import {maskDocumentPII} from './documentIntelligence.ts';
 import {
   validateExpenseEntry,EXPENSE_CATEGORIES,
   type ExpenseEntry,type ExpenseKind,type ExpenseCategory
@@ -83,7 +84,7 @@ export function applyReviewedDocumentToLedger(
       recordedAt:now.toISOString(),
       kind:choice.kind,
       category:choice.category,
-      description:line.label.slice(0,100),
+      description:maskDocumentPII(line.label).slice(0,100),
       paidVia:'Owner-reviewed document',
       amount:Math.round(Math.abs(line.amount)*100)/100,
       currency:'ZAR',
