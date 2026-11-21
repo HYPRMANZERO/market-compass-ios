@@ -17,6 +17,20 @@ jobs:
         with:
           version: '10'
       - run: pnpm install --frozen-lockfile
+      - name: Require identical financial source core in owner and staging editions
+        shell: bash
+        run: |
+          git fetch --no-tags origin feature/ios-safari-launch-2026-11-26
+          for name in vehicleFinance documentIntelligence bankStatementParser financialSourceNormalizer standardBankPdfLayout localFinanceDocs localPdfText reviewedDocumentLedger; do
+            file="artifacts/market-compass/src/lib/${name}.ts"
+            owner=$(git rev-parse "HEAD:${file}")
+            staging=$(git rev-parse "FETCH_HEAD:${file}")
+            if [ "$owner" != "$staging" ]; then
+              echo "Financial source core differs between owner and test PWA: $file"
+              exit 1
+            fi
+          done
+          echo "Both editions have identical source-normalization and protection code."
       - run: node --experimental-strip-types --test tests/bank-statement-rows.test.mjs tests/financial-source-normalization.test.mjs tests/document-intelligence.test.mjs tests/owner-bank-release-parity.test.mjs
       - run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/financial-readiness.test.mjs tests/monthly-expenses.test.mjs
       - run: pnpm run typecheck:libs
