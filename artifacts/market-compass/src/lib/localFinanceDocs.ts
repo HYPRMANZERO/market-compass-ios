@@ -33,7 +33,7 @@ export type LocalFinanceDocument={
   accountProfile?:AccountProfile;
 };
 export const MAX_FINANCE_FILES=100;
-export const MAX_FINANCE_FILE_BYTES=256_000;
+export const MAX_FINANCE_FILE_BYTES=16_000_000;
 export const MAX_FINANCE_LINES=300;
 const labelOk=(v:unknown):v is string=>typeof v==='string'&&
   v.trim().length>=2&&v.trim().length<=70&& !/[\x00-\x1f<>]/.test(v);
@@ -96,7 +96,7 @@ function splitCsv(text:string,delimiter:','|';'):string[][]{
       if(c===delimiter){row.push(field);field='';}
       else {row.push(field);if(row.some(x=>x.trim()))rows.push(row);row=[];field='';if(c==='\r'&&text[i+1]==='\n')i++;}
     }else field+=c;
-    if(rows.length>1000)throw Error('This CSV has too many rows; export a smaller range.');
+    if(rows.length>20000)throw Error('This CSV has too many rows for safe on-device processing; use a desktop split.');
   }
   if(quoted)throw Error('CSV has an unclosed quoted value.');
   row.push(field);if(row.some(x=>x.trim()))rows.push(row);
@@ -213,7 +213,7 @@ export function extractLocalFinanceDocument(
   if(!labelOk(ownerLabel))throw Error('Enter a short label describing the file (2–70 characters).');
   if(!(now instanceof Date)||!Number.isFinite(now.getTime()))throw Error('Invalid current date.');
   if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>MAX_FINANCE_FILE_BYTES)
-    throw Error('Files must be 256 KB or smaller. Choose a short export.');
+    throw Error('This text export exceeds the on-device processing safety capacity. Nothing was saved.');
   const extension=fileName.toLowerCase().split('.').pop();
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
