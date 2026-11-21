@@ -89,3 +89,10 @@ test('statement parser bounded evidence has explicit truncation rather than sile
  assert.equal(parsed.lines.length,3);
  assert.equal(parsed.truncated,true);
 });
+
+test('invoice review keeps signed amounts, locale grouping and source dates',()=>{
+  const doc=extractLocalFinanceDocument('invoice.txt',
+    'Tax invoice\nPayment due 05 Nov 26\n05 Nov 26 Invoice total R1.234,56\nAdjustment -R 125.00\nSubtotal R10.00 VAT R1.50',
+    'Synthetic invoice',{id:'12345678-1234-4234-8234-123456789012',now});
+  assert.deepEqual(doc.lines.map(row=>[row.date,row.amount]),[['2026-11-05',1234.56],[null,-125]]);
+});
