@@ -52,8 +52,8 @@ test('Standard Bank deposit is not guessed as an outgoing transfer',()=>{
  assert.equal(document.accountProfile.name,'Standard Bank Bank account');
  assert.equal(document.accountProfile.category,'bank-statement');
  assert.equal(document.lines.length,5);
- assert.equal(document.lines[3].direction,'incoming');
- assert.equal(document.lines[3].amount,1000);
+ assert.equal(document.lines[4].direction,'incoming');
+ assert.equal(document.lines[4].amount,1000);
  assert.equal(document.lines[4].semanticRole,'balance-reference');
  assert.equal(document.accountProfile.facts.some(f=>f.field==='running-balance'&&f.amount===2550.73),true);
 });
@@ -64,7 +64,7 @@ test('unknown/headerless layouts do not fabricate payment/deposit columns',()=>{
 test('ambiguous monetary column is rejected instead of becoming a fake transaction',()=>{
  const altered=items.map(v=>v);
  // Replace the deposit with a value too far from any expected numeric column.
- altered[19]=part('1,000.00',580,619,1);
+ altered[18]=part('1,000.00',580,619,1);
  const lines=layoutStandardBankPdfLines(altered);
  assert.ok(lines);
  assert.equal(lines.some(x=>x.includes('TRAVELLING')),false);
