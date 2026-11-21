@@ -67,7 +67,7 @@ test('browser PDF extraction reports progress and has no fixed page-count cutoff
 test('review UI requires consent to populate separate Debt Plan fields',async()=>{
   const src=await readFile(new URL('../artifacts/market-compass/src/components/AccountEvidenceReview.tsx',import.meta.url),'utf8');
   assert.match(src,/No historical amount is copied automatically/);
-  assert.match(src,/checked against an appropriate recent source/);
+  assert.match(src,/against an appropriate recent source/);
   assert.match(src,/onCreate\(\{name:clean,balance,apr,minimumPayment\}\)/);
   assert.doesNotMatch(src,/fetch\(|localStorage|sendBeacon/);
 });
