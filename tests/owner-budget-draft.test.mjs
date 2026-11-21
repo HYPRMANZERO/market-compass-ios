@@ -70,6 +70,17 @@ test('strict validation rejects fake verified salary or credit-card limit/balanc
   assert.throws(()=>parseOwnerBudgetDraft('{"invalid":',now),/JSON/);
   assert.throws(()=>parseOwnerBudgetDraft('x'.repeat(20_010),now),/20 KB/);
 });
+test('owner-confirmed card outstanding debt stays unverified and distinct from expenses',()=>{
+  const profile=parse({...example,creditCardFigure:{amount:7300.25,meaning:'owner_reported_outstanding_balance'}});
+  const summary=summarizeOwnerBudgetDraft(profile,now);
+  assert.equal(summary.creditCardFigureStatus,'owner_reported_outstanding_balance');
+  assert.equal(summary.creditCardFigure,7300.25);
+  assert.equal(summary.bankVerified,false);
+  assert.equal(summary.spendableCash,null);
+  assert.equal(summary.recurringMin,2600);
+  assert.equal(summary.recurringMax,2750);
+});
+
 test('missing financial profile is distinct from a zero balance',()=>{
   assert.throws(()=>parse(null));
   const s=summarizeOwnerBudgetDraft(parse({...example,creditCardFigure:null}),now);
