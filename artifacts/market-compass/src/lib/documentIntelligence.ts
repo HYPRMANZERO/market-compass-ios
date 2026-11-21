@@ -44,8 +44,8 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
     /\bpayslip\b|\bpay slip\b|\bpay advice\b/i,
     /\bnet pay\b|\bgross pay\b|\bPAYE\b/i]},
   {category:'bank-statement',matches:[
-    /\bbank statement\b|\bstatement of account\b/i,
-    /\btransaction date\b|\bopening balance\b|\bclosing balance\b/i]},
+    /\bbank statement\b|\bstatement of account\b|\b3.month statement\b|\bthree.month statement\b/i,
+    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bavailable balance\b|\bpayments\s+deposits\s+balance\b|\bSTDBANK\b/i]},
   {category:'investment-statement',matches:[
     /\binvestment statement\b|\bportfolio statement\b/i,
     /\bunits held\b|\bholdings statement\b|\bmarket value\b/i]},
