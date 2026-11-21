@@ -5,6 +5,7 @@ import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
+import { queueNativeSpeech } from '@/lib/speechPlayback';
 import { parseOwnerBudgetView, type OwnerBudgetView } from '@/lib/ownerBudgetView';
 import OwnerBudgetPanel from '@/components/OwnerBudgetPanel';
 import {
@@ -94,6 +95,7 @@ export default function VoiceAssistant({
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState('');
+  const [voicePreviewStatus,setVoicePreviewStatus] = useState('');
   const [formError, setFormError] = useState('');
   const [host, setHost] = useState(settings.url || (typeof window !== 'undefined' ? privateTailnetOrigin(window.location.origin) || '' : ''));
   // Owner-only ngrok app: suggest the current same origin, never any cross-site address.
@@ -121,6 +123,8 @@ export default function VoiceAssistant({
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryError, setMemoryError] = useState('');
   const microphone = useRef<BrowserRecognition | null>(null);
+  // Safari may release a short utterance before playback unless we hold a ref.
+  const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   const bottom = useRef<HTMLDivElement | null>(null);
   const messageSerial = useRef(0);
   const probeSerial = useRef(0);
@@ -427,22 +431,44 @@ export default function VoiceAssistant({
   }, [connected, settings.url, settings.token]);
 
   function speak(answer: string, preview=false) {
-    if ((!settings.speakReplies && !preview) || !voiceAvailable()) return;
+    if ((!settings.speakReplies && !preview) || !voiceAvailable()) {
+      if(preview)setVoicePreviewStatus('This browser does not offer speech playback.');
+      return;
+    }
     try {
       const synth=window.speechSynthesis;
-      synth.cancel();
-      const utterance = new SpeechSynthesisUtterance(voiceFriendlyText(answer));
-      // Safari can use iPhone's own default voice when no explicit voice is set.
-      // This mode must not be overridden by the automatic voice ranking.
+      const utterance=new SpeechSynthesisUtterance(voiceFriendlyText(answer));
       const best=chooseSpeechVoice(synth.getVoices(),settings.voiceURI);
-      if (settings.voiceURI===DEVICE_DEFAULT_VOICE) {
-        // Leave voice and lang unspecified: the iPhone selects both.
-      } else if(best){utterance.voice=best;utterance.lang=best.lang;}
+      if(settings.voiceURI===DEVICE_DEFAULT_VOICE){
+        // Let iOS choose the system default and its own locale.
+      }else if(best){utterance.voice=best;utterance.lang=best.lang;}
       else utterance.lang='en-ZA';
       utterance.rate=speakingRate(settings.voicePace);
       utterance.pitch=1;
-      synth.speak(utterance);
-    } catch { setStatus('Audio playback is unavailable; the reply is still available as text.'); }
+      speechUtterance.current=utterance;
+      if(preview)setVoicePreviewStatus('Starting iPhone voice preview…');
+      utterance.onstart=()=>{
+        if(preview)setVoicePreviewStatus('Playing native iPhone voice'+
+          (utterance.voice?' · '+utterance.voice.name:' · system default')+'.');
+      };
+      utterance.onend=()=>{
+        if(speechUtterance.current===utterance)speechUtterance.current=null;
+        if(preview)setVoicePreviewStatus('Preview finished. Select another listed voice if the sound was too robotic.');
+      };
+      utterance.onerror=(event)=>{
+        if(speechUtterance.current===utterance)speechUtterance.current=null;
+        const code=typeof event.error==='string'?event.error:'unavailable';
+        if(preview)setVoicePreviewStatus('iPhone preview failed ('+code+
+          '). Try Use iPhone system default voice, then Preview this voice again.');
+        else setStatus('Safari speech playback failed ('+code+'). The written response remains available.');
+      };
+      // Unlike cancel-then-speak, this does not cancel an already-idle iOS
+      // speech queue just before a user-triggered short preview.
+      queueNativeSpeech(synth,utterance);
+    } catch {
+      if(preview)setVoicePreviewStatus('Native iPhone preview is unavailable. The reply text is still accessible.');
+      else setStatus('Audio playback is unavailable; the reply is still available as text.');
+    }
   }
 
   function saveConnection(urlOverride?: string) {
@@ -809,7 +835,7 @@ export default function VoiceAssistant({
         </select>
       </label>
       <button type="button" disabled={!speakingSupported}
-        onClick={()=>speak('Hello, I am Compass. I can help you review your financial records and make a plan.',true)}
+        onClick={()=>speak('Hello. I am Compass. This is your iPhone voice preview. Your historical financial plan is dated the fifteenth of October. No current bank balance is verified.',true)}
         className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
         <Speaker size={15} className="mr-1 inline"/> Preview this voice
       </button>
@@ -818,6 +844,7 @@ export default function VoiceAssistant({
         className="ml-2 mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
         <RefreshCw size={14} className="mr-1 inline"/> Refresh iPhone voices
       </button>
+      {voicePreviewStatus && <p role="status" aria-live="polite" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{voicePreviewStatus}</p>}
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
         Safari reports {availableVoices.length} English voices on this device. The iPhone system default
         option lets iOS choose instead. Safari may not expose all downloaded Enhanced/Premium
