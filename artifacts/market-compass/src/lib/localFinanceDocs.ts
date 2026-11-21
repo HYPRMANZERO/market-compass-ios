@@ -210,9 +210,13 @@ export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDoc
   const checked=current.map(validateLocalFinanceDocument);
   if(checked.some(x=>!x))throw Error('One of the existing encrypted document summaries is invalid. Back up before editing.');
   const safe=checked as LocalFinanceDocument[];
-  if(!validateLocalFinanceDocument(document)||safe.length>=MAX_FINANCE_FILES||
-     safe.some(x=>x.id===document.id))throw Error('Document is invalid, duplicate, or the 12-document limit has been reached.');
-  return [...safe,document];
+  const checkedDocument=validateLocalFinanceDocument(document);
+  if(!checkedDocument||safe.length>=MAX_FINANCE_FILES||
+     safe.some(x=>x.id===checkedDocument.id))throw Error('Document is invalid, duplicate, or the 12-document limit has been reached.');
+  // Save the reconstructed allowlist object, NEVER the caller's untrusted
+  // input. This prevents injected secrets, source paths or extra fields from
+  // entering the encrypted workspace even if a caller uses type assertions.
+  return [...safe,checkedDocument];
 }
 export function removeLocalFinanceDocument(current:unknown,id:string):LocalFinanceDocument[]{
   if(!Array.isArray(current))throw Error('Invalid encrypted document list.');
