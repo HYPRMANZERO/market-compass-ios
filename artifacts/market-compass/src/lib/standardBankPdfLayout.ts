@@ -77,13 +77,15 @@ export function layoutStandardBankPdfLines(items:ReadonlyArray<unknown>):string[
   if(!rows)return null;
   const headerIndex=rows.findIndex(r=>headersIn(r)!==null);
   if(headerIndex<0)return null;
-  const header=headersIn(rows[headerIndex])!;
-  const dateLimit=(header.date.x+header.description.x)/2;
-  const descLimit=header.payments.x-14;
+  let header=headersIn(rows[headerIndex])!;
   const output:string[]=[];
   let previous:{index:number;y:number}|null=null;
-  for(const row of rows){
-    if(headersIn(row)){previous=null;continue;}
+  for(const row of rows.slice(headerIndex+1)){
+    const repeatedHeader=headersIn(row);
+    if(repeatedHeader){header=repeatedHeader;previous=null;continue;}
+    const dateLimit=header.description.x-4;
+    const descLimit=header.payments.x-14;
+    const amountStart=(header.description.x+header.payments.x)/2;
     const dateParts:Part[]=[],descriptionParts:Part[]=[];
     const values:{payments:string;deposits:string;balance:string}={
       payments:'',deposits:'',balance:''
@@ -93,11 +95,18 @@ export function layoutStandardBankPdfLines(items:ReadonlyArray<unknown>):string[
       // Avoid leaking delimiter characters into our ephemeral table protocol.
       const clean={...p,text:p.text.replace(/[|]/g,' ')};
       if(p.x<dateLimit){dateParts.push(clean);continue;}
-      if(p.x<descLimit){descriptionParts.push(clean);continue;}
-      if(!MONEY.test(p.text.trim())){ambiguous=true;break;}
-      const column=nearestMoneyColumn(p,header);
-      if(!column||values[column]){ambiguous=true;break;}
-      values[column]=p.text.trim();
+      // Right-aligned values can extend left of the payment header.
+      const isAmount=p.x>=amountStart&&MONEY.test(p.text);
+      if(isAmount){
+        const column=nearestMoneyColumn(p,header);
+        if(!column||values[column]){ambiguous=true;break;}
+        values[column]=p.text;
+      } else if(p.x<descLimit){
+        descriptionParts.push(clean);
+      } else {
+        ambiguous=true;
+        break;
+      }
     }
     const date=dateParts.map(p=>p.text).join(' ').trim();
     const description=descriptionParts.map(p=>p.text).join(' ').trim();
