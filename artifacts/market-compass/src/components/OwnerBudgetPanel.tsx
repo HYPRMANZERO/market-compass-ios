@@ -61,10 +61,16 @@ export default function OwnerBudgetPanel({view,connected,available}:Props){
       {view.historicalCycles.length>0 && <details className="text-[11px]">
         <summary className="cursor-pointer font-semibold">Historical incomplete snapshots ({view.historicalCycles.length})</summary>
         <div className="mt-2 space-y-2">
-          {view.historicalCycles.map(item=><p key={item.date}>
+          {view.historicalCycles.map(item=><div key={item.date}>
             <strong>{item.date}</strong>: reported pay {rand(item.reportedIncome)}, listed costs {rand(item.listedExpenseTotal)}.
             {' '}This is not a complete statement reconciliation.
-          </p>)}
+            {item.entries.length>0 && <ul className="mt-1 space-y-1 pl-2">
+              {item.entries.map((entry,i)=><li key={i} className="flex justify-between gap-2">
+                <span>{entry.label}</span>
+                <strong>{rand(entry.min)}</strong>
+              </li>)}
+            </ul>}
+          </div>)}
         </div>
       </details>}
       {view.creditCardFigureStatus==='unknown_balance_or_limit' && view.creditCardFigure!==null && <p className="text-[11px]">
