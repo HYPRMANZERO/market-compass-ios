@@ -41,6 +41,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const [label,setLabel]=useState('');
   const passwordInput=useRef<HTMLInputElement>(null);
   const [reading,setReading]=useState(false);
+  const [progress,setProgress]=useState<{page:number;total:number;stage:string}>({page:0,total:0,stage:'reading'});
+  const readController=useRef<AbortController|null>(null);
   const [preview,setPreview]=useState<LocalFinanceDocument|null>(null);
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
@@ -52,16 +54,24 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     const pdf=/\.pdf$/i.test(file.name);
     const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
     if(!file.size||file.size>limit){
-      setError(pdf?'Choose a PDF smaller than 2 MB. Nothing was saved.':
-        'Choose a CSV, TXT or JSON file smaller than 256 KB. Nothing was saved.');
+      setError(pdf?'PDF exceeds on-device memory safety capacity. Nothing was saved.':
+        'The file exceeds on-device text processing capacity. Nothing was saved.');
       return;
     }
     setReading(true);
+    setProgress({page:0,total:0,stage:'reading'});
+    const controller=new AbortController();
+    readController.current=controller;
     // The password is passed only to the local PDF reader. It never enters
     // React state, IndexedDB, settings, requests, logs or saved document data.
     let temporaryPassword=oneTimePassword;
     try{
-      const data=pdf?await extractLocalPdfText(file,temporaryPassword):await file.text();
+      const data=pdf?await extractLocalPdfText(file,temporaryPassword,{
+        signal:controller.signal,
+        onProgress:next=>setProgress(next)
+      }):await file.text();
+      if(controller.signal.aborted)throw Error('Document processing cancelled; nothing was saved.');
+      setProgress(old=>({...old,stage:'classifying'}));
       const privateLabel=label.trim() || 'iPhone financial export';
       const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
       setPreview(draft);
@@ -72,6 +82,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       setError(e instanceof Error?e.message:'Could not read this financial file privately.');
     }finally{
       temporaryPassword='';
+      readController.current=null;
       setReading(false);
     }
   }
@@ -98,8 +109,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
       <summary className="min-h-9 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-        CSV, TXT, transaction JSON and text-based PDF. PDF limit: 2 MB, 12 pages;
-        other files: 256 KB. Only up to 60 recognised lines are stored.
+        CSV, TXT, transaction JSON and selectable-text PDF. Multi-page PDFs
+        are processed across all pages with visible progress; a 64 MB on-device
+        memory ceiling remains to prevent Safari crashes. Source evidence is
+        bounded for encrypted storage and any truncation is disclosed.
         Scanned PDFs, photographs, Word and Excel need a separate local extractor.
         The original file stays on your phone. Do not use online converters for
         private financial documents.
@@ -140,7 +153,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           void selected(selectedFile,oneTimePassword);
         }}
         className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px] disabled:opacity-40"/>
-      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading locally…</span>}
+      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading and classifying locally…</span>}
     </label>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
       Next: inspect dates and amounts, then tap Save reviewed excerpts. To
@@ -151,7 +164,11 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         Review {preview.lines.length} extracted lines · {preview.label}
       </p>
       <p className="rounded-lg border border-primary/20 bg-background p-3 text-[12px] font-semibold">
-        Document classification: {financeLabel(preview.documentKind)}
+        Classified as: {preview.accountProfile?.category.replaceAll('-',' ')??financeLabel(preview.documentKind)}
+        <span className="mt-1 block font-normal text-muted-foreground">
+          Account label: {preview.accountProfile?.name??'Unidentified account'} ·
+          {preview.accountProfile?.confidence==='matched-terms'?' Matched document terms':' Needs owner verification'}
+        </span>
       </p>
       {preview.documentKind&&preview.documentKind!=='unclassified'&&
         <p className="text-[11px] leading-5 text-muted-foreground">
@@ -177,7 +194,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         </div>)}
       </div>
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
-        Import was limited to the first 60 recognised lines. This is not the full file.
+        The saved excerpt is partial. The original remains in iPhone Files; review further source entries separately.
       </p>}
       <button type="button" onClick={save}
         className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
@@ -200,7 +217,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           {document.label} · {document.lines.length} lines
         </summary>
         <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
-          {financeLabel(document.documentKind??detectFinanceDocument(document.lines.map(l=>l.label).join(' '),document.label))}
+          {document.accountProfile?
+            document.accountProfile.name+' · '+document.accountProfile.category.replaceAll('-',' '):
+            financeLabel(document.documentKind??detectFinanceDocument(document.lines.map(l=>l.label).join(' '),document.label))}
         </p>
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
           Owner-selected on {new Date(document.importedAt).toLocaleDateString('en-ZA')}.
@@ -238,5 +257,28 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       wait for the encrypted auto-save to finish, then choose Export encrypted backup.
       Keep the original files separately; only bounded excerpts are stored.
     </p>
+    {reading&&<div role="dialog" aria-modal="true" aria-labelledby="mc-processing-title"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/65 p-5">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-xl">
+        <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" aria-hidden="true"/>
+        <h2 id="mc-processing-title" className="text-center text-[17px] font-bold">Processing your document</h2>
+        <p className="mt-2 text-center text-[12px] leading-5 text-muted-foreground" role="status" aria-live="polite">
+          {progress.stage==='reading'?'Opening the document privately…':
+            progress.stage==='classifying'?'Identifying account and financial fields…':
+            'Reading page '+progress.page+' of '+progress.total}
+        </p>
+        {progress.total>0&&<div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-primary transition-all"
+            style={{width:Math.max(1,Math.round(progress.page/progress.total*100))+'%'}}/>
+        </div>}
+        <p className="mt-3 text-center text-[11px] text-muted-foreground">
+          Text is processed on this iPhone. Raw PDFs and passwords are not sent to HYPRBOX.
+        </p>
+        <button type="button" onClick={()=>readController.current?.abort()}
+          className="mt-4 min-h-11 w-full rounded-xl border border-border text-[12px] font-semibold">
+          Cancel processing
+        </button>
+      </div>
+    </div>}
   </section>;
 }
