@@ -85,7 +85,7 @@ export function validateOwnerBudgetDraft(raw:unknown,now=new Date()):OwnerBudget
     salary:raw.salary,incentive:raw.incentive,incentiveGuaranteed:false,
     hourlyRate:raw.hourlyRate,hourlyAlreadyIncluded:'unknown',
     recurring,scheduledOverrides,historicalCycles,
-    creditCardFigure:credit?{amount:credit.amount as number,meaning:'unknown_balance_or_limit'}:null
+    creditCardFigure:credit&&isObject(credit)?{amount:credit.amount as number,meaning:'unknown_balance_or_limit'}:null
   };
 }
 export function parseOwnerBudgetDraft(text:string,now=new Date()):OwnerBudgetDraft{
