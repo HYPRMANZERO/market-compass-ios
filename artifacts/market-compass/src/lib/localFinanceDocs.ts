@@ -1,3 +1,5 @@
+import {detectFinanceDocument,extractVehicleFinanceLines,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
+
 /**
  * Local-only, owner-reviewed financial-file intake.
  *
@@ -12,6 +14,9 @@ export type LocalFinanceLine={
   amount:number|null;
   date:string|null;
   direction:'incoming'|'outgoing'|'unclassified';
+  semanticRole?:FinanceRole;
+  semanticField?:FinanceField;
+  ratePercent?:number;
 };
 export type LocalFinanceDocument={
   id:string;
@@ -23,6 +28,7 @@ export type LocalFinanceDocument={
   complete:false;
   lines:LocalFinanceLine[];
   truncated:boolean;
+  documentKind?:FinanceDocumentKind;
 };
 export const MAX_FINANCE_FILES=12;
 export const MAX_FINANCE_FILE_BYTES=256_000;
@@ -174,13 +180,24 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
       v.amount!==null&& (typeof v.amount!=='number'||!Number.isFinite(v.amount)||Math.abs(v.amount)>10_000_000)||
       v.date!==null&&dateOf(v.date)!==v.date||
       !['incoming','outgoing','unclassified'].includes(String(v.direction)))return null;
-    lines.push({label:v.label,amount:v.amount as number|null,date:v.date as string|null,
-      direction:v.direction as LocalFinanceLine['direction']});
+    if(v.semanticRole!==undefined && !['contract-term','balance-reference','rate-reference','transaction','unclassified'].includes(String(v.semanticRole)))return null;
+    if(v.semanticField!==undefined && !['original-principal','previous-instalment','instalment','residual-value','settlement-quotation','statement-balance','annual-rate','completed-payment'].includes(String(v.semanticField)))return null;
+    if(v.ratePercent!==undefined && (typeof v.ratePercent!=='number'||!Number.isFinite(v.ratePercent)||v.ratePercent<0||v.ratePercent>100))return null;
+    const line:LocalFinanceLine={label:v.label,amount:v.amount as number|null,date:v.date as string|null,
+      direction:v.direction as LocalFinanceLine['direction']};
+    if(v.semanticRole!==undefined)line.semanticRole=v.semanticRole as FinanceRole;
+    if(v.semanticField!==undefined)line.semanticField=v.semanticField as FinanceField;
+    if(v.ratePercent!==undefined)line.ratePercent=v.ratePercent as number;
+    lines.push(line);
   }
-  return {id:input.id,label:input.label.trim(),importedAt:input.importedAt,
+  if(input.documentKind!==undefined &&
+    !['absa-vehicle-finance','vehicle-finance','unclassified'].includes(String(input.documentKind)))return null;
+  const validated:LocalFinanceDocument={id:input.id,label:input.label.trim(),importedAt:input.importedAt,
     source:'owner-selected-iphone-file',bankVerified:false,complete:false,
     format:input.format as LocalFinanceDocument['format'],
-    lines,truncated:input.truncated};
+    lines,truncated:input.truncated as boolean};
+  if(input.documentKind!==undefined)validated.documentKind=input.documentKind as FinanceDocumentKind;
+  return validated;
 }
 export function extractLocalFinanceDocument(
   fileName:string,text:string,ownerLabel:string,
@@ -193,13 +210,20 @@ export function extractLocalFinanceDocument(
   const extension=fileName.toLowerCase().split('.').pop();
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
-  const lines=extension==='csv'?parseCsv(text):extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
+  const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+ownerLabel):'unclassified';
+  // A finance contract is NOT a transaction CSV. Recognise its terms before
+  // the generic R-amount extractor can conflate contract values with payments.
+  const lines:LocalFinanceLine[]=documentKind!=='unclassified'?
+    extractVehicleFinanceLines(text).map(line=>({...line,label:maskText(line.label,130)})):
+    extension==='csv'?parseCsv(text):
+    extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
   if(!lines.length)throw Error('No financial rows with recognisable amounts were found. Nothing was saved.');
   const document={
     id,label:ownerLabel.trim(),importedAt:now.toISOString(),
     source:'owner-selected-iphone-file' as const,format:extension,
     bankVerified:false as const,complete:false as const,
-    lines:lines.slice(0,MAX_FINANCE_LINES),truncated:lines.length>MAX_FINANCE_LINES
+    lines:lines.slice(0,MAX_FINANCE_LINES),truncated:lines.length>MAX_FINANCE_LINES,
+    documentKind
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
