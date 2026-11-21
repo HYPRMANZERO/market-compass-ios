@@ -19,6 +19,7 @@ import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSetti
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
@@ -439,6 +440,9 @@ function Overview({ data }: { data: WorkspaceData }) {
         <ArrowRight size={17} className="shrink-0" />
       </Link>
     </div>
+    <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
+      settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
+      budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
     <div className="hidden lg:block">
     <PageIntro eyebrow="A clearer view, at your pace" title="Your compass" description="A quiet place to see what is known, what is estimated, and what still needs your attention." trailing={<div className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-[11px] text-muted-foreground"><span className="mono mr-2 text-foreground">TODAY</span>{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>} />
     <div className="grid gap-4 md:grid-cols-3">
