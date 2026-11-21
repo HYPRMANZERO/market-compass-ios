@@ -46,3 +46,11 @@ test('market abbreviations are expanded for speech without inventing a quote',()
  assert.match(out,/No verified/);
  assert.doesNotMatch(out,/S&P 500|BTC\/USD/);
 });
+
+test('speech never truncates high precision crypto figures into incorrect rand values',()=>{
+ const out=voiceFriendlyText('BTC is 0.000123 ZAR. ZAR 0.00000001 is an unverified quote. R 100.333 is not rounded.');
+ assert.match(out,/0\.000123 South African rand/);
+ assert.match(out,/South African rand 0\.00000001/);
+ assert.match(out,/R 100\.333/);
+ assert.doesNotMatch(out,/123 rand|100 rand and 33 cents/);
+});
