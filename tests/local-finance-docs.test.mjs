@@ -1,4 +1,5 @@
 import test from 'node:test';
+const displayDigits=value=>value.replace(/[\s\u00a0\u202f]/g,'');
 import assert from 'node:assert/strict';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
@@ -68,7 +69,7 @@ test('offline assistant retrieves only approved document excerpts with source la
  const answer=answerFromOfflineFinanceDocs(q,[d]);
  assert.ok(answer);
  assert.match(answer,/October payslip/);
- assert.match(answer,/10400|10,400/);
+ assert.match(displayDigits(answer),/10400/);
  assert.match(answer,/not a complete statement|Not a complete statement/i);
  assert.doesNotMatch(answer,/bank verified/i);
  const ctx={currency:'ZAR',monthlyExtra:'',accounts:[],draftCount:0,localFinanceDocuments:[d]};
