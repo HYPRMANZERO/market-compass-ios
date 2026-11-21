@@ -67,10 +67,16 @@ export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'n
     score:p.matches.reduce((score,re)=>score+(re.test(haystack)?1:0),0)}))
     .sort((a,b)=>b.score-a.score);
   const best=ranked[0];
-  const category:DocumentCategory=best&&best.score>0?best.kind:'unclassified';
+  const tied=best.score>0&&ranked[1]?.score===best.score;
+  const header=text.split(/\r?\n/).slice(0,5).join(' ');
+  const headingMatches=tied?ranked.filter(candidate=>candidate.score===best.score&&
+    patterns.find(pattern=>pattern.category===candidate.kind)?.matches[0].test(header)):[];
+  const category:DocumentCategory=tied?(headingMatches.length===1?headingMatches[0].kind:
+    ranked.some(candidate=>candidate.kind==='bank-statement'&&candidate.score===best.score)?'bank-statement':'unclassified'):
+    best.score>0?best.kind:'unclassified';
   return {name:institution==='Unidentified provider'?names[category]:
     category==='bank-statement'?institution+' account':institution+' '+names[category],
-    institution,category,confidence:best&&best.score>=2?'matched-terms':'uncertain'};
+    institution,category,confidence:!tied&&best.score>=2?'matched-terms':'uncertain'};
 }
 /** Strong PII redaction for stored excerpts: never save full account/ID numbers. */
 export function maskDocumentPII(text:string):string{
