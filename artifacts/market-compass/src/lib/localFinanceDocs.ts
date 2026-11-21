@@ -1,4 +1,5 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
+import {makeAccountProfile,maskDocumentPII,safeAccountProfile,type AccountProfile} from './documentIntelligence.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -29,10 +30,11 @@ export type LocalFinanceDocument={
   lines:LocalFinanceLine[];
   truncated:boolean;
   documentKind?:FinanceDocumentKind;
+  accountProfile?:AccountProfile;
 };
-export const MAX_FINANCE_FILES=12;
+export const MAX_FINANCE_FILES=100;
 export const MAX_FINANCE_FILE_BYTES=256_000;
-export const MAX_FINANCE_LINES=60;
+export const MAX_FINANCE_LINES=300;
 const labelOk=(v:unknown):v is string=>typeof v==='string'&&
   v.trim().length>=2&&v.trim().length<=70&& !/[\x00-\x1f<>]/.test(v);
 const asObject=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -55,7 +57,7 @@ function maskText(value:unknown,max=130):string{
   if(typeof value!=='string')return '';
   // Mask common identifiers; not a guarantee that every possible item of
   // personal information has been removed. The owner must review the preview.
-  return value.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email]')
+  return maskDocumentPII(value).replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email]')
     .replace(/(?:\+27|0)\d(?:[\s-]?\d){8,10}/g,'[phone]')
     .replace(/\b(?:\d[\s-]?){12,19}\b/g,'[long-number]')
     .replace(/\b(?:\d{4}[\s-]?){2,4}\d{0,4}\b/g,'[number]')
@@ -133,7 +135,7 @@ function parseCsv(text:string):LocalFinanceLine[]{
 }
 function parseText(text:string):LocalFinanceLine[]{
   const out:LocalFinanceLine[]=[];
-  for(const raw of text.split(/\r?\n/).slice(0,1000)){
+  for(const raw of text.split(/\r?\n/).slice(0,25000)){
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const trimmed=raw.trim();if(trimmed.length<3)continue;
     const rand=trimmed.match(/\b(?:ZAR|R)\s*([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
@@ -197,6 +199,11 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     format:input.format as LocalFinanceDocument['format'],
     lines,truncated:input.truncated as boolean};
   if(input.documentKind!==undefined)validated.documentKind=input.documentKind as FinanceDocumentKind;
+  if(input.accountProfile!==undefined){
+    const profile=safeAccountProfile(input.accountProfile);
+    if(!profile)return null;
+    validated.accountProfile=profile;
+  }
   return validated;
 }
 export function extractLocalFinanceDocument(
@@ -223,7 +230,8 @@ export function extractLocalFinanceDocument(
     source:'owner-selected-iphone-file' as const,format:extension,
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:lines.length>MAX_FINANCE_LINES,
-    documentKind
+    documentKind,
+    accountProfile:makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES))
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
@@ -255,7 +263,7 @@ export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDoc
   const safe=checked as LocalFinanceDocument[];
   const checkedDocument=validateLocalFinanceDocument(document);
   if(!checkedDocument||safe.length>=MAX_FINANCE_FILES||
-     safe.some(x=>x.id===checkedDocument.id))throw Error('Document is invalid, duplicate, or the 12-document limit has been reached.');
+     safe.some(x=>x.id===checkedDocument.id))throw Error('Document is invalid, duplicate, or the device document-summary capacity has been reached.');
   // Save the reconstructed allowlist object, NEVER the caller's untrusted
   // input. This prevents injected secrets, source paths or extra fields from
   // entering the encrypted workspace even if a caller uses type assertions.
