@@ -145,7 +145,7 @@ export function evaluateFinancialReadiness(
 
   const ownerDate=ownerBudget?daysSince(ownerBudget.recordedAt,now):null;
   const budgetStatus:ReadinessStatus=!ownerBudget?'missing':
-    ownerDate===null||ownerDate>40?'review':'recorded';
+    ownerDate===null||ownerDate>30?'review':'recorded';
   items.push(entry('owner_budget','Owner budget reference',budgetStatus,false,
     budgetStatus==='missing'?'No owner budget draft is saved; other inputs can still be entered manually.':
       budgetStatus==='review'?'Owner budget is historical or undated for current planning.':
