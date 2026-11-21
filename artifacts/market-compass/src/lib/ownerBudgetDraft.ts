@@ -55,7 +55,7 @@ export function validateOwnerBudgetDraft(raw:unknown,now=new Date()):OwnerBudget
   const scheduledOverrides:OwnerBudgetException[]=overrideRaw.map(x=>{
     if(!isObject(x)||!validMonth(x.month)||!isLabel(x.label)||!isMoney(x.amount))
       throw Error('A scheduled exception needs a valid month, label and amount.');
-    const match=recurring.find(e=>e.label.toLowerCase()===x.label.trim().toLowerCase());
+    const match=recurring.find(e=>e.label.toLowerCase()===String(x.label).trim().toLowerCase());
     if(!match)throw Error('Each month-specific exception must match a normal recurring label.');
     return {month:x.month,label:match.label,amount:x.amount};
   });
