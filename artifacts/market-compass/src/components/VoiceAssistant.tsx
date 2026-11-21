@@ -3,6 +3,7 @@ import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Refresh
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
+import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, type VoicePace } from '@/lib/speechVoices';
 
 type RecognitionResult = { 0: { transcript: string }; isFinal: boolean };
 type RecognitionEvent = { results: ArrayLike<RecognitionResult>; resultIndex: number };
@@ -18,7 +19,17 @@ type RecognitionWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserRecognition;
   SpeechRecognition?: new () => BrowserRecognition;
 };
-type Message = { id: string; source: 'owner' | 'local' | 'ollama'; text: string };
+type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string };
+type AgentRunResult = {
+  ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
+  answer: string; workspaceWritten: false; approvalExecutionEnabled: false;
+  trace: {tool:string;label:string;status:'ok'|'unavailable';effect:'read'}[];
+  results: Record<string,{available?:boolean;connected?:boolean;reason?:string}>;
+  approval: null | {
+    status:'draft'|'blocked';type:string;description:string;
+    requiresApproval:true;executable:false;nextStep?:string;
+  };
+};
 type SourceInventory = {
   readOnly: boolean; checkedAt: string;
   documentSources: {source:string;date:string}[];
@@ -67,16 +78,25 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [query, setQuery] = useState('');
   const [recognitionSupported] = useState(micAvailable);
   const [speakingSupported] = useState(voiceAvailable);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState('');
   const [formError, setFormError] = useState('');
   const [host, setHost] = useState(settings.url || (typeof window !== 'undefined' ? privateTailnetOrigin(window.location.origin) || '' : ''));
+  // When the full PWA is served privately through Tailscale, keep the AI same-origin.
+  // The original GitHub Pages edition may instead use a private *.ts.net AI URL.
+  const tailnetSameOrigin = typeof window !== 'undefined' &&
+    window.location.hostname.endsWith('.ts.net')
+      ? privateTailnetOrigin(window.location.origin) : null;
+  const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
   const [secret, setSecret] = useState(settings.token);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
+  const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
   const [luno, setLuno] = useState<LunoStatus | null>(null);
   const [sourceError, setSourceError] = useState('');
@@ -106,6 +126,15 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!speakingSupported) return;
+    const synth=window.speechSynthesis;
+    const refresh=()=>setAvailableVoices(sortedEnglishVoices(synth.getVoices()));
+    refresh();
+    synth.addEventListener('voiceschanged',refresh);
+    return ()=>synth.removeEventListener('voiceschanged',refresh);
+  }, [speakingSupported]);
 
   useEffect(() => () => {
     probeSerial.current++;
@@ -348,21 +377,27 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, settings.url, settings.token]);
 
-  function speak(answer: string) {
-    if (!settings.speakReplies || !voiceAvailable()) return;
+  function speak(answer: string, preview=false) {
+    if ((!settings.speakReplies && !preview) || !voiceAvailable()) return;
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(answer.slice(0, 1000));
-      utterance.lang = 'en-ZA'; utterance.rate = 0.96;
-      window.speechSynthesis.speak(utterance);
+      const synth=window.speechSynthesis;
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(voiceFriendlyText(answer));
+      const best=chooseSpeechVoice(synth.getVoices(),settings.voiceURI);
+      if(best){utterance.voice=best;utterance.lang=best.lang;}
+      else utterance.lang='en-ZA';
+      utterance.rate=speakingRate(settings.voicePace);
+      utterance.pitch=1;
+      synth.speak(utterance);
     } catch { setStatus('Audio playback is unavailable; the reply is still available as text.'); }
   }
 
-  function saveConnection() {
+  function saveConnection(urlOverride?: string) {
     setFormError('');
     try {
       const saved = validateDesktopAiSettings({
-        url: host, token: secret, enabled: true, shareFinancialContext,
+        ...settings,
+        url: urlOverride ?? host, token: secret, enabled: true, shareFinancialContext,
         speakReplies: settings.speakReplies,
       });
       onSettingsChange(saved);
@@ -382,7 +417,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   function forgetConnection() {
     if (!window.confirm('Forget this desktop AI connection and delete its saved access token from the encrypted workspace?')) return;
     onSettingsChange({
-      url: '', token: '', enabled: false, shareFinancialContext: false,
+      ...settings, url: '', token: '', enabled: false, shareFinancialContext: false,
       speakReplies: settings.speakReplies,
     });
     setHost(''); setSecret(''); setShareFinancialContext(false);
@@ -399,7 +434,10 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       const validAccount = (a: CompassCommandContext['accounts'][number]) =>
         a.name.trim().length > 0 && [a.balance, a.apr, a.minimumPayment].every(v =>
           typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0);
-      const summary = settings.shareFinancialContext ? {
+      // Sharing financial context is opt-in AND relevant-topic-only. A greeting or
+      // unrelated question must not transmit salary, account or spending figures.
+      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
+      const summary = settings.shareFinancialContext && wantsFinancialContext ? {
         currency: context.currency,
         accounts: context.accounts.filter(validAccount).slice(0, 30).map(a => ({
           name: a.name.slice(0,60), balance: Number(a.balance),
@@ -411,7 +449,9 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
       } : undefined;
-      const response = await fetch(url + '/api/chat', {
+      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
+      const useAgent = agentMode && agentIntent;
+      const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
@@ -419,12 +459,35 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       });
       const payload: unknown = await response.json();
       if (!response.ok) throw Error(`Desktop AI returned HTTP ${response.status}. Check the local service and model.`);
-      if (!payload || typeof payload !== 'object' || !('reply' in payload) || typeof payload.reply !== 'string')
-        throw Error('Desktop AI returned an invalid response.');
+      if (!payload || typeof payload !== 'object') throw Error('Desktop AI returned an invalid response.');
       if (messageSerial.current !== id) return;
-      const reply = payload.reply.slice(0,1800);
-      add('ollama', reply); speak(reply);
-      setStatus('Answered by your desktop Ollama model. Independently verify financial claims.');
+      if (useAgent) {
+        if (!('answer' in payload) || typeof payload.answer !== 'string' ||
+          !('readOnly' in payload) || payload.readOnly !== true ||
+          !('approvalExecutionEnabled' in payload) || payload.approvalExecutionEnabled !== false ||
+          !('workspaceWritten' in payload) || payload.workspaceWritten !== false ||
+          !('trace' in payload) || !Array.isArray(payload.trace)) {
+          throw Error('Desktop agent did not confirm a read-only response.');
+        }
+        const agentResult = payload as AgentRunResult;
+        setLastAgent(agentResult);
+        add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
+        setStatus(`Read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+      } else {
+        if (!('reply' in payload) || typeof payload.reply !== 'string')
+          throw Error('Desktop AI returned an invalid chat response.');
+        const reply = payload.reply.slice(0,1800);
+        const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
+          ? payload.answerSource : 'private-desktop-model';
+        add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
+        setStatus(answerSource === 'private-desktop-model'
+          ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
+          : answerSource === 'private-assistant-shortcut'
+            ? 'Market Compass answered your greeting locally without accessing financial records.'
+            : answerSource === 'official-luno-api'
+              ? 'Read-only Luno source checked. Balances require verified, current API data.'
+              : 'Answered by a private, read-only assistant function.');
+      }
     } catch (error) {
       if (messageSerial.current !== id) return;
       setConnection('offline');
@@ -439,13 +502,20 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     const id = ++messageSerial.current;
     setQuery(''); setStatus('');
     add('owner', question);
+    setLastAgent(null);
     const result = interpretCompassCommand(question, context);
     // Safeguards and navigation remain local, but a private Luno balance must
     // not be confused with a historical cryptocurrency market candle.
     const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
       /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
     const asksPublicResearch = /^(?:search public (?:reference|information|info)|research (?:public )?(?:topic|information)|search wikipedia for)\b/i.test(question);
-    if (result.type !== 'unknown' && !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch))) {
+    // Navigation and non-negotiable payment/trading refusals remain local even
+    // with Agent mode enabled: a model must never override these guards.
+    const localSafetyRefusal = result.type === 'answer' &&
+      result.reply.startsWith('I cannot transfer money');
+    if (result.type === 'navigate' || localSafetyRefusal ||
+      ((!agentMode || !connected) && result.type !== 'unknown' &&
+      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
@@ -523,19 +593,61 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
-          setMessages([]); setStatus('Conversation cleared from page memory.');
+          setMessages([]); setLastAgent(null); setStatus('Conversation cleared from page memory.');
         }}><X size={14} className="mr-1 inline"/>Clear</button>
+      </div>
+      <div className="border-b border-border px-4 py-3">
+        <label className="flex min-h-9 items-center gap-3 text-[12px] font-semibold">
+          <input type="checkbox" checked={agentMode} disabled={busy}
+            onChange={event => { setAgentMode(event.target.checked); setLastAgent(null); }}
+            aria-label="Enable read-only agent mode"/>
+          <span>Agent mode <span className="font-normal text-muted-foreground">· max 3 read-only tools</span></span>
+        </label>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          Financial records and sources can be reviewed, not edited. Reminders and expense entries are drafts only; banking and trading are disabled.
+        </p>
+        {agentMode && !settings.shareFinancialContext && (
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+            Your unlocked iPhone vault figures are not shared with HYPRBOX. To analyse them, enable financial-context sharing under Desktop Ollama settings below. Other device vaults are not synchronized.
+          </p>
+        )}
       </div>
       <div className="max-h-[340px] min-h-[160px] space-y-3 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`max-w-[92%] rounded-[16px] px-4 py-3 text-[13px] leading-6 ${message.source === 'owner' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted/75 text-foreground'}`}>
             {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
+            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Market Compass · Read-only Agent</span>}
             {message.text}
           </div>
         </div>)}
-        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">Waiting for desktop Ollama…</div>}
+        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}
         <div ref={bottom}/>
       </div>
+      {lastAgent && (
+        <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/35 p-3" aria-label="Agent execution trace">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[12px] font-bold">Agent read-only tool trace</h3>
+            <span className="text-[11px] text-muted-foreground">{lastAgent.steps}/{lastAgent.maxSteps} checks</span>
+          </div>
+          {lastAgent.trace.length ? <ul className="mt-2 space-y-2 text-[11px] text-muted-foreground">
+            {lastAgent.trace.map((item,index)=><li key={item.tool+index}>
+              <span>{item.label} · {item.status === 'ok' ? 'Read only' : 'No verified data available'}</span>
+              {item.status !== 'ok' && typeof lastAgent.results?.[item.tool]?.reason === 'string' && (
+                <p className="mt-1 text-[11px] leading-5">{lastAgent.results[item.tool].reason}</p>
+              )}
+            </li>)}
+          </ul> : <p className="mt-2 text-[11px] text-muted-foreground">No private financial tool was accessed. This request only created a review draft.</p>}
+          {lastAgent.approval && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
+            <strong>{lastAgent.approval.status === 'blocked' ? 'Execution blocked' : 'Action proposal · review only'}</strong>
+            <p className="mt-1 leading-5">{lastAgent.approval.description}</p>
+            {lastAgent.approval.nextStep && <p className="mt-1 text-muted-foreground">{lastAgent.approval.nextStep}</p>}
+            <p className="mt-2 font-semibold text-muted-foreground">Not approved, not scheduled, not saved. No execution capability in Stage 1.</p>
+          </div>}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            No workspace writes, trades, transfers or payments are available. Source figures may be historical or manually entered.
+          </p>
+        </section>
+      )}
       <div className="border-t border-border p-3">
         <form className="flex items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
@@ -553,6 +665,42 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         {status && <p role="status" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
+
+    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
+      <summary className="cursor-pointer text-[13px] font-bold">Spoken replies · voice &amp; pace</summary>
+      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+        Choose an English voice offered by this iPhone or browser. Preview voices without sending your financial replies to another speech service.
+      </p>
+      <label className="mt-3 block text-[12px] font-semibold">
+        Spoken voice
+        <select value={availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
+          onChange={e=>onSettingsChange({...settings,voiceURI:e.target.value})}
+          disabled={!speakingSupported}
+          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
+          <option value="">Automatic · best available English voice</option>
+          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
+        </select>
+      </label>
+      <label className="mt-3 block text-[12px] font-semibold">
+        Speaking pace
+        <select value={settings.voicePace||'natural'}
+          onChange={e=>onSettingsChange({...settings,voicePace:e.target.value as VoicePace})}
+          disabled={!speakingSupported}
+          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
+          <option value="natural">Natural · relaxed</option>
+          <option value="calm">Calm · slower</option>
+          <option value="brisk">Brisk · quicker</option>
+        </select>
+      </label>
+      <button type="button" disabled={!speakingSupported}
+        onClick={()=>speak('Hello, I am Compass. I can help you review your financial records and make a plan.',true)}
+        className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
+        <Speaker size={15} className="mr-1 inline"/> Preview this voice
+      </button>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        Voice availability and audio quality depend on Safari and installed system voices. This setting is stored in your existing encrypted workspace; no new voice service is installed.
+      </p>
+    </details>
 
     <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Encrypted desktop conversation memory">
       <div className="flex items-center justify-between gap-2">
@@ -660,12 +808,32 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         </div>
         {connectionMessage && <p className="mt-1 text-muted-foreground">{connectionMessage}</p>}
       </div>
-      <label className="mt-4 block text-[12px] font-semibold">Private AI HTTPS URL (Tailscale or this protected website)
+      {publicPagesEdition && (
+        <p role="note" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] leading-5">
+          <strong>This Home Screen icon is the public GitHub Pages edition ({window.location.hostname}).</strong>
+          {' '}Connect to your own desktop's private Tailscale Serve HTTPS address (*.ts.net) while your device is connected to the same tailnet.
+          If you later install a separate private-hosted edition, its encrypted browser vault will not automatically inherit this app's data. Export an encrypted backup before moving any records.
+        </p>
+      )}
+      {tailnetSameOrigin && (
+        <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
+          This app is running on your private Tailscale host: <strong>{window.location.hostname}</strong>.
+          {' '}Use this same HTTPS origin for the desktop AI connection.
+          {privateTailnetOrigin(host) !== tailnetSameOrigin && ' Tap “Use this Tailscale address for AI” below to save it without changing your token.'}
+        </p>
+      )}
+      <label className="mt-4 block text-[12px] font-semibold">Private AI HTTPS URL (Tailscale Serve)
         <input type="url" value={host} onChange={e=>setHost(e.target.value)}
           onBlur={() => {const url=privateTailnetOrigin(host); if(url)setHost(url+'/');}}
-          placeholder="https://your-private-host.example.com/"
+          placeholder="https://hyprbox.your-tailnet.ts.net/"
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
+      {tailnetSameOrigin && privateTailnetOrigin(host) !== tailnetSameOrigin && (
+        <button type="button" onClick={() => saveConnection(tailnetSameOrigin)}
+          className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 text-[12px] font-semibold text-primary">
+          <ShieldCheck size={16}/> Use this Tailscale address for AI
+        </button>
+      )}
       <label className="mt-3 block text-[12px] font-semibold">Desktop AI token · encrypted in vault
         <input type="password" autoComplete="off" value={secret} onChange={e=>setSecret(e.target.value)}
           placeholder="Paste the separate 48+ character desktop token"
@@ -675,7 +843,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         <input type="checkbox" checked={shareFinancialContext} onChange={e=>setShareFinancialContext(e.target.checked)}/>
         Share entered financial figures with my own desktop when asking open-ended questions
       </label>
-      <button type="button" onClick={saveConnection}
+      <button type="button" onClick={() => saveConnection()}
         className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground">
         <RefreshCw size={17}/> Save &amp; reconnect automatically
       </button>
