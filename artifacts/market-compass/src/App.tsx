@@ -304,7 +304,15 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
     window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
-  useEffect(() => { window.scrollTo(0, 0); }, [path]);
+  // iOS standalone PWAs can restore the previous tab's scroll offset after
+  // React has already switched routes. Reset once now and once after paint.
+  // This prevents the first hero/card from opening beneath the sticky header.
+  useEffect(() => {
+    const reset = () => window.scrollTo(0, 0);
+    reset();
+    const frame = window.requestAnimationFrame(reset);
+    return () => window.cancelAnimationFrame(frame);
+  }, [path]);
   const openSettings = () => {
     const el = document.getElementById('mc-backup-controls') as HTMLDetailsElement | null;
     if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -341,7 +349,7 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
             <div className="truncate text-[16px] font-bold leading-5">Market Compass</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
-              <span>{online ? 'Connected' : 'Offline'} · {active.label} · {currency}</span>
+              <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
             </div>
           </div>
           <button type="button" onClick={openSettings} aria-label="Open vault, backups and settings" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><ShieldCheck size={21}/></button>
@@ -352,16 +360,16 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
       </header>
       <InstallHelp/>
-      <div className="mx-auto min-w-0 max-w-[1440px] px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
+      <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
-    <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)]/98 px-1.5 pt-2 shadow-[0_-6px_20px_rgba(17,39,33,.06)] backdrop-blur-xl lg:hidden">
+    <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)] px-1.5 pt-2 shadow-[0_-5px_16px_rgba(17,39,33,.05)] lg:hidden">
       <div className="mx-auto grid max-w-[550px] grid-cols-6 gap-0.5">
         {navItems.map(({ href, label, icon: Icon }) => {
           const selected = href === path;
           const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label === 'Expenses' ? 'Spend' : label;
           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-            className={`relative flex min-h-[57px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:scale-[.96] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+            className={`relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
             <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
             <span className="text-[10px] font-semibold leading-none">{short}</span>
             {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
