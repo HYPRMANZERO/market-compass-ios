@@ -2,6 +2,7 @@ import {useRef,useState} from 'react';
 import ReviewedDocumentLedger from './ReviewedDocumentLedger';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
@@ -161,7 +162,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[12px] font-semibold">
-        Review {preview.lines.length} extracted lines · {preview.label}
+        Review {preview.lines.length} extracted lines · {maskDocumentPII(preview.label)}
       </p>
       <p className="rounded-lg border border-primary/20 bg-background p-3 text-[12px] font-semibold">
         Document classification: {preview.accountProfile?.category.replaceAll('-',' ')??financeLabel(preview.documentKind)}
@@ -186,7 +187,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       <div className="max-h-72 space-y-2 overflow-y-auto">
         {preview.lines.map((line,index)=><div key={index} className="rounded-lg bg-background p-2 text-[11px]">
           <div className="flex flex-wrap justify-between gap-2">
-            <span className="break-words font-medium">{line.label}</span>
+            <span className="break-words font-medium">{maskDocumentPII(line.label)}</span>
             <strong>{money(line.amount)}</strong>
           </div>
           <p className="text-muted-foreground">{lineDateLabel(line)} · {roleLabel(line.semanticRole)}</p>
@@ -214,7 +215,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       </div>
       {safe.map(document=><details key={document.id} className="rounded-xl border border-border bg-background p-3">
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">
-          {document.label} · {document.lines.length} lines
+          {maskDocumentPII(document.label)} · {document.lines.length} lines
         </summary>
         <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
           {document.accountProfile?
@@ -229,7 +230,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         </p>
         <ul className="mt-2 max-h-56 space-y-2 overflow-auto text-[11px]">
           {document.lines.map((line,index)=><li key={index} className="flex flex-wrap justify-between gap-2">
-            <span>{lineDateLabel(line)} · {line.label}<span className="block text-[10px] text-muted-foreground">{roleLabel(line.semanticRole)}</span></span>
+            <span>{lineDateLabel(line)} · {maskDocumentPII(line.label)}<span className="block text-[10px] text-muted-foreground">{roleLabel(line.semanticRole)}</span></span>
             <strong>{money(line.amount)}</strong>
           </li>)}
         </ul>
