@@ -15,7 +15,7 @@ export type OwnerBudgetDraft = {
   recurring:OwnerBudgetExpense[];
   scheduledOverrides:OwnerBudgetException[];
   historicalCycles:OwnerBudgetSnapshot[];
-  creditCardFigure:{amount:number;meaning:'unknown_balance_or_limit'}|null;
+  creditCardFigure:{amount:number;meaning:'unknown_balance_or_limit'|'owner_reported_outstanding_balance'}|null;
 };
 const isObject=(x:unknown):x is Record<string,unknown>=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const isMoney=(x:unknown):x is number=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=10_000_000&&
@@ -76,8 +76,8 @@ export function validateOwnerBudgetDraft(raw:unknown,now=new Date()):OwnerBudget
     throw Error('Historical snapshot dates must be unique.');
   const credit=raw.creditCardFigure;
   if(credit!==null&&credit!==undefined&&(!isObject(credit)||!isMoney(credit.amount)||
-    credit.meaning!=='unknown_balance_or_limit'))
-    throw Error('Credit-card figure must be explicitly labelled as an unverified balance-or-limit.');
+    !['unknown_balance_or_limit','owner_reported_outstanding_balance'].includes(String(credit.meaning))))
+    throw Error('Credit-card figure must be classified as unknown or owner-reported outstanding debt; neither is lender-verified.');
   // Only allowed properties are returned; secrets or extra JSON fields cannot
   // silently become persisted data in the encrypted workspace.
   return {
@@ -85,7 +85,7 @@ export function validateOwnerBudgetDraft(raw:unknown,now=new Date()):OwnerBudget
     salary:raw.salary,incentive:raw.incentive,incentiveGuaranteed:false,
     hourlyRate:raw.hourlyRate,hourlyAlreadyIncluded:'unknown',
     recurring,scheduledOverrides,historicalCycles,
-    creditCardFigure:credit&&isObject(credit)?{amount:credit.amount as number,meaning:'unknown_balance_or_limit'}:null
+    creditCardFigure:credit&&isObject(credit)?{amount:credit.amount as number,meaning:credit.meaning as 'unknown_balance_or_limit'|'owner_reported_outstanding_balance'}:null
   };
 }
 export function parseOwnerBudgetDraft(text:string,now=new Date()):OwnerBudgetDraft{
