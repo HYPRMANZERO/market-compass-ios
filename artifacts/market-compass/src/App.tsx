@@ -5,6 +5,8 @@ import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
+import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
+import { summarizeOwnerBudgetDraft, type OwnerBudgetDraft } from '@/lib/ownerBudgetDraft';
 import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
@@ -36,11 +38,11 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { desktopAi: DesktopAiSettings; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 // The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
 // All new installations start in ZAR; the user can change country and currency explicitly.
 const initialRegion = 'ZA';
-const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -841,7 +843,12 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
 }
 
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
-  return <MonthlyExpenses
+  return <>
+    <OwnerBudgetDraftEditor
+      profile={data.ownerBudgetDraft??null}
+      onSave={profile=>setData(old=>({...old,ownerBudgetDraft:profile}))}
+    />
+    <MonthlyExpenses
     entries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
     settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
     desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
@@ -858,13 +865,18 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
     }))}
     onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
     onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
-  />;
+  />
+  </>;
 }
 
 function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
   const [, navigate] = useLocation();
   const context: CompassCommandContext = {
     currency: data.currency,
+    ownerBudgetDraft:(()=>{
+      try{return data.ownerBudgetDraft?summarizeOwnerBudgetDraft(data.ownerBudgetDraft):null;}
+      catch{return null;}
+    })(),
     accounts: data.accounts,
     monthlyExtra: data.monthlyExtra,
     privateBudget: data.privateBudget ?? emptyPrivateBudget,
