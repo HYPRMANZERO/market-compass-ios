@@ -53,6 +53,7 @@ function maskText(value:unknown,max=130):string{
     .replace(/(?:\+27|0)\d(?:[\s-]?\d){8,10}/g,'[phone]')
     .replace(/\b(?:\d[\s-]?){12,19}\b/g,'[long-number]')
     .replace(/\b(?:\d{4}[\s-]?){2,4}\d{0,4}\b/g,'[number]')
+    .replace(/\b\d{8,11}\b/g,'[number]')
     .replace(/\b(?:https?:\/\/|www\.)\S+/gi,'[link]')
     .replace(/[<>]/g,'')
     .replace(/[\r\n\t]+/g,' ')
@@ -168,7 +169,8 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     !Array.isArray(input.lines)||input.lines.length<1||input.lines.length>MAX_FINANCE_LINES)return null;
   const lines:LocalFinanceLine[]=[];
   for(const v of input.lines){
-    if(!asObject(v)||!labelOk(v.label)||v.label.length>130||
+    if(!asObject(v)||typeof v.label!=='string'||
+      v.label.trim().length<2||v.label.length>130||/[\x00-\x1f<>]/.test(v.label)||
       v.amount!==null&& (typeof v.amount!=='number'||!Number.isFinite(v.amount)||Math.abs(v.amount)>10_000_000)||
       v.date!==null&&dateOf(v.date)!==v.date||
       !['incoming','outgoing','unclassified'].includes(String(v.direction)))return null;
