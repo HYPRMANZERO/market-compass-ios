@@ -32,3 +32,29 @@ test('owner sees historical coverage and recurring signals in Home and Spend Pla
   assert.match(ui,/not automatically update the ledger/);
   assert.doesNotMatch(ui,/onApply\(|fetch\(|setData\(/);
 });
+
+test('two dated approved cycles identify recurrence, but source-only quotes do not',async()=>{
+  const {recurringPatterns,historicalEvidence}=await import('../artifacts/market-compass/src/lib/historicalRecurring.ts');
+  const make=(id,date,amount)=>({
+    id,date,recordedAt:date+'T12:00:00Z',kind:'debt-payment',category:'car',
+    description:'Vehicle loan monthly instalment',paidVia:'Bank transfer',
+    amount,currency:'ZAR',note:'Owner approved'
+  });
+  const entries=[make('one','2026-08-27',3516.20),make('two','2026-09-28',3543.36)];
+  const patterns=recurringPatterns(entries,'ZAR','2026-11-21');
+  assert.equal(patterns.length,1);
+  assert.equal(patterns[0].observedCycles,2);
+  assert.equal(patterns[0].confidence,'repeated');
+  assert.equal(patterns[0].typicalAmount,3516.20);
+  assert.equal(recurringPatterns(entries.slice(0,1),'ZAR','2026-11-21').length,0);
+  assert.equal(recurringPatterns([entries[0],{...entries[1],date:'2026-09-18'}],'ZAR','2026-11-21').length,0);
+  const doc={id:'00000000-0000-4000-8000-000000000001',label:'Old contract',
+    importedAt:'2026-11-21T00:00:00Z',
+    lines:[{date:'2026-06-26',label:'Scheduled installment 3543.36',
+      amount:3543.36,direction:'unclassified'}]};
+  const coverage=historicalEvidence([doc],[], '2026-11-21');
+  assert.equal(coverage.datedLines,1);
+  assert.equal(coverage.unapprovedDatedLines,1);
+  assert.equal(coverage.approvedHistoricalEntries,0);
+  assert.equal(recurringPatterns([], 'ZAR','2026-11-21').length,0);
+});
