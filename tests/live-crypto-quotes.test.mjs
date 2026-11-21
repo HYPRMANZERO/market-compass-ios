@@ -92,4 +92,6 @@ test('Markets page exposes provider quotes separately from daily candles',async(
   assert.match(component,/24h volume/i);
   assert.match(component,/Market cap/);
   assert.match(component,/sourceUrl/);
+  assert.match(component,/col-span-2 flex flex-wrap[^\n]+sm:hidden/);
+  assert.match(component,/sm:hidden[^\n]*>[\s\S]*?Market cap[\s\S]*?24h volume/);
 });
