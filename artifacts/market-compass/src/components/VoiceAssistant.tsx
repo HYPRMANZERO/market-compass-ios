@@ -572,6 +572,10 @@ export default function VoiceAssistant({
     const localSafetyRefusal = result.type === 'answer' &&
       result.reply.startsWith('I cannot transfer money');
     if (result.type === 'navigate' || localSafetyRefusal ||
+      // Already derived from the encrypted iPhone workspace: do not send these
+      // device-local excerpts to HYPRBOX just because Agent mode is enabled.
+      result.source === 'local-finance-documents' ||
+      result.source === 'local-owner-budget' ||
       ((!agentMode || !connected) && result.type !== 'unknown' &&
       !(!connected && result.needsHistoricalSources) &&
       !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
