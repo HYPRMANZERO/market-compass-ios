@@ -88,9 +88,9 @@ test('offline voice assistant answers only from explicit saved private draft',()
   const actual=interpretCompassCommand('What is my hourly rate?',context);
   assert.equal(actual.type,'answer');
   assert.match(actual.reply,/77/);
-  assert.match(actual.reply,/LOCAL iPhone budget/);
-  assert.match(actual.reply,/not bank verified or spendable cash/i);
-  assert.match(actual.reply,/not yet mirrored/i);
+  assert.match(actual.reply,/private budget dated/i);
+  assert.match(actual.reply,/not bank or employer verified/i);
+  assert.match(actual.reply,/not mirrored to HYPRBOX/i);
   assert.doesNotMatch(actual.reply,/verified salary/i);
   assert.match(interpretCompassCommand('What is my incentive?',context).reply,/conditional incentive/i);
   const absent=interpretCompassCommand('What is my hourly rate?',{...context,ownerBudgetDraft:null});
