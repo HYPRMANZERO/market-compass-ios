@@ -480,7 +480,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
           typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0);
       // Sharing financial context is opt-in AND relevant-topic-only. A greeting or
       // unrelated question must not transmit salary, account or spending figures.
-      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
+      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
       const summary = settings.shareFinancialContext && wantsFinancialContext ? {
         currency: context.currency,
         accounts: context.accounts.filter(validAccount).slice(0, 30).map(a => ({
@@ -493,7 +493,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
       } : undefined;
-      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
+      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
       const useAgent = agentMode && agentIntent;
       const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
@@ -652,7 +652,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         </p>
         {agentMode && !settings.shareFinancialContext && (
           <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-            Your unlocked iPhone vault figures are not shared with HYPRBOX. To analyse them, enable financial-context sharing under Desktop Ollama settings below. Other device vaults are not synchronized.
+            Your unlocked iPhone vault entries are not automatically shared with HYPRBOX. To analyse those entries, enable financial-context sharing below. The shared HYPRBOX owner budget is read-only and does not synchronize separate browser vaults.
           </p>
         )}
       </div>
