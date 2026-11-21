@@ -4,6 +4,8 @@ import {readFile} from 'node:fs/promises';
 
 const css=await readFile(new URL('../artifacts/market-compass/src/index.css',import.meta.url),'utf8');
 const app=await readFile(new URL('../artifacts/market-compass/src/App.tsx',import.meta.url),'utf8');
+const html=await readFile(new URL('../artifacts/market-compass/index.html',import.meta.url),'utf8');
+const manifest=JSON.parse(await readFile(new URL('../artifacts/market-compass/public/manifest.webmanifest',import.meta.url),'utf8'));
 
 test('iPhone shell paints opaque mobile header and tabs without iOS blur artifacts',()=>{
   assert.match(css,/\.mc-mobile-header\s*\{[\s\S]*?background-color:\s*hsl\(165 24% 19%\);[\s\S]*?-webkit-backdrop-filter:\s*none;[\s\S]*?backdrop-filter:\s*none;/);
@@ -32,4 +34,18 @@ test('header reports phone connectivity, not a potentially unverified desktop AI
   assert.match(app,/iPhone online/);
   assert.match(app,/iPhone offline/);
   assert.doesNotMatch(app,/\{online \? 'Connected' : 'Offline'\} · \{active\.label\}/);
+});
+
+test('standalone iPhone system status area matches established ngrok dark green surface',()=>{
+  assert.match(html,/<meta name="theme-color" content="#253c36"\s*\/>/);
+  assert.match(html,/<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"\s*\/>/);
+  assert.equal(manifest.background_color,'#253c36');
+  assert.equal(manifest.theme_color,'#253c36');
+  assert.match(css,/html, body \{ background-color: #253c36; \}/);
+  assert.match(css,/#root \{ background-color: hsl\(var\(--background\)\); \}/);
+  assert.match(css,/\.mc-mobile-header::before\s*\{[\s\S]*?position: fixed;[\s\S]*?height: env\(safe-area-inset-top, 0px\);[\s\S]*?background-color: #253c36;/);
+  // Preserve the opaque non-blurred header and bottom navigation from PR #12.
+  assert.match(css,/\.mc-mobile-header\s*\{[\s\S]*?-webkit-backdrop-filter: none;/);
+  assert.match(css,/\.mc-mobile-tabbar\s*\{[\s\S]*?-webkit-backdrop-filter: none;/);
+  assert.doesNotMatch(css,/html \{ background: hsl\(165 24% 19%\); \}/);
 });
