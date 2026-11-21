@@ -74,7 +74,7 @@ function moneyOf(value:unknown):number|null{
   const n=Number(s)*(negative?-1:1);
   return Number.isFinite(n)&&Math.abs(n)<=10_000_000?Math.round(n*100)/100:null;
 }
-function splitCsv(text:string):string[][]{
+function splitCsv(text:string,delimiter:','|';'):string[][]{
   const rows:string[][]=[];
   let row:string[]=[],field='',quoted=false;
   for(let i=0;i<text.length;i++){
@@ -83,8 +83,8 @@ function splitCsv(text:string):string[][]{
       if(quoted&&text[i+1]==='"'){field+='"';i++;}
       else if(!quoted && field!=='')throw Error('CSV quote occurs inside a value.');
       else quoted=!quoted;
-    }else if(!quoted&&(c===','||c===';'||c==='\n'||c==='\r')){
-      if(c===','||c===';'){row.push(field);field='';}
+    }else if(!quoted&&(c===delimiter||c==='\n'||c==='\r')){
+      if(c===delimiter){row.push(field);field='';}
       else {row.push(field);if(row.some(x=>x.trim()))rows.push(row);row=[];field='';if(c==='\r'&&text[i+1]==='\n')i++;}
     }else field+=c;
     if(rows.length>1000)throw Error('This CSV has too many rows; export a smaller range.');
@@ -97,7 +97,7 @@ function parseCsv(text:string):LocalFinanceLine[]{
   const delimiter=(text.split(/\r?\n/,1)[0].match(/;/g)||[]).length>
     (text.split(/\r?\n/,1)[0].match(/,/g)||[]).length?';':',';
   // Keep the row parser strict to one delimiter, not mixing column separators.
-  const rows=splitCsv(text);
+  const rows=splitCsv(text,delimiter);
   if(rows.length<2)throw Error('CSV must contain a header and at least one row.');
   const header=rows[0].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
   const find=(choices:string[])=>header.findIndex(x=>choices.includes(x));
