@@ -22,6 +22,23 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
     catch{return null;}
   })();
   const proposed=preview?summarizeOwnerBudgetDraft(preview):null;
+  async function readPrivateFile(file:File|undefined){
+    setError('');setMessage('');setPreview(null);setSource('');
+    if(!file)return;
+    if(file.size>20_000){
+      setError('This private budget file exceeds the 20 KB limit; nothing imported.');
+      return;
+    }
+    try{
+      const text=await file.text();
+      const candidate=parseOwnerBudgetDraft(text);
+      setSource(text);setPreview(candidate);
+      setMessage('Private file reviewed in this browser only. Inspect the totals below before choosing Save. It has not been uploaded or added to the encrypted vault.');
+    }catch(e){
+      setError(e instanceof Error?e.message:'Could not read that private budget file.');
+      setSource('');
+    }
+  }
   function review(){
     setError('');setMessage('');setPreview(null);
     try {setPreview(parseOwnerBudgetDraft(source));}
@@ -32,7 +49,7 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
     if(profile && !window.confirm('Replace only this device’s owner budget draft? Your other expenses and debt records will remain unchanged. Export an encrypted backup first.'))return;
     onSave(preview);
     setSource('');setPreview(null);setError('');
-    setMessage('Draft added to this device’s unlocked workspace. Confirm the encrypted auto-save finishes in Vault & Settings, then export an encrypted backup. This has NOT been sent to HYPRBOX or another app.');
+    setMessage('Owner budget added to this device’s unlocked workspace. Wait for “Last saved” in Vault & Settings, then export a new encrypted backup to Files. No information was sent to HYPRBOX, GitHub, or the other app.');
   }
   return <details className="mb-5 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Safari-only encrypted owner budget draft">
     <summary className="min-h-11 cursor-pointer text-[14px] font-bold">
@@ -54,16 +71,66 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
       </div>
       <p>Salary-only listed difference: <strong>{range(saved.salaryOnlyDifferenceMin,saved.salaryOnlyDifferenceMax)}</strong>. This is not verified spendable cash.</p>
       <p className="font-medium">Recorded entries: {saved.recurring.length} monthly cost lines, {saved.scheduledMonths.length} month-specific exceptions, {saved.historicalCycles.length} incomplete historical snapshots.</p>
-      <p className="text-muted-foreground">Incentive is not guaranteed; hourly earnings may already be included in payroll. Credit-card figure is not confirmed as a balance or limit.</p>
+      <details className="rounded-lg border border-border bg-background p-3">
+        <summary className="min-h-10 cursor-pointer font-semibold">Detailed listed monthly costs ({saved.recurring.length})</summary>
+        <ul className="mt-2 space-y-2">
+          {saved.recurring.map((entry,index)=><li key={index} className="flex justify-between gap-3">
+            <span className="min-w-0">{entry.label} <span className="text-muted-foreground">· {entry.category==='debt_payment'?'debt payment':entry.category==='fee'?'fee':'expense'}</span></span>
+            <strong className="shrink-0 text-right">{range(entry.min,entry.max)}</strong>
+          </li>)}
+        </ul>
+      </details>
+      {saved.scheduledMonths.length>0 && <details className="rounded-lg border border-border bg-background p-3">
+        <summary className="min-h-10 cursor-pointer font-semibold">Month-specific changes</summary>
+        {saved.scheduledMonths.map((change,index)=><div key={index} className="mt-2 text-[12px]">
+          {change.month} · {change.label}: {money(change.cost)}. Total listed costs: {range(change.listedMin,change.listedMax)}.
+        </div>)}
+      </details>}
+      {saved.historicalCycles.length>0 && <details className="rounded-lg border border-border bg-background p-3">
+        <summary className="min-h-10 cursor-pointer font-semibold">Historical owner-reported entries</summary>
+        {saved.historicalCycles.map(cycle=><div key={cycle.date} className="mt-3">
+          <p className="font-semibold">{cycle.date} · reported income {money(cycle.income)} · listed costs {money(cycle.listedExpenses)}</p>
+          <ul className="mt-2 space-y-1">
+            {cycle.entries.map((item,index)=><li key={index} className="flex justify-between gap-3">
+              <span>{item.label}</span><strong>{money(item.min)}</strong>
+            </li>)}
+          </ul>
+          <p className="mt-1 text-muted-foreground">Incomplete historical record, not bank verified.</p>
+        </div>)}
+      </details>}
+      <p className="text-muted-foreground">
+        Incentive is not guaranteed; hourly earnings may already be included in salary.
+        {saved.creditCardFigureStatus==='unknown_balance_or_limit' && saved.creditCardFigure!==null &&
+          (' A reported credit-card figure of '+money(saved.creditCardFigure)+
+          ' exists; it has not been established whether this is a balance or a credit limit.')}
+        {' '}The local planning remainder is not spendable cash.
+      </p>
     </div> : <p className="mt-3 rounded-xl bg-muted/50 p-3 text-[12px]">
       No owner budget draft has been saved here yet. This does not mean zero salary or zero expenses.
     </p>}
     <details className="mt-3 rounded-xl border border-border p-3">
       <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">{saved?'Import updated owner budget JSON':'Paste owner budget JSON to save privately'}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-        Paste the owner-budget-v1 JSON you reviewed. Use proper numbers for amounts,
-        mark incentives as conditional and hourly pay inclusion as unknown.
-        Preview before saving. Do not paste passwords, account numbers or API tokens.
+        Select your private owner-budget JSON from iPhone Files, or paste it below.
+        Only a validated, owner-approved record is saved. The app does not
+        upload the file. Do not import vault-backup files here; use Vault &amp; Settings
+        for encrypted full-workspace backups.
+      </p>
+      <label className="mt-3 block text-[12px] font-semibold">
+        Import owner budget from iPhone Files
+        <input type="file" accept=".json,application/json" aria-label="Choose private owner budget JSON file"
+          onChange={event=>{
+            const file=event.currentTarget.files?.[0];
+            event.currentTarget.value='';
+            void readPrivateFile(file);
+          }}
+          className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px]"/>
+      </label>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        The selected file remains unencrypted in Files until you delete it.
+        Once the encrypted workspace reports saved, export an encrypted vault
+        backup from Vault &amp; Settings and keep it somewhere safe.
+        Do not paste passwords, account numbers or API tokens.
       </p>
       <textarea aria-label="Owner-reported private budget JSON"
         rows={10} spellCheck={false} value={source}
@@ -81,6 +148,13 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
         <p>Monthly salary: {money(proposed.salary)}. Conditional incentive: {money(proposed.conditionalIncentive)}. Hourly pay: {money(proposed.hourlyRate)} per hour.</p>
         <p>Listed recurring costs: {range(proposed.recurringMin,proposed.recurringMax)}. Incomplete salary-only difference: {range(proposed.salaryOnlyDifferenceMin,proposed.salaryOnlyDifferenceMax)}.</p>
         <p>Included: {proposed.recurring.length} recurring items, {proposed.scheduledMonths.length} month-specific exceptions and {proposed.historicalCycles.length} historical snapshots.</p>
+        <ul className="space-y-1">
+          {proposed.recurring.map((item,index)=><li key={index} className="flex justify-between gap-2">
+            <span>{item.label}</span><strong>{range(item.min,item.max)}</strong>
+          </li>)}
+        </ul>
+        {proposed.scheduledMonths.map((item,index)=><p key={index}>Exception {item.month} · {item.label} {money(item.cost)} · total listed {range(item.listedMin,item.listedMax)}</p>)}
+        {proposed.historicalCycles.map(item=><p key={item.date}>Historical {item.date}: income {money(item.income)}, listed costs {money(item.listedExpenses)} ({item.entries.length} items, incomplete).</p>)}
         <p className="text-muted-foreground">Not bank-verified and not confirmed spare money. Nothing is being transferred or sent to HYPRBOX.</p>
         <button type="button" onClick={save}
           className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">

@@ -571,6 +571,8 @@ export default function VoiceAssistant({
     const localSafetyRefusal = result.type === 'answer' &&
       result.reply.startsWith('I cannot transfer money');
     if (result.type === 'navigate' || localSafetyRefusal ||
+      result.source === 'local-finance-documents' ||
+      result.source === 'local-owner-budget' ||
       ((!agentMode || !connected) && result.type !== 'unknown' &&
       !(!connected && result.needsHistoricalSources) &&
       !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
