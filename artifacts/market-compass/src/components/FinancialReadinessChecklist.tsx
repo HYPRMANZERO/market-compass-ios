@@ -41,8 +41,25 @@ export default function FinancialReadinessChecklist({data}:Props){
         {result.missingCount} missing · {result.reviewCount} need review
       </span>
     </div>
-    <div role="list" className="mt-4 divide-y divide-border rounded-xl border border-border">
-      {result.items.map(item=><div role="listitem" key={item.id}
+    <div className="mt-4">
+      <div className="mb-2 flex items-end justify-between gap-2">
+        <p className="text-[11px] font-semibold">Fields recorded for planning</p>
+        <p className="text-[11px] font-medium text-muted-foreground">{result.recordedCount} of {result.items.length} · not independently verified</p>
+      </div>
+      <div role="progressbar" aria-label="Recorded financial evidence fields, not verified bank data"
+        aria-valuemin={0} aria-valuemax={result.items.length} aria-valuenow={result.recordedCount}
+        className="h-2 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary transition-[width]"
+          style={{width:Math.round(result.recordedCount/result.items.length*100)+'%'}}/>
+      </div>
+    </div>
+    <details className="mt-4 rounded-xl border border-border bg-background">
+      <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-3 py-3 text-[12px] font-semibold sm:px-4">
+        <span>Review all seven evidence checks</span>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] text-muted-foreground">Expand</span>
+      </summary>
+      <div role="list" className="divide-y divide-border border-t border-border">
+        {result.items.map(item=><div role="listitem" key={item.id}
         className="flex items-start gap-3 px-3 py-3 sm:px-4">
         <span className="mt-0.5 shrink-0 text-muted-foreground">
           {item.status==='recorded'?<CheckCircle2 size={17} aria-hidden="true"/>:
@@ -68,7 +85,8 @@ export default function FinancialReadinessChecklist({data}:Props){
           {item.route==='/debt'?'Debt':'Spend'} <ArrowRight size={13} aria-hidden="true"/>
         </Link>
       </div>)}
-    </div>
+      </div>
+    </details>
     <div className="mt-3 rounded-xl bg-muted/45 p-3">
       <div className="flex gap-2">
         <ShieldCheck size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden="true"/>
