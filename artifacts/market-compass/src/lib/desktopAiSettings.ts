@@ -1,4 +1,5 @@
 import { privateTailnetOrigin } from './privateTailnetUrl.ts';
+import type { VoicePace } from './speechVoices.ts';
 
 export type DesktopAiSettings = {
   url: string;
@@ -6,6 +7,9 @@ export type DesktopAiSettings = {
   enabled: boolean;
   shareFinancialContext: boolean;
   speakReplies: boolean;
+  /** Optional voice controls, persisted only in the encrypted PWA vault. */
+  voiceURI?: string;
+  voicePace?: VoicePace;
 };
 
 export const DEFAULT_DESKTOP_AI: DesktopAiSettings = {
@@ -14,6 +18,8 @@ export const DEFAULT_DESKTOP_AI: DesktopAiSettings = {
   enabled: false,
   shareFinancialContext: false,
   speakReplies: false,
+  voiceURI: '',
+  voicePace: 'natural',
 };
 
 /** Only a well-formed HTTPS tailnet address and an independent long token can be enabled. */
@@ -23,12 +29,15 @@ export function validateDesktopAiSettings(value: DesktopAiSettings): DesktopAiSe
   if (typeof value.token !== 'string' || value.token.length < 48 || value.token.length > 512) {
     throw Error('Enter the separate 48+ character desktop AI token.');
   }
-  if (!url) throw Error('Enter your private HTTPS connection: Tailscale Serve, or this Access-protected app\'s HTTPS address.');
+  if (!url) throw Error('Enter a permitted private HTTPS Tailscale Serve address (*.ts.net), or this app\'s exact approved HTTPS origin.');
   return {
     url: url + '/', token: value.token,
     enabled: value.enabled === true,
     shareFinancialContext: value.shareFinancialContext === true,
     speakReplies: value.speakReplies === true,
+    voiceURI: typeof value.voiceURI==='string' && value.voiceURI.length<=200 &&
+      !/[\u0000-\u001f<>]/.test(value.voiceURI) ? value.voiceURI : '',
+    voicePace: value.voicePace==='calm' || value.voicePace==='brisk' ? value.voicePace : 'natural',
   };
 }
 
