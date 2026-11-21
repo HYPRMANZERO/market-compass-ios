@@ -104,7 +104,7 @@ export function evaluateFinancialReadiness(
       'One or both cash/reserve fields are incomplete or invalid.',
     'Enter current liquid cash and the minimum reserve to protect in Debt Plan.','/debt'));
 
-  const accountComplete=(a:FinancialReadinessInputs['accounts'] extends (infer U)[]?U:never)=>{
+  const accountComplete=(a:NonNullable<FinancialReadinessInputs['accounts']>[number])=>{
     return !!a && typeof a.name==='string' && a.name.trim().length>0 &&
       amountState(a.balance)==='entered'&&amountState(a.minimumPayment)==='entered'&&
       amountState(a.apr)==='entered'&&Number(a.apr)<=200;
