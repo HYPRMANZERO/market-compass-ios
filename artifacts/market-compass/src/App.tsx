@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
+import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
 import {
   addLocalFinanceDocument,removeLocalFinanceDocument,
@@ -761,6 +762,7 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
   const total = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   return <>
     <PageIntro eyebrow="Plan with your own numbers" title="Debt payoff" description="Build a local payoff plan and prepare secure provider payment handoffs without connecting your bank accounts. No payments are initiated from this page." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck size={14} /> Encrypted device workspace</div>} />
+    <FinancialReadinessChecklist data={data} />
     <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
       <div className="space-y-4">
         <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50</span>}>
@@ -866,6 +868,7 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
 
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
   return <>
+    <FinancialReadinessChecklist data={data} />
     <OwnerBudgetDraftEditor
       profile={data.ownerBudgetDraft??null}
       onSave={profile=>setData(old=>({...old,ownerBudgetDraft:profile}))}
