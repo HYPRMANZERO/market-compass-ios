@@ -13,6 +13,8 @@ export type LaunchGuideline={
   reserveGap:number|null;
   /** Bounded, owner-reviewable brief; never includes raw file text or account names. */
   reviewBrief:string;
+  /** Fits the authenticated HYPRBOX Agent's 500-character query limit. */
+  agentBrief:string;
 };
 const money=(v:number)=>new Intl.NumberFormat('en-ZA',{
   style:'currency',currency:'ZAR',minimumFractionDigits:2,maximumFractionDigits:2
@@ -97,6 +99,19 @@ export function buildLocalLaunchGuideline(input:FinancialReadinessInputs,now=new
     needs.length?'Missing/review: '+needs.join('; ')+'.':'All presence fields recorded, but evidence is still unverified.',
     'No raw documents, passwords, names, account identifiers, or transaction-level entries included. All financial data is owner-reported, not independently verified.'
   ].join('\n');
+  const agentBrief=[
+    'Read-only 30/60/90-day finance guideline; owner-reported, NOT bank verified. No payments/trades.',
+    'Currency '+input.currency+(input.currencyReviewRequired?' (needs review).':'.'),
+    canCalculate
+      ? 'Income '+money(income!)+'; essentials '+money(essentials!)+
+        '; debt minimums '+money(minimums!)+'; debt total '+money(debts!)+
+        '; provisional listed difference '+money(preliminaryHeadroom!)+
+        '; reserve gap '+money(reserveGap!)+'.'
+      : 'Current budget/debt fields incomplete; surplus and available bank funds UNKNOWN.',
+    'Local reviewed files '+docs.length+', ledger entries '+records.length+
+      ' (partial). Explain risks, missing evidence and next review steps; no execution.'
+  ].join(' ');
+  if(agentBrief.length>500) throw Error('Private Agent summary exceeds 500 characters.');
   return {readyForIllustration:canCalculate,coverage,steps,
-    preliminaryHeadroom,reserveGap,reviewBrief:brief.slice(0,2400)};
+    preliminaryHeadroom,reserveGap,reviewBrief:brief.slice(0,2400),agentBrief};
 }
