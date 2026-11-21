@@ -30,7 +30,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
   async function selected(file:File|undefined,oneTimePassword:string){
     setPreview(null);setFeedback('');setError('');
     if(!file||reading)return;
-    const pdf=/\\.pdf$/i.test(file.name);
+    const pdf=/\.pdf$/i.test(file.name);
     const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
     if(!file.size||file.size>limit){
       setError(pdf?'Choose a PDF smaller than 2 MB. Nothing was saved.':
