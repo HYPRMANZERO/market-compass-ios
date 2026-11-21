@@ -30,3 +30,27 @@ test('financial response strings are spoken in natural rand terms',()=>{
  assert.match(out,/annual interest rate/);
  assert.doesNotMatch(out,/ZAR 1,400.50/);
 });
+
+test('debt replies pronounce rand suffixes, rand symbols and interest percentages',()=>{
+ const out=voiceFriendlyText('Total debt 209,618.00 ZAR; minimum 4,152.20 ZAR; paid R 200.01; APR 21%.');
+ assert.match(out,/rand/);
+ assert.match(out,/rand and 20 cents/);
+ assert.match(out,/200 rand and 1 cent/);
+ assert.match(out,/annual interest rate 21 percent/);
+ assert.doesNotMatch(out,/209,618\.00 ZAR|4,152\.20 ZAR|R 200\.01/);
+});
+test('market abbreviations are expanded for speech without inventing a quote',()=>{
+ const out=voiceFriendlyText('The S&P 500 is a stock index. No verified BTC/USD price is available.');
+ assert.match(out,/S and P five hundred/);
+ assert.match(out,/Bitcoin to US dollars/);
+ assert.match(out,/No verified/);
+ assert.doesNotMatch(out,/S&P 500|BTC\/USD/);
+});
+
+test('speech never truncates high precision crypto figures into incorrect rand values',()=>{
+ const out=voiceFriendlyText('BTC is 0.000123 ZAR. ZAR 0.00000001 is an unverified quote. R 100.333 is not rounded.');
+ assert.match(out,/0\.000123 South African rand/);
+ assert.match(out,/South African rand 0\.00000001/);
+ assert.match(out,/R 100\.333/);
+ assert.doesNotMatch(out,/123 rand|100 rand and 33 cents/);
+});
