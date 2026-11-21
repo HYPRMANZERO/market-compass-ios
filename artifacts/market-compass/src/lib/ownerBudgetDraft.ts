@@ -117,6 +117,7 @@ export function summarizeOwnerBudgetDraft(value:OwnerBudgetDraft,now=new Date())
         incomplete:true,entries:x.entries};
     }),
     creditCardFigureStatus:v.creditCardFigure?.meaning??'not_provided',
+    creditCardFigure:v.creditCardFigure?.amount??null,
     sourceType:'encrypted-device-draft' as const,
     bankVerified:false as const,currentBalance:null,spendableCash:null,
     pendingDesktopMirror:true as const,
