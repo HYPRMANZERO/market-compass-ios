@@ -2,7 +2,9 @@
  * Deterministic, local-first commands for the voice assistant.
  * Never mutates financial records and never moves money or places trades.
  */
-import {answerFromOfflineOwnerBudget, type OfflineOwnerBudgetSummary} from './offlineOwnerBudget';
+import {answerFromOfflineOwnerBudget, type OfflineOwnerBudgetSummary} from './offlineOwnerBudget.ts';
+import {answerFromOfflineFinanceDocs} from './offlineFinanceDocs.ts';
+import type {LocalFinanceDocument} from './localFinanceDocs.ts';
 
 export type CompassCommandContext = {
   currency: string;
@@ -10,6 +12,7 @@ export type CompassCommandContext = {
   monthlyExtra: string;
   /** Owner-reported private device draft. Never bank-verified or synced. */
   ownerBudgetDraft?: OfflineOwnerBudgetSummary | null;
+  localFinanceDocuments?: LocalFinanceDocument[];
   privateBudget?: { monthlyIncome: string; monthlyEssentials: string; liquidFunds: string; reserveTarget: string } | null;
   marketCache?: { symbol: string; currency: string; candles?: { date: string; close: number }[] } | null;
   draftCount: number;
@@ -48,6 +51,8 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
   const path = navigations.find(p => p.regex.test(q));
   if (path) return { type:'navigate', destination:path.to, reply:path.response };
 
+  const documentedAnswer=answerFromOfflineFinanceDocs(raw,ctx.localFinanceDocuments);
+  if(documentedAnswer)return {type:'answer',reply:documentedAnswer};
   const spentQuery=/\b(how much|what|total|summary|overview)\b/.test(q) &&
     /\b(spent|spending|expenses|salary cycle|monthly expenses|repayments)\b/.test(q);
   if (spentQuery && ctx.expenseSummary && ctx.expenseSummary.entryCount > 0 && !/\b(october|historical|2026-10)\b/.test(q)) {
