@@ -299,7 +299,15 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
     window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
-  useEffect(() => { window.scrollTo(0, 0); }, [path]);
+  // iOS standalone PWAs can restore the previous tab's scroll offset after
+  // React has already switched routes. Reset once now and once after paint.
+  // This prevents the first hero/card from opening beneath the sticky header.
+  useEffect(() => {
+    const reset = () => window.scrollTo(0, 0);
+    reset();
+    const frame = window.requestAnimationFrame(reset);
+    return () => window.cancelAnimationFrame(frame);
+  }, [path]);
   const openSettings = () => {
     const el = document.getElementById('mc-backup-controls') as HTMLDetailsElement | null;
     if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
