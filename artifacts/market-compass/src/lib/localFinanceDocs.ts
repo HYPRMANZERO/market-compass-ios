@@ -1,0 +1,222 @@
+/**
+ * Local-only, owner-reviewed financial-file intake.
+ *
+ * Text-based CSV, TXT and JSON can be parsed inside Safari without uploading
+ * any file. Keep ONLY bounded, redacted, human-reviewed excerpts in the
+ * existing passphrase-encrypted workspace. This is not OCR or bank verification.
+ * PDF, DOCX, XLSX, images and password-protected documents are deliberately
+ * NOT parsed, rather than implying that unsupported files were read.
+ */
+export type LocalFinanceLine={
+  label:string;
+  amount:number|null;
+  date:string|null;
+  direction:'incoming'|'outgoing'|'unclassified';
+};
+export type LocalFinanceDocument={
+  id:string;
+  label:string;
+  importedAt:string;
+  format:'csv'|'txt'|'json';
+  source:'owner-selected-iphone-file';
+  bankVerified:false;
+  complete:false;
+  lines:LocalFinanceLine[];
+  truncated:boolean;
+};
+export const MAX_FINANCE_FILES=12;
+export const MAX_FINANCE_FILE_BYTES=256_000;
+export const MAX_FINANCE_LINES=60;
+const labelOk=(v:unknown):v is string=>typeof v==='string'&&
+  v.trim().length>=2&&v.trim().length<=70&& !/[\x00-\x1f<>]/.test(v);
+const asObject=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+function dateOf(value:unknown):string|null{
+  if(typeof value!=='string')return null;
+  const v=value.trim();
+  let match=v.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  let year:string,month:string,day:string;
+  if(match){[year,month,day]=match.slice(1,4);}
+  else {
+    match=v.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
+    if(!match)return null;
+    day=match[1].padStart(2,'0');month=match[2].padStart(2,'0');year=match[3];
+  }
+  const date=year+'-'+month+'-'+day;
+  const stamp=new Date(date+'T00:00:00Z');
+  return Number.isFinite(stamp.getTime())&&stamp.toISOString().slice(0,10)===date?date:null;
+}
+function maskText(value:unknown,max=130):string{
+  if(typeof value!=='string')return '';
+  // Mask common identifiers; not a guarantee that every possible item of
+  // personal information has been removed. The owner must review the preview.
+  return value.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email]')
+    .replace(/(?:\+27|0)\d(?:[\s-]?\d){8,10}/g,'[phone]')
+    .replace(/\b(?:\d[\s-]?){12,19}\b/g,'[long-number]')
+    .replace(/\b(?:\d{4}[\s-]?){2,4}\d{0,4}\b/g,'[number]')
+    .replace(/\b\d{8,11}\b/g,'[number]')
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi,'[link]')
+    .replace(/[<>]/g,'')
+    .replace(/[\r\n\t]+/g,' ')
+    .replace(/\s+/g,' ').trim().slice(0,max);
+}
+function moneyOf(value:unknown):number|null{
+  if(typeof value==='number')return Number.isFinite(value)&&Math.abs(value)<=10_000_000?
+    Math.round(value*100)/100:null;
+  if(typeof value!=='string')return null;
+  let s=value.trim().replace(/^(?:ZAR|R)\s*/i,'').replace(/\s/g,'');
+  if(!s)return null;
+  const negative=s.startsWith('(')&&s.endsWith(')');
+  if(negative)s=s.slice(1,-1);
+  // South African exports commonly use 1,234.56; only accept the decimal
+  // comma when there is a single ungrouped comma and <=2 decimal digits.
+  if(/^\d+,\d{1,2}$/.test(s))s=s.replace(',','.');
+  else s=s.replace(/,/g,'');
+  if(!/^[+-]?\d+(?:\.\d{1,2})?$/.test(s))return null;
+  const n=Number(s)*(negative?-1:1);
+  return Number.isFinite(n)&&Math.abs(n)<=10_000_000?Math.round(n*100)/100:null;
+}
+function splitCsv(text:string,delimiter:','|';'):string[][]{
+  const rows:string[][]=[];
+  let row:string[]=[],field='',quoted=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){
+      if(quoted&&text[i+1]==='"'){field+='"';i++;}
+      else if(!quoted && field!=='')throw Error('CSV quote occurs inside a value.');
+      else quoted=!quoted;
+    }else if(!quoted&&(c===delimiter||c==='\n'||c==='\r')){
+      if(c===delimiter){row.push(field);field='';}
+      else {row.push(field);if(row.some(x=>x.trim()))rows.push(row);row=[];field='';if(c==='\r'&&text[i+1]==='\n')i++;}
+    }else field+=c;
+    if(rows.length>1000)throw Error('This CSV has too many rows; export a smaller range.');
+  }
+  if(quoted)throw Error('CSV has an unclosed quoted value.');
+  row.push(field);if(row.some(x=>x.trim()))rows.push(row);
+  return rows;
+}
+function parseCsv(text:string):LocalFinanceLine[]{
+  const delimiter=(text.split(/\r?\n/,1)[0].match(/;/g)||[]).length>
+    (text.split(/\r?\n/,1)[0].match(/,/g)||[]).length?';':',';
+  // Keep the row parser strict to one delimiter, not mixing column separators.
+  const rows=splitCsv(text,delimiter);
+  if(rows.length<2)throw Error('CSV must contain a header and at least one row.');
+  const header=rows[0].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
+  const find=(choices:string[])=>header.findIndex(x=>choices.includes(x));
+  const labelIdx=find(['description','details','transaction description','narrative','reference','item','particulars','name','pay item']);
+  const dateIdx=find(['date','transaction date','posting date','value date','pay date','period']);
+  const amountIdx=find(['amount','transaction amount','value','total','net amount','net pay','gross pay']);
+  const debitIdx=find(['debit','debits','withdrawal','money out','paid out']);
+  const creditIdx=find(['credit','credits','deposit','money in','paid in']);
+  if(labelIdx<0 || (amountIdx<0&&(debitIdx<0&&creditIdx<0)))
+    throw Error('Unsupported CSV columns. Export a table with Description and Amount (or Debit/Credit), optionally Date.');
+  const out:LocalFinanceLine[]=[];
+  for(const row of rows.slice(1)){
+    if(out.length>=MAX_FINANCE_LINES+1)break;
+    const description=maskText(row[labelIdx],130);
+    if(!description)continue;
+    let direction:LocalFinanceLine['direction']='unclassified';
+    let amount=amountIdx>=0?moneyOf(row[amountIdx]):null;
+    if(amount===null&&creditIdx>=0){const credit=moneyOf(row[creditIdx]);if(credit!==null&&credit!==0){amount=Math.abs(credit);direction='incoming';}}
+    if(amount===null&&debitIdx>=0){const debit=moneyOf(row[debitIdx]);if(debit!==null&&debit!==0){amount=Math.abs(debit);direction='outgoing';}}
+    if(amount===null)continue;
+    // Signed values are not always direction-labelled by banks. Do not guess
+    // when a generic Amount field has an unknown sign convention.
+    out.push({label:description,amount,date:dateIdx>=0?dateOf(row[dateIdx]):null,direction});
+  }
+  return out;
+}
+function parseText(text:string):LocalFinanceLine[]{
+  const out:LocalFinanceLine[]=[];
+  for(const raw of text.split(/\r?\n/).slice(0,1000)){
+    if(out.length>=MAX_FINANCE_LINES+1)break;
+    const trimmed=raw.trim();if(trimmed.length<3)continue;
+    const rand=trimmed.match(/\b(?:ZAR|R)\s*([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
+    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|payment|total|insurance|fuel|rent|car payment)\b[^0-9]{0,12}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
+    const token=rand?.[1]??known?.[1];
+    const amount=moneyOf(token??null);
+    if(amount===null)continue;
+    const dateMatch=trimmed.match(/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{4}\b/);
+    const desc=maskText(trimmed,130);if(!desc)continue;
+    out.push({label:desc,amount,date:dateMatch?dateOf(dateMatch[0]):null,direction:'unclassified'});
+  }
+  return out;
+}
+function parseJson(text:string):LocalFinanceLine[]{
+  let value:unknown;
+  try{value=JSON.parse(text);}catch{throw Error('Selected JSON is not valid.');}
+  const source=Array.isArray(value)?value:
+    asObject(value)&&Array.isArray(value.transactions)?value.transactions:
+    asObject(value)&&Array.isArray(value.entries)?value.entries:null;
+  if(!source)throw Error('JSON must contain a transactions or entries array. Owner-budget-v1 files belong in the Owner budget section.');
+  const out:LocalFinanceLine[]=[];
+  for(const row of source.slice(0,MAX_FINANCE_LINES+1)){
+    if(!asObject(row))continue;
+    const label=maskText(row.description??row.label??row.details??row.name,130);
+    const amount=moneyOf(row.amount??row.value??row.total);
+    if(!label||amount===null)continue;
+    out.push({label,amount,date:dateOf(row.date??row.transactionDate),
+      direction:row.direction==='incoming'||row.direction==='outgoing'?row.direction:'unclassified'});
+  }
+  return out;
+}
+export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument|null{
+  if(!asObject(input)||typeof input.id!=='string'||!/^[0-9a-f-]{20,64}$/i.test(input.id)||
+    !labelOk(input.label)||typeof input.importedAt!=='string'||
+    !Number.isFinite(Date.parse(input.importedAt))||
+    input.source!=='owner-selected-iphone-file'||input.bankVerified!==false||
+    input.complete!==false||input.truncated!==true&&input.truncated!==false||
+    !['csv','txt','json'].includes(String(input.format))||
+    !Array.isArray(input.lines)||input.lines.length<1||input.lines.length>MAX_FINANCE_LINES)return null;
+  const lines:LocalFinanceLine[]=[];
+  for(const v of input.lines){
+    if(!asObject(v)||typeof v.label!=='string'||
+      v.label.trim().length<2||v.label.length>130||/[\x00-\x1f<>]/.test(v.label)||
+      v.amount!==null&& (typeof v.amount!=='number'||!Number.isFinite(v.amount)||Math.abs(v.amount)>10_000_000)||
+      v.date!==null&&dateOf(v.date)!==v.date||
+      !['incoming','outgoing','unclassified'].includes(String(v.direction)))return null;
+    lines.push({label:v.label,amount:v.amount as number|null,date:v.date as string|null,
+      direction:v.direction as LocalFinanceLine['direction']});
+  }
+  return {id:input.id,label:input.label.trim(),importedAt:input.importedAt,
+    source:'owner-selected-iphone-file',bankVerified:false,complete:false,
+    format:input.format as LocalFinanceDocument['format'],
+    lines,truncated:input.truncated};
+}
+export function extractLocalFinanceDocument(
+  fileName:string,text:string,ownerLabel:string,
+  {now=new Date(),id=crypto.randomUUID()}={}
+):LocalFinanceDocument{
+  if(!labelOk(ownerLabel))throw Error('Enter a short label describing the file (2–70 characters).');
+  if(!(now instanceof Date)||!Number.isFinite(now.getTime()))throw Error('Invalid current date.');
+  if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>MAX_FINANCE_FILE_BYTES)
+    throw Error('Files must be 256 KB or smaller. Choose a short export.');
+  const extension=fileName.toLowerCase().split('.').pop();
+  if(extension!=='csv'&&extension!=='txt'&&extension!=='json')
+    throw Error('This version accepts local CSV, TXT and transaction JSON. PDF, photos and spreadsheets need a separate offline extractor; nothing was uploaded.');
+  const lines=extension==='csv'?parseCsv(text):extension==='txt'?parseText(text):parseJson(text);
+  if(!lines.length)throw Error('No financial rows with recognisable amounts were found. Nothing was saved.');
+  const document={
+    id,label:ownerLabel.trim(),importedAt:now.toISOString(),
+    source:'owner-selected-iphone-file' as const,format:extension,
+    bankVerified:false as const,complete:false as const,
+    lines:lines.slice(0,MAX_FINANCE_LINES),truncated:lines.length>MAX_FINANCE_LINES
+  };
+  const validated=validateLocalFinanceDocument(document);
+  if(!validated)throw Error('File review could not produce a safe bounded local document.');
+  return validated;
+}
+export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDocument):LocalFinanceDocument[]{
+  if(!Array.isArray(current))throw Error('Invalid existing encrypted document list. Export a backup first.');
+  const checked=current.map(validateLocalFinanceDocument);
+  if(checked.some(x=>!x))throw Error('One of the existing encrypted document summaries is invalid. Back up before editing.');
+  const safe=checked as LocalFinanceDocument[];
+  if(!validateLocalFinanceDocument(document)||safe.length>=MAX_FINANCE_FILES||
+     safe.some(x=>x.id===document.id))throw Error('Document is invalid, duplicate, or the 12-document limit has been reached.');
+  return [...safe,document];
+}
+export function removeLocalFinanceDocument(current:unknown,id:string):LocalFinanceDocument[]{
+  if(!Array.isArray(current))throw Error('Invalid encrypted document list.');
+  const checked=current.map(validateLocalFinanceDocument);
+  if(checked.some(x=>!x))throw Error('Unrecognised document data; cannot silently discard it.');
+  return (checked as LocalFinanceDocument[]).filter(x=>x.id!==id);
+}
