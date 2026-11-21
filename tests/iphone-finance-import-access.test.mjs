@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const root=new URL('../artifacts/market-compass/src/',import.meta.url);
+const app=await readFile(new URL('App.tsx',root),'utf8');
+const owner=await readFile(new URL('components/OwnerBudgetDraftEditor.tsx',root),'utf8');
+const statements=await readFile(new URL('components/LocalFinanceFiles.tsx',root),'utf8');
+const assistant=await readFile(new URL('components/VoiceAssistant.tsx',root),'utf8');
+
+test('original PWA Home and Spend expose straightforward iPhone file access',()=>{
+  assert.match(app,/<Link href="\/expenses"[\s\S]*?Import private financial files from iPhone Files/);
+  assert.match(app,/<Route path="\/expenses"><ExpenseLedger data=\{data\} setData=\{setData\}/);
+  assert.match(app,/<OwnerBudgetDraftEditor/);
+  assert.match(app,/<LocalFinanceFiles/);
+  assert.match(owner,/return <section id="mc-finance-import"/);
+  assert.match(statements,/return <section id="mc-financial-files"/);
+  assert.doesNotMatch(owner,/return <details className="mb-5/);
+  assert.doesNotMatch(statements,/return <details className="mb-5/);
+});
+test('owner JSON chooser is visible, does not filter away iPhone Files, and offers a paste fallback',()=>{
+  assert.match(owner,/<input type="file"[\s\S]*?onChange=\{event=>/);
+  assert.match(owner,/file\.name\.toLowerCase\(\)\.endsWith\('\.json'\)/);
+  assert.match(owner,/await readOwnerFileText\(file\)/);
+  assert.match(owner,/new FileReader\(\)/);
+  assert.match(owner,/Paste owner-budget JSON instead/);
+  assert.match(owner,/parseOwnerBudgetDraft\(text\)/);
+  assert.match(owner,/onSave\(preview\)/);
+  assert.doesNotMatch(owner,/fetch\(|axios|XMLHttpRequest/);
+});
+test('financial statement picker needs no label before choosing, with explicit review and save',()=>{
+  assert.match(statements,/disabled=\{safe\.length>=MAX_FINANCE_FILES\}/);
+  assert.doesNotMatch(statements,/disabled=\{[^}]*label\.trim\(\)\.length/);
+  assert.match(statements,/const privateLabel=label\.trim\(\) \|\| 'iPhone financial export'/);
+  assert.match(statements,/extractLocalFinanceDocument\(file\.name,data,privateLabel\)/);
+  assert.match(statements,/onAdd\(preview\)/);
+  assert.match(statements,/No files are uploaded to GitHub/);
+  assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
+});
+
+test('local finance and owner budget replies remain local even with Agent mode enabled',()=>{
+  assert.match(assistant,/result\.source === 'local-finance-documents'/);
+  assert.match(assistant,/result\.source === 'local-owner-budget'/);
+  const check=assistant.indexOf("result.source === 'local-finance-documents'");
+  const send=assistant.indexOf('void askDesktop(question, id);');
+  assert.ok(check>0&&send>check,'Local replies must be handled before remote inference');
+});

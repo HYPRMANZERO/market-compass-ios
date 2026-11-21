@@ -70,14 +70,15 @@ test('strict validation rejects fake verified salary or credit-card limit/balanc
   assert.throws(()=>parseOwnerBudgetDraft('{"invalid":',now),/JSON/);
   assert.throws(()=>parseOwnerBudgetDraft('x'.repeat(20_010),now),/20 KB/);
 });
-test('owner-reported outstanding debt is a valid local card classification, not a lender report',()=>{
-  const got=parse({...example,creditCardFigure:{amount:6600,meaning:'owner_reported_outstanding_balance'}});
-  const summary=summarizeOwnerBudgetDraft(got,now);
+test('owner-confirmed card outstanding debt stays unverified and distinct from expenses',()=>{
+  const profile=parse({...example,creditCardFigure:{amount:7300.25,meaning:'owner_reported_outstanding_balance'}});
+  const summary=summarizeOwnerBudgetDraft(profile,now);
   assert.equal(summary.creditCardFigureStatus,'owner_reported_outstanding_balance');
-  assert.equal(summary.creditCardFigure,6600);
+  assert.equal(summary.creditCardFigure,7300.25);
   assert.equal(summary.bankVerified,false);
-  assert.equal(summary.currentBalance,null);
   assert.equal(summary.spendableCash,null);
+  assert.equal(summary.recurringMin,2600);
+  assert.equal(summary.recurringMax,2750);
 });
 
 test('missing financial profile is distinct from a zero balance',()=>{
@@ -98,9 +99,9 @@ test('offline voice assistant answers only from explicit saved private draft',()
   const actual=interpretCompassCommand('What is my hourly rate?',context);
   assert.equal(actual.type,'answer');
   assert.match(actual.reply,/77/);
-  assert.match(actual.reply,/LOCAL iPhone budget/);
-  assert.match(actual.reply,/not bank verified or spendable cash/i);
-  assert.match(actual.reply,/not yet mirrored/i);
+  assert.match(actual.reply,/private budget dated/i);
+  assert.match(actual.reply,/not bank or employer verified/i);
+  assert.match(actual.reply,/not mirrored to HYPRBOX/i);
   assert.doesNotMatch(actual.reply,/verified salary/i);
   assert.match(interpretCompassCommand('What is my incentive?',context).reply,/conditional incentive/i);
   const absent=interpretCompassCommand('What is my hourly rate?',{...context,ownerBudgetDraft:null});

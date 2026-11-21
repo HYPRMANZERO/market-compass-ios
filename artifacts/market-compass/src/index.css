@@ -406,8 +406,15 @@ select:focus-visible, textarea:focus-visible {
 #mc-backup-controls { scroll-margin-top: calc(94px + env(safe-area-inset-top)); }
 .mc-mobile-tabbar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 @media (display-mode: standalone) and (max-width: 1023px) {
-  /* Keep the iPhone system status area the same green as Market Compass's header. */
-  html, body { background-color: hsl(165 24% 19%); }
+  /* The iOS status bar overlays the PWA when black-translucent is enabled.
+     Paint a predictable dark area behind it, rather than allowing the page
+     content or an iOS compositor-blurred snapshot to show through. */
+  /* Match the existing, known-good ngrok PWA launch/status backing.
+     iOS black-translucent overlays the status bar on the document canvas:
+     a light BODY can bleed through even when HTML is dark. Only the safe
+     area gets the green backing; #root keeps the actual page light. */
+  html, body { background-color: #253c36; }
+  #root { background-color: hsl(var(--background)); }
   .mc-mobile-header { padding-top: calc(12px + env(safe-area-inset-top)); }
   .mc-mobile-header::before {
     content: '';
@@ -416,20 +423,38 @@ select:focus-visible, textarea:focus-visible {
     left: 0;
     right: 0;
     height: env(safe-area-inset-top, 0px);
-    background-color: hsl(165 24% 19%);
+    background-color: #253c36;
     pointer-events: none;
   }
 }
 @media (max-width: 1023px) {
   :root { --app-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
   body { overflow-x: hidden; }
+  html {
+    scroll-padding-top: calc(82px + env(safe-area-inset-top));
+    scroll-padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+  /* Reserve enough space for the fixed six-tab bar and the home-indicator.
+     The old 112px PLUS safe-area offset left excessive blank space. */
+  .mc-mobile-content { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  /* Both surfaces are opaque. Backdrop-filter on the sticky header caused
+     some iPhone Safari compositions to soften the logo/text while scrolling.
+     Don't blur the contents of a surface that is already opaque. */
+  .mc-mobile-header {
+    background-color: hsl(165 24% 19%);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .mc-mobile-tabbar {
+    background-color: hsl(44 33% 99%);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   /* Safari zooms the viewport on focus for inputs smaller than 16px. */
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
   select, textarea { font-size: 16px !important; }
   input, textarea, select { max-width: 100%; }
   input[type='date'], input[type='time'] { min-width: 0; }
-  .mc-mobile-tabbar { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
-  .mc-mobile-header { -webkit-backdrop-filter: blur(8px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .rise-in { animation: none !important; }
