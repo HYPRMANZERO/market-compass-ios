@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+// pnpm installs this dependency in the application workspace, not root tests.
+import * as pdfjs from '../artifacts/market-compass/node_modules/pdfjs-dist/legacy/build/pdf.mjs';
 
 // Entirely fabricated encrypted statement; no owner's financial documents
 // or actual passwords should ever be copied into code or CI logs.
