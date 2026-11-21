@@ -23,15 +23,18 @@ export function answerFromOfflineOwnerBudget(
      !Array.isArray(budget.scheduledMonths)||budget.sourceType!=='encrypted-device-draft'||
      budget.bankVerified!==false||budget.currentBalance!==null||
      budget.spendableCash!==null||budget.pendingDesktopMirror!==true)return null;
-  const q=question.toLowerCase().trim().replace(/[?!.,]/g,'').replace(/\s+/g,' ');
+  const q=question.toLowerCase().trim().replace(/[?!,]/g,'').replace(/\.(?!\d)/g,'').replace(/\s+/g,' ');
   if(q.length<2||q.length>500)return null;
   const preface='From your private budget dated '+budget.recordedAt+': ';
-  const cycle=budget.historicalCycles.find(item=>{
+  const matchingCycles=budget.historicalCycles.filter(item=>{
     const name=monthName(item.date.slice(0,7)).toLowerCase();
     return q.includes(item.date.slice(0,7))||q.includes(name)||
-      (q.includes(name.split(' ')[0])&&q.includes(item.date.slice(0,4)))||
-      q.includes(item.date);
+      q.includes(item.date)||
+      (q.includes(name.split(' ')[0])&&
+        (q.includes(item.date.slice(0,4))||
+         budget.historicalCycles.filter(other=>other.date.slice(5,7)===item.date.slice(5,7)).length===1));
   });
+  const cycle=matchingCycles.length===1?matchingCycles[0]:undefined;
   if(cycle){
     const line=cycle.entries.find(e=>q.includes(e.label.toLowerCase()));
     if(line) return preface+cycle.date+' includes reported '+line.label+' of '+money(line.min)+
