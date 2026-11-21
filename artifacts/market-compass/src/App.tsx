@@ -20,6 +20,7 @@ import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
+import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
@@ -488,6 +489,11 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
+    <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
+      currency={data.currency}
+      onCreate={account=>setData(old=>({...old,accounts:[
+        ...old.accounts,{...account,id:crypto.randomUUID()}
+      ]}))}/>
     <HistoricalRecurringInsights documents={data.localFinanceDocuments??[]}
       entries={data.expenseEntries??[]} currency={data.currency}/>
     <div className="hidden lg:block">
@@ -983,6 +989,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
         />
+        <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
+          currency={data.currency}
+          onCreate={account=>setData(old=>({...old,accounts:[
+            ...old.accounts,{...account,id:crypto.randomUUID()}
+          ]}))}/>
       </>}
       {section==='activity'&&<>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
