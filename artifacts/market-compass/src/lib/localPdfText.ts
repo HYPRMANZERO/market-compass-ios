@@ -72,7 +72,8 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
   const bytes = new Uint8Array(await file.arrayBuffer());
   let task: ReturnType<typeof pdfjs.getDocument> | undefined;
   try {
-    if (bytes.byteLength > MAX_LOCAL_PDF_BYTES) throw Error('PDF exceeds the 2 MB limit.');
+    options.signal?.throwIfAborted();
+    if (bytes.byteLength > MAX_LOCAL_PDF_BYTES) throw Error('PDF exceeds the 64 MB on-device memory safety limit.');
     task = pdfjs.getDocument({
       data: bytes,
       password: temporaryPassword || undefined,
@@ -91,6 +92,9 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
       // from transform x/y so "R 3 543,36" stays beside its source label.
       // Keep explicit EOL fallback for PDFs without usable coordinates.
       const genericLines=layoutSelectablePdfLines(content.items);
+      if (genericLines.length === 0) {
+        throw Error(`The PDF contains no selectable text on page ${pageNumber} of ${pdf.numPages}. Use offline OCR for scanned pages or export CSV/TXT. Nothing was saved.`);
+      }
       // Where a native five-column statement table is present, preserve the
       // actual Payments/Deposits positions using PDF geometry. Keep only
       // institution/header context and available-balance notes from the generic
@@ -115,12 +119,10 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
         throw Error('PDF contains too much extractable text. Select fewer pages.');
       }
     }
-    const text = lines.join('\n').trim();
-    if (!text) {
-      throw Error('This PDF has no selectable text. Scanned images need an offline OCR tool; nothing was saved.');
-    }
-    return text;
+    options.signal?.throwIfAborted();
+    return lines.join('\n').trim();
   } catch (error) {
+    if (options.signal?.aborted) throw Error('PDF processing cancelled; nothing was saved.');
     if (error instanceof Error && error.name === 'PasswordException') {
       throw Error('This PDF requires a password or the temporary password was incorrect. Enter the PDF password and choose the file again. Nothing was saved.');
     }
