@@ -932,6 +932,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
   const settings = vault.backupSettings;
   const data = vault.data;
   const financialAmountsPresent = data.accounts.length > 0 ||
+    Boolean(data.ownerBudgetDraft) ||
     data.monthlyExtra.trim() !== '' || data.emergencyReserve.trim() !== '' ||
     Boolean(data.privateBudget && [data.privateBudget.monthlyIncome, data.privateBudget.monthlyEssentials, data.privateBudget.liquidFunds].some(v => v.trim() !== ''));
   const chooseCurrency = (currency: string, region?: string) => {
