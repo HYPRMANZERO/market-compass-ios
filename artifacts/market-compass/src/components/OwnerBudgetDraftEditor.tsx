@@ -71,7 +71,38 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
       </div>
       <p>Salary-only listed difference: <strong>{range(saved.salaryOnlyDifferenceMin,saved.salaryOnlyDifferenceMax)}</strong>. This is not verified spendable cash.</p>
       <p className="font-medium">Recorded entries: {saved.recurring.length} monthly cost lines, {saved.scheduledMonths.length} month-specific exceptions, {saved.historicalCycles.length} incomplete historical snapshots.</p>
-      <p className="text-muted-foreground">Incentive is not guaranteed; hourly earnings may already be included in payroll. Credit-card figure is not confirmed as a balance or limit.</p>
+      <details className="rounded-lg border border-border bg-background p-3">
+        <summary className="min-h-10 cursor-pointer font-semibold">Detailed listed monthly costs ({saved.recurring.length})</summary>
+        <ul className="mt-2 space-y-2">
+          {saved.recurring.map((entry,index)=><li key={index} className="flex justify-between gap-3">
+            <span className="min-w-0">{entry.label} <span className="text-muted-foreground">· {entry.category==='debt_payment'?'debt payment':entry.category==='fee'?'fee':'expense'}</span></span>
+            <strong className="shrink-0 text-right">{range(entry.min,entry.max)}</strong>
+          </li>)}
+        </ul>
+      </details>
+      {saved.scheduledMonths.length>0 && <details className="rounded-lg border border-border bg-background p-3">
+        <summary className="min-h-10 cursor-pointer font-semibold">Month-specific changes</summary>
+        {saved.scheduledMonths.map((change,index)=><div key={index} className="mt-2 text-[12px]">
+          {change.month} · {change.label}: {money(change.cost)}. Total listed costs: {range(change.listedMin,change.listedMax)}.
+        </div>)}
+      </details>}
+      {saved.historicalCycles.length>0 && <details className="rounded-lg border border-border bg-background p-3">
+        <summary className="min-h-10 cursor-pointer font-semibold">Historical owner-reported entries</summary>
+        {saved.historicalCycles.map(cycle=><div key={cycle.date} className="mt-3">
+          <p className="font-semibold">{cycle.date} · reported income {money(cycle.income)} · listed costs {money(cycle.listedExpenses)}</p>
+          <ul className="mt-2 space-y-1">
+            {cycle.entries.map((item,index)=><li key={index} className="flex justify-between gap-3">
+              <span>{item.label}</span><strong>{money(item.min)}</strong>
+            </li>)}
+          </ul>
+          <p className="mt-1 text-muted-foreground">Incomplete historical record, not bank verified.</p>
+        </div>)}
+      </details>}
+      <p className="text-muted-foreground">
+        Incentive is not guaranteed; hourly earnings may already be included in salary.
+        {saved.creditCardFigureStatus==='unknown_balance_or_limit' && ' A reported credit-card figure exists, but it is not confirmed as an outstanding balance or credit limit.'}
+        {' '}The local planning remainder is not spendable cash.
+      </p>
     </div> : <p className="mt-3 rounded-xl bg-muted/50 p-3 text-[12px]">
       No owner budget draft has been saved here yet. This does not mean zero salary or zero expenses.
     </p>}
@@ -115,6 +146,13 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
         <p>Monthly salary: {money(proposed.salary)}. Conditional incentive: {money(proposed.conditionalIncentive)}. Hourly pay: {money(proposed.hourlyRate)} per hour.</p>
         <p>Listed recurring costs: {range(proposed.recurringMin,proposed.recurringMax)}. Incomplete salary-only difference: {range(proposed.salaryOnlyDifferenceMin,proposed.salaryOnlyDifferenceMax)}.</p>
         <p>Included: {proposed.recurring.length} recurring items, {proposed.scheduledMonths.length} month-specific exceptions and {proposed.historicalCycles.length} historical snapshots.</p>
+        <ul className="space-y-1">
+          {proposed.recurring.map((item,index)=><li key={index} className="flex justify-between gap-2">
+            <span>{item.label}</span><strong>{range(item.min,item.max)}</strong>
+          </li>)}
+        </ul>
+        {proposed.scheduledMonths.map((item,index)=><p key={index}>Exception {item.month} · {item.label} {money(item.cost)} · total listed {range(item.listedMin,item.listedMax)}</p>)}
+        {proposed.historicalCycles.map(item=><p key={item.date}>Historical {item.date}: income {money(item.income)}, listed costs {money(item.listedExpenses)} ({item.entries.length} items, incomplete).</p>)}
         <p className="text-muted-foreground">Not bank-verified and not confirmed spare money. Nothing is being transferred or sent to HYPRBOX.</p>
         <button type="button" onClick={save}
           className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
