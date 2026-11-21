@@ -141,12 +141,23 @@ function parseText(text:string):LocalFinanceLine[]{
   for(const raw of text.split(/\r?\n/).slice(0,25000)){
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const trimmed=raw.trim();if(trimmed.length<3)continue;
-    const rand=trimmed.match(/\b(?:ZAR|R)\s*([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
-    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|amount due|invoice total|total due|take home pay|payment|total|insurance|fuel|rent|car payment)\b[^0-9]{0,12}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
-    const token=rand?.[1]??known?.[1];
-    const amount=moneyOf(token??null);
+    const sourceDate=bankStatementDate(trimmed);
+    const body=sourceDate?trimmed.replace(sourceDate.matched,' '):trimmed;
+    // Read a complete numeric token. A date or a second currency value makes
+    // a poor substitute for the labelled amount.
+    const currencyValues=[...body.matchAll(/(?:^|[^\w.,+-])([+-]?)\s*(?:ZAR|R)\s*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)/gi)];
+    if(currencyValues.length>1)continue;
+    const known=body.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|amount due|invoice total|total due|take home pay|payment|total|insurance|fuel|rent|car payment)\b[\s:=]*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)(?![\d.,%])/i);
+    const match=currencyValues[0];
+    let token=match?match[1]+match[2]:known?.[1];
+    if(!token)continue;
+    token=token.replace(/\s/g,'');
+    if(/^[+-]?\d{1,3}(?:\.\d{3})+,\d{2}$/.test(token))token=token.replace(/\./g,'').replace(',','.');
+    else if(/^[+-]?\d+,\d{1,2}$/.test(token))token=token.replace(',','.');
+    else if(!/^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(token))continue;
+    const amount=moneyOf(token);
     if(amount===null)continue;
-    const date=bankStatementDate(trimmed)?.date??null;
+    const date=sourceDate?.date??null;
     const desc=maskText(trimmed,130);if(!desc)continue;
     out.push({label:desc,amount,date,direction:'unclassified'});
   }
