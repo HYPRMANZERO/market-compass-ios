@@ -26,6 +26,7 @@ jobs:
       - run: node --test tests/home-document-upload.test.mjs
       - run: node --experimental-strip-types --test tests/document-intelligence.test.mjs
       - run: node --experimental-strip-types --test tests/bank-statement-rows.test.mjs
+      - run: node --experimental-strip-types --test tests/financial-source-normalization.test.mjs
       - run: node --experimental-strip-types --test tests/vehicle-finance-classification.test.mjs
       - run: node --experimental-strip-types --test tests/private-ai-origin.test.mjs
       - run: node --experimental-strip-types --test tests/financial-source-health.test.mjs
