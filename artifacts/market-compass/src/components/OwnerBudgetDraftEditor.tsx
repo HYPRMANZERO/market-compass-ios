@@ -100,7 +100,9 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
       </details>}
       <p className="text-muted-foreground">
         Incentive is not guaranteed; hourly earnings may already be included in salary.
-        {saved.creditCardFigureStatus==='unknown_balance_or_limit' && ' A reported credit-card figure exists, but it is not confirmed as an outstanding balance or credit limit.'}
+        {saved.creditCardFigureStatus==='unknown_balance_or_limit' && saved.creditCardFigure!==null &&
+          (' A reported credit-card figure of '+money(saved.creditCardFigure)+
+          ' exists; it has not been established whether this is a balance or a credit limit.')}
         {' '}The local planning remainder is not spendable cash.
       </p>
     </div> : <p className="mt-3 rounded-xl bg-muted/50 p-3 text-[12px]">
