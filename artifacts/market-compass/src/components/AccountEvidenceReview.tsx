@@ -17,7 +17,8 @@ const fieldNames:Record<DocumentFact['field'],string>={
   'original-principal':'Original amount financed',
   'instalment':'Contractual monthly instalment','previous-instalment':'Previous instalment',
   'residual-value':'Residual/balloon value','annual-rate':'Quoted annual interest',
-  'net-pay':'Net pay','amount-due':'Amount due'
+  'net-pay':'Net pay','amount-due':'Amount due',
+  'running-balance':'Last dated running balance (historical)'
 };
 const usable=(f:DocumentFact,key:'balance'|'apr'|'minimumPayment')=>
   (key==='balance'&&f.field==='statement-balance'&&f.amount!==null)||
