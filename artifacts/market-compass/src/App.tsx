@@ -881,6 +881,10 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
       onRemove={id=>setData(old=>({
         ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
       }))}
+      ledgerEntries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
+      currency={data.currency}
+      currencyReviewRequired={data.currencyReviewRequired}
+      onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
     />
     <MonthlyExpenses
     entries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
