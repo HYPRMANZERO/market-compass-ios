@@ -56,6 +56,7 @@ export function enqueueOfflineQuestion(
 }
 export function removeOfflineQuestion(input:unknown,id:string):QueuedReadOnlyQuestion[]{
   if(!Array.isArray(input))return [];
-  return input.map(validateQueuedQuestion).filter((x):x is QueuedReadOnlyQuestion=>
-    Boolean(x&&x.id!==id));
+  const items=input.map(validateQueuedQuestion);
+  if(items.some(x=>!x))throw Error('The encrypted offline queue contains unrecognized entries. Back up before changing it.');
+  return (items as QueuedReadOnlyQuestion[]).filter(x=>x.id!==id);
 }
