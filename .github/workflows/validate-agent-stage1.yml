@@ -19,6 +19,8 @@ jobs:
           cache: pnpm
       - name: Install pinned workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared TypeScript libraries before PWA typecheck
+        run: pnpm run typecheck:libs
       - name: Typecheck existing PWA with Agent mode
         run: pnpm --filter @workspace/market-compass run typecheck
       - name: Build private PWA with Agent mode
