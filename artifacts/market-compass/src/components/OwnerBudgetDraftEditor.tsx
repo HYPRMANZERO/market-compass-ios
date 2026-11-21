@@ -202,8 +202,24 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
           <ul className="mt-1 space-y-1">{line.entries.map((entry,i)=><li key={i}
             className="flex justify-between gap-2"><span>{entry.label}</span><strong>{money(entry.min)}</strong></li>)}</ul>
         </div>)}
+        {saved.creditCardFigureStatus==='owner_reported_outstanding_balance'&&saved.creditCardFigure!==null&&
+          <p><strong>Outstanding credit-card debt reported by you: {money(saved.creditCardFigure)}</strong>.
+            This is not lender-verified. The outstanding principal is not an additional monthly expense.</p>}
         {saved.creditCardFigureStatus==='unknown_balance_or_limit'&&saved.creditCardFigure!==null&&
-          <p>The reported credit-card figure {money(saved.creditCardFigure)} might be a limit or a balance; unverified.</p>}
+          <div className="space-y-2">
+            <p>The reported credit-card figure {money(saved.creditCardFigure)} was previously labelled as an unknown balance or limit.</p>
+            <button type="button" onClick={()=>{
+              if(!profile?.creditCardFigure)return;
+              if(!window.confirm('Confirm this amount is credit-card OUTSTANDING DEBT (not your credit limit)? It will be recorded as owner-reported, not lender-verified.'))return;
+              onSave({...profile,creditCardFigure:{
+                amount:profile.creditCardFigure.amount,
+                meaning:'owner_reported_outstanding_balance'
+              }});
+              setMessage('Card amount reclassified as owner-reported outstanding debt in this encrypted iPhone workspace. Wait for auto-save, then export a fresh encrypted backup.');
+            }} className="min-h-11 rounded-xl border border-primary/40 bg-background px-3 text-[12px] font-semibold">
+              Confirm as outstanding debt
+            </button>
+          </div>}
       </div>
     </details>:<p className="mt-3 text-[11px] text-muted-foreground">
       No owner budget is saved on this iPhone yet. Missing information does not mean zero income.
