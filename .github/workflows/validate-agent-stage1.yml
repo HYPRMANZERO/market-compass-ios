@@ -1,0 +1,30 @@
+name: Validate Market Compass read-only agent UI
+on:
+  push:
+    branches: [feature/ios-safari-launch-2026-11-26]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  typecheck-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install pinned workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck existing PWA with Agent mode
+        run: pnpm --filter @workspace/market-compass run typecheck
+      - name: Build private PWA with Agent mode
+        env:
+          BASE_PATH: /market-compass-ios/
+          NODE_ENV: production
+        run: pnpm --filter @workspace/market-compass run build
+      - name: Verify private CSS utilities
+        run: node scripts/verify-private-ui-css.mjs
