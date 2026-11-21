@@ -101,6 +101,10 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
               {coin.change24h>=0?'+':''}{coin.change24h.toFixed(2)}% / 24h
             </p>
           </div>
+          <div className="col-span-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground sm:hidden">
+            <span>Market cap <strong className="text-foreground">{compact(coin.marketCap,selected)}</strong></span>
+            <span>24h volume <strong className="text-foreground">{compact(coin.volume24h,selected)}</strong></span>
+          </div>
           <p className="hidden text-right text-[11px] tabular-nums text-muted-foreground sm:block">
             Market cap<br/><strong className="text-foreground">{compact(coin.marketCap,selected)}</strong>
           </p>
