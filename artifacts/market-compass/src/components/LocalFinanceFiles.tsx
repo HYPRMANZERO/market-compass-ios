@@ -1,4 +1,6 @@
 import {useRef,useState} from 'react';
+import ReviewedDocumentLedger from './ReviewedDocumentLedger';
+import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
@@ -12,13 +14,18 @@ type Props={
   documents:LocalFinanceDocument[];
   onAdd:(value:LocalFinanceDocument)=>void;
   onRemove:(id:string)=>void;
+  ledgerEntries:ExpenseEntry[];
+  currency:string;
+  currencyReviewRequired:boolean;
+  onApplyEntries:(entries:ExpenseEntry[])=>void;
 };
 
 /**
  * No API fetch or File upload: parsing stays on the device.
  * Only owner-approved, bounded excerpts enter the existing encrypted vault.
  */
-export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
+export default function LocalFinanceFiles({documents,onAdd,onRemove,
+  ledgerEntries,currency,currencyReviewRequired,onApplyEntries}:Props){
   const [label,setLabel]=useState('');
   const passwordInput=useRef<HTMLInputElement>(null);
   const [reading,setReading]=useState(false);
@@ -71,6 +78,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
       Market Compass extracts up to 60 labelled financial lines, lets you review
       them, and stores only approved excerpts in this device’s encrypted workspace.
       The original document is not uploaded to GitHub, HYPRBOX or another service.
+      To update Spend totals, open a saved document below and explicitly approve its classified entries.
     </p>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
       PDF limit: 2 MB and 12 pages of selectable text. CSV, TXT and JSON limit:
@@ -170,8 +178,12 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
             <strong>{money(line.amount)}</strong>
           </li>)}
         </ul>
+        <ReviewedDocumentLedger key={document.id} document={document}
+          entries={ledgerEntries} currency={currency}
+          currencyReviewRequired={currencyReviewRequired}
+          onApply={onApplyEntries}/>
         <button type="button" onClick={()=>{
-          if(window.confirm('Remove only these local excerpts? The original iPhone file and other vault records remain untouched.'))onRemove(document.id);
+          if(window.confirm('Remove only these local excerpts? The original iPhone file and other vault records remain untouched. Already approved Spend entries will remain; remove them separately in Monthly Expenses if needed.'))onRemove(document.id);
         }} className="mt-3 min-h-11 rounded-lg border border-border px-4 text-[12px] font-semibold">
           Remove saved excerpts
         </button>
