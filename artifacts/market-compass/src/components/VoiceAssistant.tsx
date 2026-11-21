@@ -572,6 +572,7 @@ export default function VoiceAssistant({
       result.reply.startsWith('I cannot transfer money');
     if (result.type === 'navigate' || localSafetyRefusal ||
       ((!agentMode || !connected) && result.type !== 'unknown' &&
+      !(!connected && result.needsHistoricalSources) &&
       !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
@@ -661,7 +662,7 @@ export default function VoiceAssistant({
         </button>
       </div>
       <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75">
-        <WifiOff size={16}/> Offline commands ready
+        <WifiOff size={16}/> Offline calculations + queued questions
         <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">
           {connected ? 'Ollama connected' : connection === 'checking' ? 'Connecting…' : settings.enabled ? 'Auto reconnect on' : 'Local mode'}
         </span>
@@ -856,7 +857,7 @@ export default function VoiceAssistant({
         For general topics, try: "search public info about compound interest." This searches public Wikipedia references only and sends no private financial context.
       </p>
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-        Only successful desktop AI conversations are saved. Offline questions are not synchronized.
+        Offline read-only questions stay in this iPhone's encrypted vault until you review and send them after reconnection. Only successful desktop AI conversations are stored on HYPRBOX.
         Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
         Compression is measured; no fixed ratio is guaranteed.
       </p>
