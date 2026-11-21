@@ -69,7 +69,7 @@ export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'n
   const best=ranked[0];
   const category:DocumentCategory=best&&best.score>0?best.kind:'unclassified';
   return {name:institution==='Unidentified provider'?names[category]:
-    institution+' '+names[category],
+    category==='bank-statement'?institution+' account':institution+' '+names[category],
     institution,category,confidence:best&&best.score>=2?'matched-terms':'uncertain'};
 }
 /** Strong PII redaction for stored excerpts: never save full account/ID numbers. */
