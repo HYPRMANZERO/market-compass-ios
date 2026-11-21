@@ -748,7 +748,7 @@ export default function VoiceAssistant({
             </li>)}
           </ul> : <p className="mt-2 text-[11px] text-muted-foreground">{lastAgent.approval ? 'No private financial tool was accessed. This request is a review-only draft or blocked action.' : 'No private financial tool was accessed. Ollama answered as a conversation.'}</p>}
           {lastAgent.verifiedSummary && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
-            <strong>Verified read-only source summary</strong>
+            <strong>Read-only source evidence · not necessarily bank-verified</strong>
             <p className="mt-1 leading-5">{lastAgent.verifiedSummary}</p>
           </div>}
           {lastAgent.approval && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
