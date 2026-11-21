@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
+import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
 import {
   addLocalFinanceDocument,removeLocalFinanceDocument,
   type LocalFinanceDocument
@@ -595,7 +596,8 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     finally { setBacktesting(false); }
   };
   return <>
-    <PageIntro eyebrow="Observe before interpreting" title="Markets" description="Import real daily crypto candles from public exchange APIs; calculate local indicators on your device. JSE/other markets require an authorized CSV feed." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Public exchange candles</div>} />
+    <PageIntro eyebrow="Observe before interpreting" title="Markets" description="View provider-sourced cryptocurrency quotes and analyse completed spot candles. JSE shares and other markets require authorized data feeds." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Read-only market research</div>} />
+    <LiveCryptoQuotes currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
         <label className="flex-1"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Crypto spot pair</span><input data-testid="input-market-symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTC, ETH, SOL or BTCUSD" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
