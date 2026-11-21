@@ -31,7 +31,7 @@ jobs:
             fi
           done
           echo "Both editions have identical source-normalization and protection code."
-      - run: node --experimental-strip-types --test tests/bank-statement-rows.test.mjs tests/financial-source-normalization.test.mjs tests/document-intelligence.test.mjs tests/owner-bank-release-parity.test.mjs
+      - run: node --experimental-strip-types --test tests/standard-bank-layout.test.mjs tests/bank-statement-rows.test.mjs tests/financial-source-normalization.test.mjs tests/document-intelligence.test.mjs tests/owner-bank-release-parity.test.mjs
       - run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/financial-readiness.test.mjs tests/monthly-expenses.test.mjs
       - run: pnpm run typecheck:libs
       - run: pnpm --filter @workspace/market-compass run typecheck
