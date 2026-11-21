@@ -104,6 +104,7 @@ export default function VoiceAssistant({
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
   const [secret, setSecret] = useState(settings.token);
+  const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
   const [reconnectNonce, setReconnectNonce] = useState(0);
@@ -516,7 +517,14 @@ export default function VoiceAssistant({
       // Sharing financial context is opt-in AND relevant-topic-only. A greeting or
       // unrelated question must not transmit salary, account or spending figures.
       const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
-      const summary = settings.shareFinancialContext && wantsFinancialContext ? {
+      const wantsDocuments=/\b(?:documents?|statements?|payslips?|invoices?|instalments?|quotations?)\b/i.test(prompt);
+      const includeFacts=settings.shareFinancialContext&&shareDocumentFacts&&wantsDocuments;
+      const documentFacts=includeFacts?(context.localFinanceDocuments??[]).slice().sort((a,b)=>b.importedAt.localeCompare(a.importedAt))
+        .flatMap(doc=>(doc.accountProfile?.facts??[]).slice(0,4).map(fact=>({
+          category:doc.accountProfile!.category,field:fact.field,amount:fact.amount,
+          asOf:fact.asOf,ratePercent:fact.ratePercent
+        }))).slice(0,12):undefined;
+      const summary = settings.shareFinancialContext && (wantsFinancialContext||includeFacts) ? {
         currency: context.currency,
         accounts: context.accounts.filter(validAccount).slice(0, 30).map(a => ({
           name: a.name.slice(0,60), balance: Number(a.balance),
@@ -527,6 +535,7 @@ export default function VoiceAssistant({
         liquidFunds: context.privateBudget?.liquidFunds ?? '',
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
+        documentFacts,
       } : undefined;
       const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
       const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
@@ -1025,6 +1034,10 @@ export default function VoiceAssistant({
         <input type="checkbox" checked={shareFinancialContext} onChange={e=>setShareFinancialContext(e.target.checked)}/>
         Share entered financial figures with my own desktop when asking open-ended questions
       </label>
+      {settings.shareFinancialContext&&<label className="mt-2 flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={shareDocumentFacts} onChange={e=>setShareDocumentFacts(e.target.checked)}/>
+        Include historical document figures when I ask about my documents this session
+      </label>}
       <button type="button" onClick={() => saveConnection()}
         className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground">
         <RefreshCw size={17}/> Save &amp; reconnect automatically

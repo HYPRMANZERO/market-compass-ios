@@ -1,6 +1,6 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
 import {makeAccountProfile,maskDocumentPII,safeAccountProfile,classifyDocument,type AccountProfile} from './documentIntelligence.ts';
-import {parseBankStatementText} from './bankStatementParser.ts';
+import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -142,13 +142,13 @@ function parseText(text:string):LocalFinanceLine[]{
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const trimmed=raw.trim();if(trimmed.length<3)continue;
     const rand=trimmed.match(/\b(?:ZAR|R)\s*([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
-    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|payment|total|insurance|fuel|rent|car payment)\b[^0-9]{0,12}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
+    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|amount due|invoice total|total due|take home pay|payment|total|insurance|fuel|rent|car payment)\b[^0-9]{0,12}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
     const token=rand?.[1]??known?.[1];
     const amount=moneyOf(token??null);
     if(amount===null)continue;
-    const dateMatch=trimmed.match(/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{4}\b/);
+    const date=bankStatementDate(trimmed)?.date??null;
     const desc=maskText(trimmed,130);if(!desc)continue;
-    out.push({label:desc,amount,date:dateMatch?dateOf(dateMatch[0]):null,direction:'unclassified'});
+    out.push({label:desc,amount,date,direction:'unclassified'});
   }
   return out;
 }
@@ -243,7 +243,7 @@ export function extractLocalFinanceDocument(
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
-    accountProfile:makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES))
+    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
