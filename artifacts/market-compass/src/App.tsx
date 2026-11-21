@@ -7,6 +7,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
+import AccountEvidenceReview from '@/components/AccountEvidenceReview';
+import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
+import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
 import {
@@ -424,11 +427,53 @@ function money(value: number, currency = 'USD') {
 }
 function num(value: string) { return value.trim() === '' ? NaN : Number(value); }
 
-function Overview({ data }: { data: WorkspaceData }) {
+function Overview({ data,setData }: { data: WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>> }) {
   const openDrafts = data.drafts.filter((draft) => draft.status === 'pending').length;
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
+  const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
+  const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
+    <details id="mc-home-upload" className="mb-4 rounded-2xl border border-primary/30 bg-card p-3 shadow-sm sm:p-4">
+      <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Upload size={20}/></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold">Upload financial documents</span>
+          <span className="mt-1 block text-[11px] font-normal leading-5 text-muted-foreground">
+            Choose from iPhone Files · {docs.length} document(s) in this encrypted vault
+          </span>
+        </span>
+        <ChevronDown size={19} className="shrink-0 text-muted-foreground"/>
+      </summary>
+      <div className="mt-3 border-t border-border pt-4">
+        <p className="mb-3 text-[12px] leading-5 text-muted-foreground">
+          Review dated PDF, CSV, TXT and transaction JSON evidence locally.
+          Only approved transaction rows update your salary-cycle ledger.
+        </p>
+        <LocalFinanceFiles documents={docs}
+          onAdd={document=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          }))}
+          onRemove={id=>setData(old=>({
+            ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
+          }))}
+          ledgerEntries={entries}
+          currency={data.currency}
+          currencyReviewRequired={data.currencyReviewRequired}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+        />
+      </div>
+    </details>
+    <HomeFinancialEvidence documents={docs} entries={entries}
+      settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+      accounts={data.accounts??[]} budget={data.privateBudget??emptyPrivateBudget}
+      currency={data.currency}/>
+    <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
+      currency={data.currency}
+      onCreate={account=>setData(old=>({...old,accounts:[
+        ...old.accounts,{...account,id:crypto.randomUUID()}
+      ]}))}/>
+    <HistoricalRecurringInsights documents={docs} entries={entries} currency={data.currency}/>
     <div className="lg:hidden">
       <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
         pendingDrafts={openDrafts} market={feed} fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
@@ -932,6 +977,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
         />
+        <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
+          currency={data.currency}
+          onCreate={account=>setData(old=>({...old,accounts:[
+            ...old.accounts,{...account,id:crypto.randomUUID()}
+          ]}))}/>
       </>}
       {section==='activity'&&<>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
@@ -1129,7 +1179,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
   const { data, setData } = vault;
   const pending = data.drafts.filter((draft) => draft.status === 'pending').length;
   return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><BackupControls vault={vault} /><Switch>
-    <Route path="/"><Overview data={data} /></Route>
+    <Route path="/"><Overview data={data} setData={setData} /></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
