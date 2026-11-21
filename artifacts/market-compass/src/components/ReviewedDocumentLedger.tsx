@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {isFinanceReferenceLabel} from '@/lib/vehicleFinance';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {
   EXPENSE_CATEGORIES,EXPENSE_KINDS,
@@ -106,7 +107,7 @@ export default function ReviewedDocumentLedger({
               disabled={already||unusable||!canApply} checked={already||row.checked}
               onChange={e=>change(index,{checked:e.target.checked})}/>
             <span className="min-w-0 break-words">
-              Line {index+1}: {line.label} · {showMoney(line.amount)}
+              Line {index+1}: {maskDocumentPII(line.label)} · {showMoney(line.amount)}
               <span className="block text-[11px] font-normal text-muted-foreground">
                 {already?(referenceOnly?'Previously posted — review: may be a loan reference, not a payment':'Already added to Spend'):referenceOnly?'Reference figure only — not a completed payment':unusable?'Amount unknown or zero':
                   'Source direction: '+(line.direction==='unclassified'?'unconfirmed':line.direction)}
