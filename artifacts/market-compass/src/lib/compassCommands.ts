@@ -20,6 +20,7 @@ export type CompassCommandContext = {
 };
 export type CompassCommandResult = {
   type: 'answer' | 'navigate' | 'unknown';
+  source?: 'local-owner-budget' | 'local-finance-documents';
   reply: string;
   needsHistoricalSources?: boolean;
   destination?: '/' | '/markets' | '/debt' | '/expenses' | '/drafts' | '/assistant';
@@ -52,7 +53,7 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
   if (path) return { type:'navigate', destination:path.to, reply:path.response };
 
   const documentedAnswer=answerFromOfflineFinanceDocs(raw,ctx.localFinanceDocuments);
-  if(documentedAnswer)return {type:'answer',reply:documentedAnswer};
+  if(documentedAnswer)return {type:'answer',source:'local-finance-documents',reply:documentedAnswer};
   const spentQuery=/\b(how much|what|total|summary|overview)\b/.test(q) &&
     /\b(spent|spending|expenses|salary cycle|monthly expenses|repayments)\b/.test(q);
   if (spentQuery && ctx.expenseSummary && ctx.expenseSummary.entryCount > 0 && !/\b(october|historical|2026-10)\b/.test(q)) {
@@ -66,7 +67,7 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
   // Local-first, deterministic financial analysis of the OWNER-REVIEWED
   // encrypted PWA budget. No request to HYPRBOX, cloud model or bank provider.
   const localBudgetAnswer=answerFromOfflineOwnerBudget(raw,ctx.ownerBudgetDraft);
-  if(localBudgetAnswer) return {type:'answer',reply:localBudgetAnswer};
+  if(localBudgetAnswer) return {type:'answer',source:'local-owner-budget',reply:localBudgetAnswer};
   if(spentQuery && ctx.expenseSummary && ctx.expenseSummary.entryCount===0) {
     return {type:'answer',needsHistoricalSources:true,reply:
       'No transactions were entered in this device’s current salary-cycle ledger. That does not mean zero spending or zero salary. Import your private owner budget file in Spend to view owner-reported planning figures, or connect an authorised statement source.'};
