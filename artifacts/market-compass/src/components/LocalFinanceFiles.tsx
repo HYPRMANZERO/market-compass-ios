@@ -79,7 +79,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     </div>
     <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
       Add a statement or payslip from iPhone Files. Review the extracted figures
-      before saving. Nothing is sent to the desktop AI or a provider.
+      before saving. The original file is not uploaded to GitHub, HYPRBOX or a provider.
     </p>
     <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
       <summary className="min-h-9 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
