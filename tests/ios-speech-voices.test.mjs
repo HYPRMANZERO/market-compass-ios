@@ -14,9 +14,9 @@ const v=[
 test('iOS advertised English system voices are discoverable, not invented',()=>{
  const english=sortedEnglishVoices(v);
  assert.equal(english.length,4);
- assert.equal(english[0].name,'Enhanced English');
+ assert.equal(english[0].name,'Premium Siri-like');
  assert.ok(chooseSpeechVoice(v,'voice:Generic').name==='Generic');
- assert.equal(chooseSpeechVoice(v,'voice:missing').name,'Enhanced English');
+ assert.equal(chooseSpeechVoice(v,'voice:missing').name,'Premium Siri-like');
 });
 test('explicit iPhone default allows the device to pick an unrestricted voice',()=>{
  assert.equal(chooseSpeechVoice(v,DEVICE_DEFAULT_VOICE),null);
