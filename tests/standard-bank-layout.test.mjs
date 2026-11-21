@@ -70,3 +70,29 @@ test('ambiguous monetary column is rejected instead of becoming a fake transacti
  assert.ok(lines);
  assert.equal(lines.some(x=>x.includes('TRAVELLING')),false);
 });
+
+test('Standard Bank keeps split posting dates and wide right-aligned payments',()=>{
+  const items=[
+    part('Date',30,700,22),part('Description',105,700,60),
+    part('Payments',350,700,43),part('Deposits',440,700,40),
+    part('Balance',530,700,34),
+    part('STATEMENT OPENING BALANCE',105,680,170),
+    part('22,500.00',510,680,54),
+    part('27',30,660,11),part('Mar',47,660,19),part('26',74,660,11),
+    part('CARD PURCHASE 26 MAR',105,660,140),
+    part('-12,345.67',331,660,62),part('10,154.33',510,660,54),
+    part('CARD PAYMENT',105,650,80),
+    part('28 Mar 26',30,630,52),part('TRANSFER RECEIVED',105,630,112),
+    part('750.00',446,630,34),part('10,904.33',510,630,54)
+  ];
+  const extracted=layoutStandardBankPdfLines(items);
+  assert.ok(extracted);
+  const {lines}=parseBankStatementText(extracted.join('\n'));
+  assert.deepEqual(lines.map(({date,amount,runningBalance,semanticRole})=>
+    [date,amount,runningBalance,semanticRole]),[
+    [null,22500,undefined,'balance-reference'],
+    ['2026-03-27',-12345.67,10154.33,'transaction'],
+    ['2026-03-28',750,10904.33,'transaction']
+  ]);
+  assert.equal(lines[1].label,'CARD PURCHASE 26 MAR CARD PAYMENT');
+});
