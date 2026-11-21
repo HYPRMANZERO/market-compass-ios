@@ -33,6 +33,20 @@ test('accepts a dated, read-only owner reported budget and does not infer availa
   assert.equal(result.recurring[0].label,'Synthetic rent');
   assert.equal(result.historicalCycles[0].entries[0].label,'Synthetic rent');
 });
+test('owner-confirmed outstanding card principal parses as unverified rather than a live lender balance',()=>{
+  const parsed=parseOwnerBudgetView({...sample,
+    creditCardFigureStatus:'owner_reported_outstanding_balance',
+    creditCardFigure:7700.50
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.creditCardFigureStatus,'owner_reported_outstanding_balance');
+  assert.equal(parsed.creditCardFigure,7700.50);
+  assert.equal(parsed.bankVerified,false);
+  assert.equal(parsed.currentBalance,null);
+  assert.equal(parsed.spendableCash,null);
+  assert.equal(parsed.recurringExpenseMin,2400);
+});
+
 test('rejects forged live verification and returned vault data',()=>{
   for(const changed of [
     {bankVerified:true},{employerVerified:true},{spendableCash:9999},
