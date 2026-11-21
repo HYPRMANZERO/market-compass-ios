@@ -7,6 +7,43 @@
  * from browser-managed memory; we drop references after each attempt instead.
  */
 export const MAX_LOCAL_PDF_BYTES = 2_000_000;
+/** Rebuild selectable text lines without saving PDF coordinates or raw bytes. */
+export function layoutSelectablePdfLines(items:ReadonlyArray<unknown>):string[]{
+  const fragments:{text:string;x:number;y:number;order:number;end:boolean}[]=[];
+  for(let i=0;i<items.length;i++){
+    const item=items[i];
+    if(!item||typeof item!=='object'||!('str' in item)||
+       typeof item.str!=='string')continue;
+    const content=item.str.replace(/[\r\n\t]+/g,' ').trim();
+    if(!content)continue;
+    const matrix='transform' in item?item.transform:null;
+    const valid=Array.isArray(matrix)&&matrix.length>=6&&
+      Number.isFinite(matrix[4])&&Number.isFinite(matrix[5]);
+    fragments.push({text:content,x:valid?Number(matrix[4]):NaN,
+      y:valid?Number(matrix[5]):NaN,order:i,
+      end:'hasEOL' in item&&item.hasEOL===true});
+  }
+  if(fragments.length===0)return [];
+  if(fragments.every(x=>Number.isFinite(x.x)&&Number.isFinite(x.y))){
+    const rows:{y:number;parts:typeof fragments}[]=[];
+    // Coordinates are in PDF points. +/-2.5 accommodates glyph baselines.
+    for(const frag of fragments){
+      const row=rows.find(r=>Math.abs(r.y-frag.y)<=2.5);
+      if(row)row.parts.push(frag);
+      else rows.push({y:frag.y,parts:[frag]});
+    }
+    rows.sort((a,b)=>b.y-a.y);
+    return rows.map(row=>row.parts.sort((a,b)=>a.x-b.x).map(p=>p.text).join(' '))
+      .map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+  }
+  const out:string[]=[];let current='';
+  for(const frag of fragments){
+    current+=(current?' ':'')+frag.text;
+    if(frag.end){out.push(current);current='';}
+  }
+  if(current)out.push(current);
+  return out;
+}
 export const MAX_LOCAL_PDF_PAGES = 12;
 export const MAX_LOCAL_PDF_TEXT_CHARS = 200_000;
 
@@ -43,23 +80,15 @@ export async function extractLocalPdfText(file: File, temporaryPassword = ''): P
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      let current = '';
-      for (const item of content.items) {
-        if (!('str' in item) || typeof item.str !== 'string') continue;
-        const fragment = item.str.replace(/[\r\n\t]+/g, ' ').trim();
-        if (fragment) current += (current ? ' ' : '') + fragment;
-        if ('hasEOL' in item && item.hasEOL && current) {
-          lines.push(current);
-          length += current.length + 1;
-          current = '';
-        }
-        if (length + current.length > MAX_LOCAL_PDF_TEXT_CHARS) {
+      // PDF text order is not always reading order. Reconstruct line positions
+      // from transform x/y so "R 3 543,36" stays beside its source label.
+      // Keep explicit EOL fallback for PDFs without usable coordinates.
+      const pageLines=layoutSelectablePdfLines(content.items);
+      for(const line of pageLines){
+        length+=line.length+1;
+        if(length>MAX_LOCAL_PDF_TEXT_CHARS)
           throw Error('PDF contains too much extractable text. Select fewer pages.');
-        }
-      }
-      if (current) {
-        lines.push(current);
-        length += current.length + 1;
+        lines.push(line);
       }
       page.cleanup();
       if (length > MAX_LOCAL_PDF_TEXT_CHARS) {
