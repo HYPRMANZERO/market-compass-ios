@@ -73,6 +73,9 @@ export default function OwnerBudgetPanel({view,connected,available}:Props){
           </div>)}
         </div>
       </details>}
+      {view.creditCardFigureStatus==='owner_reported_outstanding_balance' && view.creditCardFigure!==null && <p className="text-[11px]">
+        Credit-card outstanding debt reported by owner: {rand(view.creditCardFigure)} · not lender-verified; not spendable cash.
+      </p>}
       {view.creditCardFigureStatus==='unknown_balance_or_limit' && view.creditCardFigure!==null && <p className="text-[11px]">
         Reported credit-card figure: {rand(view.creditCardFigure)} · not yet established whether balance or credit limit.
       </p>}
