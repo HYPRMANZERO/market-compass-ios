@@ -116,8 +116,8 @@ function parseCsv(text:string):LocalFinanceLine[]{
   const labelIdx=find(['description','details','transaction description','narrative','reference','item','particulars','name','pay item']);
   const dateIdx=find(['date','transaction date','posting date','value date','pay date','period']);
   const amountIdx=find(['amount','transaction amount','value','total','net amount','net pay','gross pay']);
-  const debitIdx=find(['debit','debits','withdrawal','money out','paid out']);
-  const creditIdx=find(['credit','credits','deposit','money in','paid in']);
+  const debitIdx=find(['debit','debits','withdrawal','withdrawals','payment','payments','money out','paid out']);
+  const creditIdx=find(['credit','credits','deposit','deposits','money in','paid in']);
   if(labelIdx<0 || (amountIdx<0&&(debitIdx<0&&creditIdx<0)))
     throw Error('Unsupported CSV columns. Export a table with Description and Amount (or Debit/Credit), optionally Date.');
   const out:LocalFinanceLine[]=[];
@@ -125,13 +125,12 @@ function parseCsv(text:string):LocalFinanceLine[]{
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const description=maskText(row[labelIdx],130);
     if(!description)continue;
-    let direction:LocalFinanceLine['direction']='unclassified';
-    let amount=amountIdx>=0?moneyOf(row[amountIdx]):null;
-    if(amount===null&&creditIdx>=0){const credit=moneyOf(row[creditIdx]);if(credit!==null&&credit!==0){amount=Math.abs(credit);direction='incoming';}}
-    if(amount===null&&debitIdx>=0){const debit=moneyOf(row[debitIdx]);if(debit!==null&&debit!==0){amount=Math.abs(debit);direction='outgoing';}}
+    const credit=moneyOf(row[creditIdx])||0;
+    const debit=moneyOf(row[debitIdx])||0;
+    if(credit&&debit)continue;
+    const direction=credit?'incoming':debit?'outgoing':'unclassified';
+    const amount=credit?Math.abs(credit):debit?-Math.abs(debit):moneyOf(row[amountIdx]);
     if(amount===null)continue;
-    // Signed values are not always direction-labelled by banks. Do not guess
-    // when a generic Amount field has an unknown sign convention.
     out.push({label:description,amount,date:dateIdx>=0?dateOf(row[dateIdx]):null,direction});
   }
   return out;
