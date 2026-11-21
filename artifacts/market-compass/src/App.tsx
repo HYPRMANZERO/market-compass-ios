@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import { summarizeOwnerBudgetDraft, type OwnerBudgetDraft } from '@/lib/ownerBudgetDraft';
+import { enqueueOfflineQuestion, removeOfflineQuestion, type QueuedReadOnlyQuestion } from '@/lib/offlineAgentQueue';
 import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
@@ -38,11 +39,11 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 // The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
 // All new installations start in ZAR; the user can change country and currency explicitly.
 const initialRegion = 'ZA';
-const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -898,7 +899,21 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
   };
   return <>
     <VoiceAssistant context={context} onNavigate={navigate} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
-      onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))} />
+      onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))}
+      queuedReadOnlyQuestions={Array.isArray(data.offlineAgentQuestions)?data.offlineAgentQuestions:[]}
+      onQueueReadOnlyQuestion={question=>{
+        const created=enqueueOfflineQuestion(data.offlineAgentQuestions??[],question);
+        setData(old=>({
+          ...old,
+          offlineAgentQuestions:(old.offlineAgentQuestions??[]).some(x=>x.id===created.created.id)
+            ?old.offlineAgentQuestions
+            :[...(old.offlineAgentQuestions??[]),created.created]
+        }));
+        return created.created;
+      }}
+      onRemoveQueuedReadOnlyQuestion={id=>setData(old=>({
+        ...old,offlineAgentQuestions:removeOfflineQuestion(old.offlineAgentQuestions??[],id)
+      }))} />
     {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
       <summary className="cursor-pointer text-[12px] font-semibold">Earlier saved instructions · {data.queue.length}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These records came from the original command interpreter and remain encrypted in your vault. They are not active instructions, payments or trades.</p>
