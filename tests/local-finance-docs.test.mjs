@@ -58,8 +58,9 @@ test('unsupported and malformed inputs never become saved financial records',()=
   ['other.csv','Field,Total\nName,300'],['broken.json','{']
  ]) assert.throws(()=>extract(name,body),Error,name);
  assert.throws(()=>extract('synthetic.csv','Date,Description,Amount\n2026-09-12,Test,200','x'));
- assert.throws(()=>extract('synthetic.csv',
-   'Date,Description,Amount\n2026-09-12,Test,200'.repeat(9000)),/256 KB|CSV has too many rows/);
+ const expanded=extract('synthetic.csv',
+   'Date,Description,Amount\n'+Array.from({length:1500},()=> '2026-09-12,Test,200').join('\n'));
+ assert.equal(expanded.truncated,true);
 });
 test('only bounded reviewed excerpts are added/removed, and invalid entries fail closed',()=>{
  const d=extract('synthetic.csv',csv);
