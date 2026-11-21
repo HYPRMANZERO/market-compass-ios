@@ -1,3 +1,4 @@
+import {registerHooks} from 'node:module';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -50,4 +51,46 @@ test('UI uses a transient input, not state or settings, for the PDF password',as
   assert.doesNotMatch(ui,/setPassword|password:\s*settings|localStorage\.setItem|fetch\(/i);
   assert.match(parser,/task\.destroy\(\)/);
   assert.doesNotMatch(parser,/localStorage|indexedDB|fetch\(/);
+});
+
+test('a PDF with an unreadable page fails without returning a partial statement',async()=>{
+  const loader=registerHooks({
+    resolve(specifier,context,nextResolve){
+      if(specifier==='pdfjs-dist/legacy/build/pdf.mjs'){
+        const mock=`
+          export const GlobalWorkerOptions={};
+          export function getDocument(){
+            return {
+              promise:Promise.resolve({
+                numPages:2,
+                async getPage(page){
+                  return {
+                    async getTextContent(){
+                      return {items:page===1?[{str:'Net pay R7,200.00'}]:[]};
+                    },
+                    cleanup(){}
+                  };
+                }
+              }),
+              async destroy(){}
+            };
+          }
+        `;
+        return {url:'data:text/javascript,'+encodeURIComponent(mock),shortCircuit:true};
+      }
+      if(specifier==='pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'){
+        return {url:'data:text/javascript,export default "mock-worker"',shortCircuit:true};
+      }
+      return nextResolve(specifier,context);
+    }
+  });
+  try{
+    const {extractLocalPdfText}=await import('../artifacts/market-compass/src/lib/localPdfText.ts');
+    await assert.rejects(
+      extractLocalPdfText(new File(['%PDF-1.7'],'synthetic.pdf')),
+      /no selectable text on page 2 of 2.*Nothing was saved/i
+    );
+  }finally{
+    loader.deregister();
+  }
 });
