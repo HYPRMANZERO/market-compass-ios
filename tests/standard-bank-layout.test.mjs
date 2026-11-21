@@ -49,12 +49,13 @@ test('Standard Bank deposit is not guessed as an outgoing transfer',()=>{
    now:new Date('2026-11-21T12:00:00Z'),
    id:'a5c64db2-80b1-4f4a-85e2-a64b49ac7e77'
  });
- assert.equal(document.accountProfile.name,'Standard Bank Bank account');
+ assert.equal(document.accountProfile.name,'Standard Bank account');
  assert.equal(document.accountProfile.category,'bank-statement');
  assert.equal(document.lines.length,5);
  assert.equal(document.lines[4].direction,'incoming');
  assert.equal(document.lines[4].amount,1000);
- assert.equal(document.lines[4].semanticRole,'balance-reference');
+ assert.equal(document.lines[0].semanticRole,'balance-reference');
+ assert.equal(document.lines[1].semanticRole,'balance-reference');
  assert.equal(document.accountProfile.facts.some(f=>f.field==='running-balance'&&f.amount===2550.73),true);
 });
 test('unknown/headerless layouts do not fabricate payment/deposit columns',()=>{
