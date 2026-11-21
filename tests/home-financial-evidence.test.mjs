@@ -21,7 +21,7 @@ test('financial evidence shows saved documents and approved salary-cycle entries
   assert.match(s,/cycleAnalysis\(safeEntries,cycle\.start/);
   assert.match(s,/Imported \{d\.importedAt/);
   assert.match(s,/line\.date\?\?'Undated'/);
-  assert.match(s,/not a live bank balance/i);
+  assert.match(s,/nothing here is a live bank balance/i);
   assert.match(s,/NOT a verified current debt balance/);
   assert.match(s,/Documents only affect the transaction totals after you approve/);
   assert.doesNotMatch(s,/fetch\(|sendBeacon\(|onApply\(|setData\(/);
