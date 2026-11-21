@@ -8,7 +8,7 @@ export type OwnerBudgetLine = {
 export type OwnerBudgetOverride = {month:string;label:string;amount:number};
 export type OwnerBudgetCycle = {
   date:string;reportedIncome:number;listedExpenseTotal:number;
-  listedDifference:number;complete:false;
+  listedDifference:number;complete:false;entries:OwnerBudgetLine[];
 };
 export type OwnerBudgetMonth = {
   month:string;listedExpenseMin:number;listedExpenseMax:number;
@@ -75,10 +75,19 @@ export function parseOwnerBudgetView(data:unknown):OwnerBudgetView|null {
   const historicalCycles:OwnerBudgetCycle[]=[];
   for(const x of data.historicalCycles){
     if(!isObject(x)||!date(x.date)||!money(x.reportedIncome)||
-       !money(x.listedExpenseTotal)||!money(x.listedDifference)||x.complete!==false)return null;
+       !money(x.listedExpenseTotal)||!money(x.listedDifference)||x.complete!==false||
+       !Array.isArray(x.entries)||x.entries.length>60)return null;
+    const entries:OwnerBudgetLine[]=[];
+    for(const entry of x.entries){
+      if(!isObject(entry)||!names(entry.label)||
+         !['expense','debt_payment','fee'].includes(String(entry.category))||
+         !money(entry.min)||!money(entry.max)||entry.min<0||entry.min!==entry.max)return null;
+      entries.push({label:entry.label,category:entry.category as OwnerBudgetLine['category'],min:entry.min,max:entry.max});
+    }
     historicalCycles.push({
       date:x.date,reportedIncome:x.reportedIncome,
-      listedExpenseTotal:x.listedExpenseTotal,listedDifference:x.listedDifference,complete:false
+      listedExpenseTotal:x.listedExpenseTotal,listedDifference:x.listedDifference,
+      complete:false,entries
     });
   }
   const scheduledMonths:OwnerBudgetMonth[]=[];
