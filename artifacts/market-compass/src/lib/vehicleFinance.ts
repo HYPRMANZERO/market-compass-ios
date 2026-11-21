@@ -64,7 +64,7 @@ const amountFrom=(text:string):number|null=>{
   return Number.isFinite(n)&&n>=0&&n<=10_000_000?Math.round(n*100)/100:null;
 };
 const percentFrom=(s:string):number|undefined=>{
-  const m=s.match(/(?:\b(?:rate|interest|apr)\b[^%]{0,50})?(\d{1,2}(?:[.,]\d{1,3})?)\s*%/i);
+  const m=s.match(/\b(\d{1,2}(?:[.,]\d{1,3})?)\s*%/i);
   if(!m)return undefined;
   const n=Number(m[1].replace(',','.'));
   return Number.isFinite(n)&&n>=0&&n<=100?n:undefined;
