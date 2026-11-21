@@ -430,6 +430,12 @@ function Overview({ data }: { data: WorkspaceData }) {
     <div className="lg:hidden">
       <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
         pendingDrafts={openDrafts} market={feed} fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
+      <Link href="/expenses"
+        aria-label="Go to Spend to import private financial files"
+        className="mb-4 mt-3 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3 text-[12px] font-semibold shadow-sm">
+        <span>{data.ownerBudgetDraft?'View or update my private finance imports':'Import private financial files from iPhone Files'}</span>
+        <ArrowRight size={17} className="shrink-0" />
+      </Link>
     </div>
     <div className="hidden lg:block">
     <PageIntro eyebrow="A clearer view, at your pace" title="Your compass" description="A quiet place to see what is known, what is estimated, and what still needs your attention." trailing={<div className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-[11px] text-muted-foreground"><span className="mono mr-2 text-foreground">TODAY</span>{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>} />

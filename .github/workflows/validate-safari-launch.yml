@@ -23,6 +23,7 @@ jobs:
       - run: node --experimental-strip-types --test tests/offline-owner-budget-analysis.test.mjs tests/local-finance-docs.test.mjs
       - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs tests/financial-source-health.test.mjs
       - run: node --test tests/iphone-mobile-shell.test.mjs
+      - run: node --test tests/iphone-finance-import-access.test.mjs
       - run: pnpm run typecheck:libs
       - run: pnpm --filter @workspace/market-compass run typecheck
       - name: Build static iPhone PWA
