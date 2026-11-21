@@ -62,9 +62,12 @@ export default function ReviewedDocumentLedger({
       setFeedback(decisions.length+' approved line(s) added to Spend. Open Monthly Expenses and select the relevant 26th–25th salary cycle. These are not confirmed bank balances; export an encrypted vault backup after auto-save.');
     }catch(e){setError(e instanceof Error?e.message:'Cannot apply these reviewed document lines.');}
   }
-  return <details className="mt-3 rounded-xl border border-border bg-muted/30 p-3">
-    <summary className="min-h-11 cursor-pointer text-[12px] font-semibold">
-      Review and add to Spend · {applied.size} of {document.lines.length} already added
+  return <details className="mt-3 rounded-2xl border border-primary/20 bg-primary/[.035] p-3 sm:p-4">
+    <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-2 text-[12px] font-semibold">
+      <span>Review and add to Spend</span>
+      <span className="rounded-full bg-background px-2.5 py-1 text-[10px] font-medium">
+        {applied.size}/{document.lines.length} posted
+      </span>
     </summary>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
       Saving a document stores excerpts, but does not create transaction entries.
@@ -78,7 +81,7 @@ export default function ReviewedDocumentLedger({
         Your currency needs review. This importer does not know whether the source
         document uses a currency other than ZAR. Verify currency before adding.
       </p>:null}
-    <div className="mt-3 space-y-3">
+    <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
         const unusable=line.amount===null||line.amount===0;
@@ -86,7 +89,7 @@ export default function ReviewedDocumentLedger({
           checked:false,date:line.date??'',kind:'' as const,category:'' as const
         };
         const options=row.kind?allowedDocumentCategories(row.kind):[];
-        return <div key={index} className="rounded-lg border border-border bg-background p-3">
+        return <div key={index} className={`rounded-xl border bg-background p-3 ${row.checked ? 'border-primary/40 shadow-sm' : 'border-border'}`}>
           <label className="flex items-start gap-2 text-[12px] font-semibold">
             <input type="checkbox" className="mt-1 h-4 w-4 shrink-0"
               disabled={already||unusable||!canApply} checked={already||row.checked}
