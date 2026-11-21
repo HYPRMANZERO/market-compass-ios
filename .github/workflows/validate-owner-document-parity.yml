@@ -1,0 +1,31 @@
+name: Validate owner PWA bank document parity
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  document-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - run: pnpm install --frozen-lockfile
+      - run: node --experimental-strip-types --test tests/bank-statement-rows.test.mjs tests/financial-source-normalization.test.mjs tests/document-intelligence.test.mjs tests/owner-bank-release-parity.test.mjs
+      - run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/financial-readiness.test.mjs tests/monthly-expenses.test.mjs
+      - run: pnpm run typecheck:libs
+      - run: pnpm --filter @workspace/market-compass run typecheck
+      - name: Verify original GitHub Pages build
+        env:
+          PORT: '5173'
+          BASE_PATH: '/market-compass-ios/'
+          NODE_ENV: production
+        run: pnpm --filter @workspace/market-compass run build
+      - run: node scripts/prepare-offline-shell.mjs
+      - run: test -f artifacts/market-compass/dist/public/sw.js && test -f artifacts/market-compass/dist/public/index.html
