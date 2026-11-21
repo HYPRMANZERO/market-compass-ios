@@ -33,6 +33,15 @@ test('accepts a dated, read-only owner reported budget and does not infer availa
   assert.equal(result.recurring[0].label,'Synthetic rent');
   assert.equal(result.historicalCycles[0].entries[0].label,'Synthetic rent');
 });
+test('protected UI accepts owner-reported outstanding card debt without verified cash claims',()=>{
+  const got=parseOwnerBudgetView({...sample,creditCardFigureStatus:'owner_reported_outstanding_balance',creditCardFigure:6600});
+  assert.ok(got);
+  assert.equal(got.creditCardFigure,6600);
+  assert.equal(got.bankVerified,false);
+  assert.equal(got.currentBalance,null);
+  assert.equal(got.spendableCash,null);
+});
+
 test('rejects forged live verification and returned vault data',()=>{
   for(const changed of [
     {bankVerified:true},{employerVerified:true},{spendableCash:9999},
