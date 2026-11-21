@@ -96,7 +96,10 @@ export default function ReviewedDocumentLedger({
         const referenceOnly=line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
           line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||
           (document.documentKind&&document.documentKind!=='unclassified'&&line.semanticRole!=='transaction');
-        const unusable=line.amount===null||line.amount===0||Boolean(referenceOnly);
+        const oldBankRow=document.format==='pdf'&&
+          document.accountProfile?.category==='bank-statement'&&
+          (line.semanticRole!=='transaction'||line.date===null);
+        const unusable=line.amount===null||line.amount===0||Boolean(referenceOnly)||oldBankRow;
         const row=draft[index]??{
           checked:false,date:line.date??'',kind:'' as const,category:'' as const
         };
