@@ -5,6 +5,7 @@ const root=new URL('../artifacts/market-compass/src/',import.meta.url);
 const app=await readFile(new URL('App.tsx',root),'utf8');
 const owner=await readFile(new URL('components/OwnerBudgetDraftEditor.tsx',root),'utf8');
 const statements=await readFile(new URL('components/LocalFinanceFiles.tsx',root),'utf8');
+const assistant=await readFile(new URL('components/VoiceAssistant.tsx',root),'utf8');
 
 test('original PWA Home and Spend expose straightforward iPhone file access',()=>{
   assert.match(app,/<Link href="\/expenses"[\s\S]*?Import private financial files from iPhone Files/);
@@ -34,4 +35,12 @@ test('financial statement picker needs no label before choosing, with explicit r
   assert.match(statements,/onAdd\(preview\)/);
   assert.match(statements,/No files are uploaded to GitHub/);
   assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
+});
+
+test('local finance and owner budget replies remain local even with Agent mode enabled',()=>{
+  assert.match(assistant,/result\.source === 'local-finance-documents'/);
+  assert.match(assistant,/result\.source === 'local-owner-budget'/);
+  const check=assistant.indexOf("result.source === 'local-finance-documents'");
+  const send=assistant.indexOf('void askDesktop(question, id);');
+  assert.ok(check>0&&send>check,'Local replies must be handled before remote inference');
 });
