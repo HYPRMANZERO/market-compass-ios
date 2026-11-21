@@ -1,4 +1,5 @@
-import {useState} from 'react';
+import {useRef,useState} from 'react';
+import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
   MAX_FINANCE_FILE_BYTES,MAX_FINANCE_FILES,type LocalFinanceDocument
@@ -14,31 +15,43 @@ type Props={
 };
 
 /**
- * No API fetch or File upload: File.text() stays in browser memory.
+ * No API fetch or File upload: parsing stays on the device.
  * Only owner-approved, bounded excerpts enter the existing encrypted vault.
  */
 export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
   const [label,setLabel]=useState('');
+  const passwordInput=useRef<HTMLInputElement>(null);
+  const [reading,setReading]=useState(false);
   const [preview,setPreview]=useState<LocalFinanceDocument|null>(null);
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
   const safe=documents.map(validateLocalFinanceDocument)
     .filter((x):x is LocalFinanceDocument=>x!==null);
-  async function selected(file:File|undefined){
+  async function selected(file:File|undefined,oneTimePassword:string){
     setPreview(null);setFeedback('');setError('');
-    if(!file)return;
-    if(file.size>MAX_FINANCE_FILE_BYTES){
-      setError('This file is larger than 256 KB; export a smaller CSV, TXT or JSON statement. No file was saved.');
+    if(!file||reading)return;
+    const pdf=/\\.pdf$/i.test(file.name);
+    const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
+    if(!file.size||file.size>limit){
+      setError(pdf?'Choose a PDF smaller than 2 MB. Nothing was saved.':
+        'Choose a CSV, TXT or JSON file smaller than 256 KB. Nothing was saved.');
       return;
     }
+    setReading(true);
+    // The password is passed only to the local PDF reader. It never enters
+    // React state, IndexedDB, settings, requests, logs or saved document data.
+    let temporaryPassword=oneTimePassword;
     try{
-      const data=await file.text();
+      const data=pdf?await extractLocalPdfText(file,temporaryPassword):await file.text();
       const privateLabel=label.trim() || 'iPhone financial export';
       const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
       setPreview(draft);
-      setFeedback('Local review ready. Only the extracted excerpts below will be saved if you approve. The original file has not been uploaded.');
+      setFeedback('Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
     }catch(e){
-      setError(e instanceof Error?e.message:'Could not parse this financial file.');
+      setError(e instanceof Error?e.message:'Could not read this financial file privately.');
+    }finally{
+      temporaryPassword='';
+      setReading(false);
     }
   }
   function save(){
@@ -54,17 +67,16 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
       Import financial statement exports · {safe.length} saved
     </h2>
     <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-      Select CSV, TXT or transaction JSON files from iPhone Files. Market Compass
-      extracts up to 60 labelled financial lines from each selected file, lets you
-      review them, and stores only approved excerpts in this device’s encrypted
-      workspace. No files are uploaded to GitHub, HYPRBOX or another service.
+      Select CSV, TXT, transaction JSON or text-based PDF documents from iPhone Files.
+      Market Compass extracts up to 60 labelled financial lines, lets you review
+      them, and stores only approved excerpts in this device’s encrypted workspace.
+      The original document is not uploaded to GitHub, HYPRBOX or another service.
     </p>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      Supported: CSV transaction tables, plain text, or transaction JSON.
-      A CSV file exported from your bank may work; PDF payslips, scans,
-      photographs, XLSX and DOCX are not parsed yet. Selecting an unsupported
-      file produces an on-screen error without uploading it. Do not use an
-      online converter for private financial documents.
+      PDF limit: 2 MB and 12 pages of selectable text. CSV, TXT and JSON limit:
+      256 KB. Scanned PDFs, photographs, DOCX and XLSX need a separate local
+      extractor and are not read here. Do not use online converters for private
+      financial documents.
     </p>
     <label className="mt-3 block text-[12px] font-semibold">
       Optional file label · e.g. October bank export
@@ -74,20 +86,37 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
         className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
     </label>
     <label className="mt-3 block text-[12px] font-semibold">
-      Choose a file from iPhone Files (max 256 KB)
+      Temporary PDF password (only if required)
+      <input ref={passwordInput} type="password" autoComplete="off" spellCheck={false}
+        aria-label="Temporary PDF password, never stored"
+        placeholder="Enter password before selecting a protected PDF"
+        className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
+    </label>
+    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+      The password field is cleared as soon as you choose a file. The password
+      is used only during local PDF decryption; it is not saved in your vault
+      or sent to Ollama. Browser memory cannot be guaranteed to erase instantly.
+      If a PDF reports an incorrect password, re-enter it and select the PDF again.
+    </p>
+    <label className="mt-3 block text-[12px] font-semibold">
+      Choose a document from iPhone Files
       <input type="file"
-        aria-label="Choose private CSV TXT or transaction JSON file from iPhone Files"
-        disabled={safe.length>=MAX_FINANCE_FILES}
+        aria-label="Choose private CSV TXT JSON or PDF document from iPhone Files"
+        disabled={safe.length>=MAX_FINANCE_FILES||reading}
         onChange={event=>{
           const selectedFile=event.currentTarget.files?.[0];
           event.currentTarget.value='';
-          void selected(selectedFile);
+          const oneTimePassword=passwordInput.current?.value??'';
+          if(passwordInput.current)passwordInput.current.value='';
+          void selected(selectedFile,oneTimePassword);
         }}
         className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px] disabled:opacity-40"/>
+      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading locally…</span>}
     </label>
     <p className="mt-2 text-[11px] text-muted-foreground">
-      You can choose a file without entering a label first. The app reviews
-      extracted information locally; you must approve it before saving.
+      You can choose a file without entering a label or password. Only
+      protected PDFs require the temporary password. Always review the extracted
+      dates, amounts and transaction direction before saving.
     </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[12px] font-semibold">
