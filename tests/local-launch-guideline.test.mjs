@@ -31,6 +31,9 @@ test('complete but unverified figures yield a cautious 30/60/90-day guideline',(
  assert.match(plan.reviewBrief,/NOT spendable bank funds/);
  assert.match(plan.reviewBrief,/not independently verified/i);
  assert.ok(plan.reviewBrief.length<=2400);
+ assert.ok(plan.agentBrief.length<=500);
+ assert.match(plan.agentBrief,/Read-only 30\/60\/90-day finance guideline/);
+ assert.doesNotMatch(plan.agentBrief,/SECRET_LENDER|PRIVATE_DOC_LABEL|PRIVATE_TRANSACTION_LABEL/);
  assert.doesNotMatch(plan.reviewBrief,/SECRET_LENDER|PRIVATE_DOC_LABEL|PRIVATE_TRANSACTION_LABEL/);
 });
 
@@ -58,7 +61,7 @@ test('uncertain currency and incomplete debt prevent a ZAR payoff illustration',
 test('optional HYPRBOX brief requires explicit copy, no automatic transmission',async()=>{
  const ui=await readFile(new URL('../artifacts/market-compass/src/components/FinancialReadinessChecklist.tsx',import.meta.url),'utf8');
  assert.match(ui,/window\.confirm\(/);
- assert.match(ui,/navigator\.clipboard\.writeText\(plan\.reviewBrief\)/);
+ assert.match(ui,/navigator\.clipboard\.writeText\(plan\.agentBrief\)/);
  assert.match(ui,/nothing has been sent automatically/i);
  assert.doesNotMatch(ui,/(?:fetch\(|XMLHttpRequest|localStorage\.setItem|navigator\.sendBeacon)/i);
 });
