@@ -44,8 +44,8 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
     /\bpayslip\b|\bpay slip\b|\bpay advice\b/i,
     /\bnet pay\b|\bgross pay\b|\bPAYE\b/i]},
   {category:'bank-statement',matches:[
-    /\bbank statement\b|\bstatement of account\b/i,
-    /\btransaction date\b|\bopening balance\b|\bclosing balance\b/i]},
+    /\bbank statement\b|\bstatement of account\b|\b3.month statement\b|\bthree.month statement\b/i,
+    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bavailable balance\b|\bpayments\s+deposits\s+balance\b|\bSTDBANK\b/i]},
   {category:'investment-statement',matches:[
     /\binvestment statement\b|\bportfolio statement\b/i,
     /\bunits held\b|\bholdings statement\b|\bmarket value\b/i]},
@@ -144,7 +144,9 @@ export function makeAccountProfile(
   }
   // A dated running balance is observation of that statement row, not a
   // current bank feed or a second transaction. Keep only the latest dated row.
-  const observed=excerpts.filter(e=>
+  // Reverse order before stable sorting, so the last occurrence on the
+  // latest date wins rather than the first entry from that same day.
+  const observed=[...excerpts].reverse().filter(e=>
     typeof e.runningBalance==='number'&&Number.isFinite(e.runningBalance)&&
     typeof e.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(e.date))
     .sort((a,b)=>(b.date??'').localeCompare(a.date??''));
