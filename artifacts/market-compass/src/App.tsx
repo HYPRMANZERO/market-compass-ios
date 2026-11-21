@@ -218,6 +218,9 @@ function useWorkspaceVault() {
 }
 
 function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
+  const isStandalone=typeof window!=='undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & {standalone?:boolean}).standalone===true);
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<void>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
@@ -230,6 +233,13 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
       <div className="rounded-[26px] bg-[hsl(44,33%,99%)] p-5 text-foreground shadow-[0_20px_60px_rgba(0,0,0,.12)] sm:p-7">
         <div className="mb-4 flex items-center gap-2"><ShieldCheck className="text-primary" size={23}/><h2 className="text-[21px] font-bold">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
         <p className="text-[13px] leading-6 text-muted-foreground">Debt plans, saved markets and notes are stored encrypted on this device. No bank sign-in is required.</p>
+        <p role="note" className="mt-3 rounded-xl border border-border bg-muted/30 p-3 text-[11px] leading-5 text-muted-foreground">
+          Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>.
+          The browser tab, installed Home Screen app and different HTTPS addresses can have
+          separate encrypted vaults. If the password works in one but not here,
+          reopen the original session where your documents were saved.
+          Do not clear website data or overwrite either vault.
+        </p>
         {!vault.hasVault && <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
           Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
         </p>}
