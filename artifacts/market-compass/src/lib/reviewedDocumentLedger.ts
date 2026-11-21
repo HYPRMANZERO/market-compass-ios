@@ -6,7 +6,7 @@
  * execution, or HYPRBOX transmission. Document lines are incomplete evidence.
  * Entry IDs are stable for retries and edits, preventing accidental reimport.
  */
-import {validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
+import {validateLocalFinanceDocument,type LocalFinanceDocument,type LocalFinanceLine} from './localFinanceDocs.ts';
 import {isFinanceReferenceLabel} from './vehicleFinance.ts';
 import {maskDocumentPII} from './documentIntelligence.ts';
 import {
@@ -32,6 +32,34 @@ const validCategories:Record<ExpenseKind,ExpenseCategory[]>={
 };
 export function allowedDocumentCategories(kind:ExpenseKind):ExpenseCategory[]{
   return validCategories[kind]??[];
+}
+export function documentRowBlockReason(doc:LocalFinanceDocument,line:LocalFinanceLine):string|null{
+  const legacyBalance=/^(?:transaction details\s+)?(?:available|opening|closing|current|running|statement) balance\b/i;
+  if(line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
+     line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||legacyBalance.test(line.label))
+    return 'Reference figure only. It is not proof of a transaction.';
+  if(doc.documentKind&&doc.documentKind!=='unclassified'&&line.semanticRole!=='transaction')
+    return 'This document line does not confirm a completed transaction.';
+  if(doc.format==='pdf'&&doc.accountProfile?.category==='bank-statement'&&
+     (line.semanticRole!=='transaction'||line.date===null))
+    return 'Re-import the original PDF to recover the transaction date and columns.';
+  return null;
+}
+
+/** Source direction and ledger treatment are separate. Transfers and reversals
+ * need their own evidence before they can affect income or expense totals. */
+export function suggestDocumentClassification(line:LocalFinanceLine):
+  Pick<ReviewedLedgerDecision,'kind'|'category'>|null{
+  if(line.direction==='unclassified')return null;
+  const description=line.label.toLowerCase();
+  if(/\b(?:own account|between my accounts|internal transfer)\b/.test(description))
+    return {kind:'transfer',category:'other'};
+  if(/\b(?:refund|reversal|reversed|chargeback|transfer|payment from|payshap|eft)\b/.test(description)&&
+     !/\b(?:fee|fees|salary|payroll|wages)\b/.test(description))return null;
+  if(line.direction==='incoming'){
+    return {kind:'income',category:/\b(?:salary|payroll|wages)\b/.test(description)?'salary':'side-income'};
+  }
+  return {kind:'expense',category:/\b(?:fee|fees|service charge)\b/.test(description)?'fees':'other'};
 }
 export function documentAppliedIndices(doc:LocalFinanceDocument,existing:ExpenseEntry[]):Set<number>{
   const ids=new Set(existing.map(e=>e.id));
@@ -62,14 +90,8 @@ export function applyReviewedDocumentToLedger(
       throw Error('Invalid or repeated document row. No entries were added.');
     chosen.add(choice.lineIndex);
     const line=doc.lines[choice.lineIndex];
-    if(line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
-       line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label))
-      throw Error('A finance quote, instalment schedule, interest rate or reference balance is not proof of a payment. Record only an actual dated transaction.');
-    if(doc.documentKind&&doc.documentKind!=='unclassified'&&line.semanticRole!=='transaction')
-      throw Error('This finance contract row is not an explicit completed payment. Do not post it to Spend.');
-    if(doc.format==='pdf'&&doc.accountProfile?.category==='bank-statement'&&
-       (line.semanticRole!=='transaction'||line.date===null))
-      throw Error('This older bank-statement excerpt lacks a verified parsed transaction date or amount. Re-import the original PDF with the updated statement parser before posting.');
+    const blocked=documentRowBlockReason(doc,line);
+    if(blocked)throw Error(blocked);
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
     if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||
