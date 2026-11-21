@@ -144,7 +144,9 @@ export function makeAccountProfile(
   }
   // A dated running balance is observation of that statement row, not a
   // current bank feed or a second transaction. Keep only the latest dated row.
-  const observed=excerpts.filter(e=>
+  // Reverse order before stable sorting, so the last occurrence on the
+  // latest date wins rather than the first entry from that same day.
+  const observed=[...excerpts].reverse().filter(e=>
     typeof e.runningBalance==='number'&&Number.isFinite(e.runningBalance)&&
     typeof e.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(e.date))
     .sort((a,b)=>(b.date??'').localeCompare(a.date??''));
