@@ -69,23 +69,28 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       setFeedback('Reviewed document excerpts added to the unlocked workspace. Wait for Last saved in Vault & Settings, then export a new encrypted backup into iPhone Files.');
     }catch(e){setError(e instanceof Error?e.message:'Document could not be saved.');}
   }
-  return <section id="mc-financial-files" className="mb-5 scroll-mt-28 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Import selected financial files privately">
-    <h2 className="text-[15px] font-bold">
-      Import financial statement exports · {safe.length} saved
-    </h2>
+  return <section id="mc-financial-files" className="mb-5 scroll-mt-28 rounded-[24px] border border-border bg-card p-4 shadow-sm sm:p-6" aria-label="Import selected financial files privately">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-muted-foreground">Financial documents</p>
+        <h2 className="mt-1 text-[17px] font-bold tracking-tight">Import & review</h2>
+      </div>
+      <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold">{safe.length} of {MAX_FINANCE_FILES} saved</span>
+    </div>
     <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-      Select CSV, TXT, transaction JSON or text-based PDF documents from iPhone Files.
-      Market Compass extracts up to 60 labelled financial lines, lets you review
-      them, and stores only approved excerpts in this device’s encrypted workspace.
-      The original document is not uploaded to GitHub, HYPRBOX or another service.
-      To update Spend totals, open a saved document below and explicitly approve its classified entries.
+      Add a statement or payslip from iPhone Files. Review the extracted figures
+      before saving. Nothing is sent to the desktop AI or a provider.
     </p>
-    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      PDF limit: 2 MB and 12 pages of selectable text. CSV, TXT and JSON limit:
-      256 KB. Scanned PDFs, photographs, DOCX and XLSX need a separate local
-      extractor and are not read here. Do not use online converters for private
-      financial documents.
-    </p>
+    <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
+      <summary className="min-h-9 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
+      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+        CSV, TXT, transaction JSON and text-based PDF. PDF limit: 2 MB, 12 pages;
+        other files: 256 KB. Only up to 60 recognised lines are stored.
+        Scanned PDFs, photographs, Word and Excel need a separate local extractor.
+        The original file stays on your phone. Do not use online converters for
+        private financial documents.
+      </p>
+    </details>
     <label className="mt-3 block text-[12px] font-semibold">
       Optional file label · e.g. October bank export
       <input type="text" autoComplete="off" maxLength={70} value={label}
@@ -93,20 +98,22 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         placeholder="Optional · defaults to iPhone financial export"
         className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
     </label>
-    <label className="mt-3 block text-[12px] font-semibold">
-      Temporary PDF password (only if required)
-      <input ref={passwordInput} type="password" autoComplete="off" spellCheck={false}
-        aria-label="Temporary PDF password, never stored"
-        placeholder="Enter password before selecting a protected PDF"
-        className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
-    </label>
-    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      The password field is cleared as soon as you choose a file. The password
-      is used only during local PDF decryption; it is not saved in your vault
-      or sent to Ollama. Browser memory cannot be guaranteed to erase instantly.
-      If a PDF reports an incorrect password, re-enter it and select the PDF again.
-    </p>
-    <label className="mt-3 block text-[12px] font-semibold">
+    <details className="mt-3 rounded-xl border border-border bg-background px-3 py-2">
+      <summary className="min-h-9 cursor-pointer text-[12px] font-semibold">Password-protected PDF? Open one-time password</summary>
+      <label className="mt-2 block text-[12px] font-semibold">
+        Temporary PDF password (only if required)
+        <input ref={passwordInput} type="password" autoComplete="off" spellCheck={false}
+          aria-label="Temporary PDF password, never stored"
+          placeholder="Enter the PDF password before selecting the file"
+          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
+      </label>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        The field is cleared when you select a file. Used only during local
+        decryption: never saved to the vault or sent to Ollama. Browser memory
+        cannot be guaranteed to erase instantly.
+      </p>
+    </details>
+    <label className="mt-4 block text-[12px] font-semibold">
       Choose a document from iPhone Files
       <input type="file"
         aria-label="Choose private CSV TXT JSON or PDF document from iPhone Files"
@@ -121,10 +128,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px] disabled:opacity-40"/>
       {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading locally…</span>}
     </label>
-    <p className="mt-2 text-[11px] text-muted-foreground">
-      You can choose a file without entering a label or password. Only
-      protected PDFs require the temporary password. Always review the extracted
-      dates, amounts and transaction direction before saving.
+    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+      Next: inspect dates and amounts, then tap Save reviewed excerpts. To
+      update Spend, also approve the individual rows in the saved document.
     </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[12px] font-semibold">
@@ -160,8 +166,11 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     </section>}
     {error&&<p role="alert" className="mt-2 text-[12px] text-destructive">{error}</p>}
     {feedback&&<p role="status" className="mt-2 text-[12px] text-muted-foreground">{feedback}</p>}
-    {safe.length>0&&<section className="mt-4 space-y-3">
-      <h3 className="text-[12px] font-bold">Encrypted local document excerpts</h3>
+    {safe.length>0&&<section className="mt-5 space-y-3 border-t border-border pt-5">
+      <div>
+        <h3 className="text-[14px] font-bold">Saved documents</h3>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Open a document to review its extracted information and add approved rows to your Spend ledger.</p>
+      </div>
       {safe.map(document=><details key={document.id} className="rounded-xl border border-border bg-background p-3">
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">
           {document.label} · {document.lines.length} lines
