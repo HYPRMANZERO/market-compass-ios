@@ -1,4 +1,6 @@
+import {useState} from 'react';
 import {ArrowRight,CheckCircle2, CircleAlert, CircleHelp, ShieldCheck} from 'lucide-react';
+import {buildLocalLaunchGuideline} from '@/lib/localLaunchGuideline';
 import {Link} from 'wouter';
 import {evaluateFinancialReadiness,type FinancialReadinessInputs,type ReadinessStatus}
   from '@/lib/financialReadiness';
@@ -13,6 +15,17 @@ const statusLabel:Record<ReadinessStatus,string>={
 /** Coverage-only: no financial amounts, documents, passwords or API calls. */
 export default function FinancialReadinessChecklist({data}:Props){
   const result=evaluateFinancialReadiness(data);
+  const plan=buildLocalLaunchGuideline(data);
+  const [copyState,setCopyState]=useState('');
+  async function copyApprovedBrief(){
+    if(!window.confirm('Copy this limited owner-reported planning brief? It includes entered financial totals but NO raw document text or password. You choose whether to paste it into private HYPRBOX Ollama.'))return;
+    try{
+      await navigator.clipboard.writeText(plan.reviewBrief);
+      setCopyState('Planning brief copied. Review it before pasting into the private Assistant. Nothing has been sent automatically.');
+    }catch{
+      setCopyState('Clipboard unavailable on this device. Select and copy the preview below manually.');
+    }
+  }
   return <section
     className="mb-5 scroll-mt-28 rounded-2xl border border-border bg-card p-4 shadow-sm"
     aria-label="What is missing for financial planning">
@@ -67,5 +80,40 @@ export default function FinancialReadinessChecklist({data}:Props){
         </p>
       </div>
     </div>
+    <details id="mc-launch-plan" className="mt-4 rounded-xl border border-border bg-background p-3">
+      <summary className="min-h-10 cursor-pointer text-[13px] font-semibold">
+        Your local 30 / 60 / 90-day planning guideline
+      </summary>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        Generated here from reviewed workspace entries without internet access,
+        model inference or bank verification. This is a starting guideline, not
+        advice to execute a payment or trade. Missing records never mean R0.
+      </p>
+      <p className="mt-2 text-[11px] font-medium">{plan.coverage}</p>
+      <div className="mt-3 space-y-3">
+        {plan.steps.map(step=><div key={step.period} className="rounded-lg bg-muted/50 p-3">
+          <h3 className="text-[12px] font-semibold">{step.period} · {step.title}</h3>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{step.detail}</p>
+        </div>)}
+      </div>
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+        To ask your HYPRBOX Ollama Agent to discuss alternatives, first review the
+        bounded planning brief below. You control any sharing: this app will not
+        automatically send financial details or raw iPhone documents to the desktop.
+        Paste the approved brief into the authenticated private Assistant with
+        Agent mode on; its tools remain read-only.
+      </p>
+      <label className="mt-2 block text-[11px] font-semibold">
+        Reviewable brief · no raw file text
+        <textarea readOnly value={plan.reviewBrief} rows={9}
+          aria-label="Private financial planning brief for optional Ollama review"
+          className="mt-2 w-full resize-y rounded-xl border border-input bg-muted/40 p-3 font-mono text-[11px] leading-5"/>
+      </label>
+      <button type="button" onClick={()=>{void copyApprovedBrief();}}
+        className="mt-3 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">
+        Copy approved summary for optional private Ollama review
+      </button>
+      {copyState&&<p role="status" className="mt-2 text-[11px] leading-5">{copyState}</p>}
+    </details>
   </section>;
 }
