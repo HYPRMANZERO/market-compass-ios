@@ -34,9 +34,12 @@ export default function ReviewedDocumentLedger({
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
   const change=(index:number,fields:Partial<ReviewRow>)=>{
     const line=document.lines[index];
-    setDraft(old=>({
-      ...old,[index]:{checked:false,date:line.date??'',kind:'',category:'',...old[index],...fields}
-    }));
+    setDraft(old=>{
+      const previous:ReviewRow=old[index]??{
+        checked:false,date:line.date??'',kind:'',category:''
+      };
+      return {...old,[index]:{...previous,...fields}};
+    });
     setError('');setFeedback('');
   };
   function submit(){
