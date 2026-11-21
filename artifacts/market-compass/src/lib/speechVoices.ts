@@ -37,12 +37,21 @@ export function speakingRate(pace: VoicePace | undefined): number {
   }
 }
 
+function spokenRand(value: string): string {
+  const amount=Number(value.replace(/,/g,''));
+  if(!Number.isFinite(amount) || amount<0 || amount>1e11) return value+' rand';
+  const totalCents=Math.round(amount*100);
+  const whole=Math.floor(totalCents/100);
+  const cents=totalCents%100;
+  return whole.toLocaleString('en-ZA')+' rand'+(cents?' and '+cents+' cents':'');
+}
+
 export function voiceFriendlyText(text: string): string {
   return text
     .replace(/https?:\/\/\S+/g, 'a reference link')
     .replace(/[*#_\u0060]/g,'')
     .replace(/\bAPR\b/g,'annual interest rate')
-    .replace(/\bZAR\s*(\d[\d,]*(?:\.\d+)?)/g,'$1 rand')
+    .replace(/\bZAR\s*(\d[\d,]*(?:\.\d+)?)/g,(_match,amount:string)=>spokenRand(amount))
     .replace(/\bBTC\b/g,'Bitcoin')
     .replace(/\bETH\b/g,'Ethereum')
     .replace(/\bUSD\b/g,'US dollars')
