@@ -86,7 +86,7 @@ export default function SalaryPush({settings}:Props){
   return <section className="rounded-xl border border-border bg-muted/40 p-3">
     <h3 className="flex items-center gap-2 text-[12px] font-semibold"><Bell size={15}/> iPhone salary-day notification</h3>
     <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-      On the private Cloudflare Access version, a Home Screen installation can receive an opt-in reminder
+      On the protected private HTTPS version, a Home Screen installation can receive an opt-in reminder
       on the 26th even while the app is closed, as long as HYPRBOX, the tunnel and its push service remain online.
       The lock-screen message contains no salary amounts or account balances.
     </p>
