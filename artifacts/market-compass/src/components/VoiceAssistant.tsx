@@ -486,7 +486,9 @@ export default function VoiceAssistant({
           typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0);
       // Sharing financial context is opt-in AND relevant-topic-only. A greeting or
       // unrelated question must not transmit salary, account or spending figures.
-      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
+      const publicMarketQuote = /\b(price|quote|trading\s+at|market\s+value)\b/i.test(prompt) &&
+        /\b(bitcoin|btc|ethereum|eth|crypto|stocks?|shares?|markets?|currenc(?:y|ies)|forex|fx)\b/i.test(prompt);
+      const wantsFinancialContext = !publicMarketQuote && /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
       const summary = settings.shareFinancialContext && wantsFinancialContext ? {
         currency: context.currency,
         accounts: context.accounts.filter(validAccount).slice(0, 30).map(a => ({
