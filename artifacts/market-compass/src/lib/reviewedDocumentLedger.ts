@@ -67,6 +67,9 @@ export function applyReviewedDocumentToLedger(
       throw Error('A finance quote, instalment schedule, interest rate or reference balance is not proof of a payment. Record only an actual dated transaction.');
     if(doc.documentKind&&doc.documentKind!=='unclassified'&&line.semanticRole!=='transaction')
       throw Error('This finance contract row is not an explicit completed payment. Do not post it to Spend.');
+    if(doc.format==='pdf'&&doc.accountProfile?.category==='bank-statement'&&
+       (line.semanticRole!=='transaction'||line.date===null))
+      throw Error('This older bank-statement excerpt lacks a verified parsed transaction date or amount. Re-import the original PDF with the updated statement parser before posting.');
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
     if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||
