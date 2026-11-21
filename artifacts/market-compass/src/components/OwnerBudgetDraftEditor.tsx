@@ -22,6 +22,23 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
     catch{return null;}
   })();
   const proposed=preview?summarizeOwnerBudgetDraft(preview):null;
+  async function readPrivateFile(file:File|undefined){
+    setError('');setMessage('');setPreview(null);setSource('');
+    if(!file)return;
+    if(file.size>20_000){
+      setError('This private budget file exceeds the 20 KB limit; nothing imported.');
+      return;
+    }
+    try{
+      const text=await file.text();
+      const candidate=parseOwnerBudgetDraft(text);
+      setSource(text);setPreview(candidate);
+      setMessage('Private file reviewed in this browser only. Inspect the totals below before choosing Save. It has not been uploaded or added to the encrypted vault.');
+    }catch(e){
+      setError(e instanceof Error?e.message:'Could not read that private budget file.');
+      setSource('');
+    }
+  }
   function review(){
     setError('');setMessage('');setPreview(null);
     try {setPreview(parseOwnerBudgetDraft(source));}
@@ -32,7 +49,7 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
     if(profile && !window.confirm('Replace only this device’s owner budget draft? Your other expenses and debt records will remain unchanged. Export an encrypted backup first.'))return;
     onSave(preview);
     setSource('');setPreview(null);setError('');
-    setMessage('Draft added to this device’s unlocked workspace. Confirm the encrypted auto-save finishes in Vault & Settings, then export an encrypted backup. This has NOT been sent to HYPRBOX or another app.');
+    setMessage('Owner budget added to this device’s unlocked workspace. Wait for “Last saved” in Vault & Settings, then export a new encrypted backup to Files. No information was sent to HYPRBOX, GitHub, or the other app.');
   }
   return <details className="mb-5 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Safari-only encrypted owner budget draft">
     <summary className="min-h-11 cursor-pointer text-[14px] font-bold">
@@ -61,9 +78,26 @@ export default function OwnerBudgetDraftEditor({profile,onSave}:Props){
     <details className="mt-3 rounded-xl border border-border p-3">
       <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">{saved?'Import updated owner budget JSON':'Paste owner budget JSON to save privately'}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-        Paste the owner-budget-v1 JSON you reviewed. Use proper numbers for amounts,
-        mark incentives as conditional and hourly pay inclusion as unknown.
-        Preview before saving. Do not paste passwords, account numbers or API tokens.
+        Select your private owner-budget JSON from iPhone Files, or paste it below.
+        Only a validated, owner-approved record is saved. The app does not
+        upload the file. Do not import vault-backup files here; use Vault &amp; Settings
+        for encrypted full-workspace backups.
+      </p>
+      <label className="mt-3 block text-[12px] font-semibold">
+        Import owner budget from iPhone Files
+        <input type="file" accept=".json,application/json" aria-label="Choose private owner budget JSON file"
+          onChange={event=>{
+            const file=event.currentTarget.files?.[0];
+            event.currentTarget.value='';
+            void readPrivateFile(file);
+          }}
+          className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px]"/>
+      </label>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        The selected file remains unencrypted in Files until you delete it.
+        Once the encrypted workspace reports saved, export an encrypted vault
+        backup from Vault &amp; Settings and keep it somewhere safe.
+        Do not paste passwords, account numbers or API tokens.
       </p>
       <textarea aria-label="Owner-reported private budget JSON"
         rows={10} spellCheck={false} value={source}
