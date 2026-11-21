@@ -24,6 +24,7 @@ type AgentRunResult = {
   ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
   answer: string; workspaceWritten: false; approvalExecutionEnabled: false;
   trace: {tool:string;label:string;status:'ok'|'unavailable';effect:'read'}[];
+  results: Record<string,{available?:boolean;connected?:boolean;reason?:string}>;
   approval: null | {
     status:'draft'|'blocked';type:string;description:string;
     requiresApproval:true;executable:false;nextStep?:string;
@@ -627,11 +628,14 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
             <h3 className="text-[12px] font-bold">Agent read-only tool trace</h3>
             <span className="text-[11px] text-muted-foreground">{lastAgent.steps}/{lastAgent.maxSteps} checks</span>
           </div>
-          {lastAgent.trace.length ? <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+          {lastAgent.trace.length ? <ul className="mt-2 space-y-2 text-[11px] text-muted-foreground">
             {lastAgent.trace.map((item,index)=><li key={item.tool+index}>
-              {item.label} · {item.status === 'ok' ? 'Read only' : 'Source unavailable'}
+              <span>{item.label} · {item.status === 'ok' ? 'Read only' : 'No verified data available'}</span>
+              {item.status !== 'ok' && typeof lastAgent.results?.[item.tool]?.reason === 'string' && (
+                <p className="mt-1 text-[11px] leading-5">{lastAgent.results[item.tool].reason}</p>
+              )}
             </li>)}
-          </ul> : <p className="mt-2 text-[11px] text-muted-foreground">No financial tool was needed for this request.</p>}
+          </ul> : <p className="mt-2 text-[11px] text-muted-foreground">No private financial tool was accessed. This request only created a review draft.</p>}
           {lastAgent.approval && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
             <strong>{lastAgent.approval.status === 'blocked' ? 'Execution blocked' : 'Action proposal · review only'}</strong>
             <p className="mt-1 leading-5">{lastAgent.approval.description}</p>
