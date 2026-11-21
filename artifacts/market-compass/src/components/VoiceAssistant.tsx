@@ -18,7 +18,16 @@ type RecognitionWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserRecognition;
   SpeechRecognition?: new () => BrowserRecognition;
 };
-type Message = { id: string; source: 'owner' | 'local' | 'ollama'; text: string };
+type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string };
+type AgentRunResult = {
+  ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
+  answer: string; workspaceWritten: false; approvalExecutionEnabled: false;
+  trace: {tool:string;label:string;status:'ok'|'unavailable';effect:'read'}[];
+  approval: null | {
+    status:'draft'|'blocked';type:string;description:string;
+    requiresApproval:true;executable:false;nextStep?:string;
+  };
+};
 type SourceInventory = {
   readOnly: boolean; checkedAt: string;
   documentSources: {source:string;date:string}[];
@@ -82,6 +91,8 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
+  const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
   const [luno, setLuno] = useState<LunoStatus | null>(null);
   const [sourceError, setSourceError] = useState('');
@@ -419,7 +430,9 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
       } : undefined;
-      const response = await fetch(url + '/api/chat', {
+      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
+      const useAgent = agentMode && agentIntent;
+      const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
@@ -427,20 +440,35 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       });
       const payload: unknown = await response.json();
       if (!response.ok) throw Error(`Desktop AI returned HTTP ${response.status}. Check the local service and model.`);
-      if (!payload || typeof payload !== 'object' || !('reply' in payload) || typeof payload.reply !== 'string')
-        throw Error('Desktop AI returned an invalid response.');
+      if (!payload || typeof payload !== 'object') throw Error('Desktop AI returned an invalid response.');
       if (messageSerial.current !== id) return;
-      const reply = payload.reply.slice(0,1800);
-      const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
-        ? payload.answerSource : 'private-desktop-model';
-      add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
-      setStatus(answerSource === 'private-desktop-model'
-        ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
-        : answerSource === 'private-assistant-shortcut'
-          ? 'Market Compass answered your greeting locally without accessing financial records.'
-          : answerSource === 'official-luno-api'
-            ? 'Read-only Luno source checked. Balances require verified, current API data.'
-            : 'Answered by a private, read-only assistant function.');
+      if (useAgent) {
+        if (!('answer' in payload) || typeof payload.answer !== 'string' ||
+          !('readOnly' in payload) || payload.readOnly !== true ||
+          !('approvalExecutionEnabled' in payload) || payload.approvalExecutionEnabled !== false ||
+          !('workspaceWritten' in payload) || payload.workspaceWritten !== false ||
+          !('trace' in payload) || !Array.isArray(payload.trace)) {
+          throw Error('Desktop agent did not confirm a read-only response.');
+        }
+        const agentResult = payload as AgentRunResult;
+        setLastAgent(agentResult);
+        add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
+        setStatus(`Read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+      } else {
+        if (!('reply' in payload) || typeof payload.reply !== 'string')
+          throw Error('Desktop AI returned an invalid chat response.');
+        const reply = payload.reply.slice(0,1800);
+        const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
+          ? payload.answerSource : 'private-desktop-model';
+        add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
+        setStatus(answerSource === 'private-desktop-model'
+          ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
+          : answerSource === 'private-assistant-shortcut'
+            ? 'Market Compass answered your greeting locally without accessing financial records.'
+            : answerSource === 'official-luno-api'
+              ? 'Read-only Luno source checked. Balances require verified, current API data.'
+              : 'Answered by a private, read-only assistant function.');
+      }
     } catch (error) {
       if (messageSerial.current !== id) return;
       setConnection('offline');
@@ -455,13 +483,15 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     const id = ++messageSerial.current;
     setQuery(''); setStatus('');
     add('owner', question);
+    setLastAgent(null);
     const result = interpretCompassCommand(question, context);
     // Safeguards and navigation remain local, but a private Luno balance must
     // not be confused with a historical cryptocurrency market candle.
     const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
       /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
     const asksPublicResearch = /^(?:search public (?:reference|information|info)|research (?:public )?(?:topic|information)|search wikipedia for)\b/i.test(question);
-    if (result.type !== 'unknown' && !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch))) {
+    if ((!agentMode || !connected) && result.type !== 'unknown' &&
+      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch))) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
@@ -539,19 +569,53 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
-          setMessages([]); setStatus('Conversation cleared from page memory.');
+          setMessages([]); setLastAgent(null); setStatus('Conversation cleared from page memory.');
         }}><X size={14} className="mr-1 inline"/>Clear</button>
+      </div>
+      <div className="border-b border-border px-4 py-3">
+        <label className="flex min-h-9 items-center gap-3 text-[12px] font-semibold">
+          <input type="checkbox" checked={agentMode} disabled={busy}
+            onChange={event => { setAgentMode(event.target.checked); setLastAgent(null); }}
+            aria-label="Enable read-only agent mode"/>
+          <span>Agent mode <span className="font-normal text-muted-foreground">· max 3 read-only tools</span></span>
+        </label>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          Financial records and sources can be reviewed, not edited. Reminders and expense entries are drafts only; banking and trading are disabled.
+        </p>
       </div>
       <div className="max-h-[340px] min-h-[160px] space-y-3 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`max-w-[92%] rounded-[16px] px-4 py-3 text-[13px] leading-6 ${message.source === 'owner' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted/75 text-foreground'}`}>
             {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
+            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Market Compass · Read-only Agent</span>}
             {message.text}
           </div>
         </div>)}
-        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">Waiting for desktop Ollama…</div>}
+        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}
         <div ref={bottom}/>
       </div>
+      {lastAgent && (
+        <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/35 p-3" aria-label="Agent execution trace">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[12px] font-bold">Agent read-only tool trace</h3>
+            <span className="text-[11px] text-muted-foreground">{lastAgent.steps}/{lastAgent.maxSteps} checks</span>
+          </div>
+          {lastAgent.trace.length ? <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+            {lastAgent.trace.map((item,index)=><li key={item.tool+index}>
+              {item.label} · {item.status === 'ok' ? 'Read only' : 'Source unavailable'}
+            </li>)}
+          </ul> : <p className="mt-2 text-[11px] text-muted-foreground">No financial tool was needed for this request.</p>}
+          {lastAgent.approval && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
+            <strong>{lastAgent.approval.status === 'blocked' ? 'Execution blocked' : 'Action proposal · review only'}</strong>
+            <p className="mt-1 leading-5">{lastAgent.approval.description}</p>
+            {lastAgent.approval.nextStep && <p className="mt-1 text-muted-foreground">{lastAgent.approval.nextStep}</p>}
+            <p className="mt-2 font-semibold text-muted-foreground">Not approved, not scheduled, not saved. No execution capability in Stage 1.</p>
+          </div>}
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            No workspace writes, trades, transfers or payments are available. Source figures may be historical or manually entered.
+          </p>
+        </section>
+      )}
       <div className="border-t border-border p-3">
         <form className="flex items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
