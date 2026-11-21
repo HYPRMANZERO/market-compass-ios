@@ -71,6 +71,17 @@ test('October history is a dated incomplete snapshot, not current spending',()=>
  assert.match(specific,/873/);
  assert.match(specific,/incomplete/i);
 });
+test('owner-reported outstanding credit card amount is not lender-verified or spendable cash',()=>{
+ const draft={...profile,creditCardFigure:{amount:5000,meaning:'owner_reported_outstanding_balance'}};
+ const budget2=summarizeOwnerBudgetDraft(validateOwnerBudgetDraft(draft,new Date('2026-11-21T20:00:00Z')),new Date('2026-11-21T20:00:00Z'));
+ const reply=answerFromOfflineOwnerBudget('What is the credit card outstanding balance?',budget2);
+ assert.match(displayDigits(reply),/5000/);
+ assert.match(reply,/owner-reported outstanding credit-card debt/i);
+ assert.match(reply,/not lender-verified/i);
+ assert.match(reply,/not represent available cash/i);
+ assert.equal(budget2.recurringMin,budget.recurringMin,'Do not add balance to monthly costs');
+});
+
 test('unconfirmed card figure is not a confirmed balance',()=>{
  const r=answer('How much is the credit card balance?');
  assert.match(displayDigits(r),/20000/);
