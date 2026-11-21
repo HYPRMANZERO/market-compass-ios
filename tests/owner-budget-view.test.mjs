@@ -14,7 +14,7 @@ const sample={
   salaryOnlyUnallocatedMin:4700,salaryOnlyUnallocatedMax:4700,
   conditionalIncentiveUnallocatedMin:5020,conditionalIncentiveUnallocatedMax:5020,
   historicalCycles:[{date:'2026-10-26',reportedIncome:7100,listedExpenseTotal:2300,
-    listedDifference:4800,complete:false}],
+    listedDifference:4800,complete:false,entries:[{label:'Synthetic rent',category:'expense',min:2300,max:2300}]}],
   scheduledMonths:[{month:'2026-12',listedExpenseMin:2500,listedExpenseMax:2500,
     salaryOnlyUnallocatedMin:4600,salaryOnlyUnallocatedMax:4600,complete:false}],
   creditCardFigureStatus:'unknown_balance_or_limit',
@@ -31,6 +31,7 @@ test('accepts a dated, read-only owner reported budget and does not infer availa
   assert.equal(result.currentBalance,null);
   assert.equal(result.bankVerified,false);
   assert.equal(result.recurring[0].label,'Synthetic rent');
+  assert.equal(result.historicalCycles[0].entries[0].label,'Synthetic rent');
 });
 test('rejects forged live verification and returned vault data',()=>{
   for(const changed of [
