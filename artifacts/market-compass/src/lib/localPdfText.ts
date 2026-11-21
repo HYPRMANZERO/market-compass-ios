@@ -32,7 +32,6 @@ export async function extractLocalPdfText(file: File, temporaryPassword = ''): P
     task = pdfjs.getDocument({
       data: bytes,
       password: temporaryPassword || undefined,
-      isEvalSupported: false,
       useSystemFonts: false,
     });
     const pdf = await task.promise;
