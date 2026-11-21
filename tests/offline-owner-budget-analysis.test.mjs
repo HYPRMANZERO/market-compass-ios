@@ -1,4 +1,5 @@
 import test from 'node:test';
+const displayDigits=value=>value.replace(/[\s\u00a0\u202f]/g,'');
 import assert from 'node:assert/strict';
 import {validateOwnerBudgetDraft,summarizeOwnerBudgetDraft}
   from '../artifacts/market-compass/src/lib/ownerBudgetDraft.ts';
@@ -52,19 +53,19 @@ test('pay rate supports exact 0.5, 1.0, 1.5, 2.0 hours without double-counting s
 });
 test('recurring monthly expenses and December exception remain separate',()=>{
  const r=answer('What is my monthly budget?');
- assert.match(r,/10,019/);
- assert.match(r,/10,249/);
+ assert.match(displayDigits(r),/10019/);
+ assert.match(displayDigits(r),/10249/);
  assert.match(r,/not spendable cash/i);
  const g=answer('What is the December gym cost?');
  assert.match(g,/874/);
- assert.match(g,/10,543/);
- assert.match(g,/10,773/);
+ assert.match(displayDigits(g),/10543/);
+ assert.match(displayDigits(g),/10773/);
  assert.match(g,/planning estimate/i);
 });
 test('October history is a dated incomplete snapshot, not current spending',()=>{
  const r=answer('What did I spend in October 2026?');
  assert.match(r,/2026-10-26/);
- assert.match(r,/8,544/);
+ assert.match(displayDigits(r),/8544/);
  assert.match(r,/not confirmed available money/i);
  const specific=answer('How much was my October 2026 Gym?');
  assert.match(specific,/873/);
@@ -72,7 +73,7 @@ test('October history is a dated incomplete snapshot, not current spending',()=>
 });
 test('unconfirmed card figure is not a confirmed balance',()=>{
  const r=answer('How much is the credit card balance?');
- assert.match(r,/20,000/);
+ assert.match(displayDigits(r),/20000/);
  assert.match(r,/not confirmed as an outstanding balance/i);
  assert.doesNotMatch(r,/verified debt balance/i);
 });
@@ -86,7 +87,7 @@ test('empty current ledger uses owner-reported budget rather than pretending zer
   }
  };
  const response=interpretCompassCommand('What were my expenses in October 2026?',ctx);
- assert.match(response.reply,/8,544/);
+ assert.match(displayDigits(response.reply),/8544/);
  assert.doesNotMatch(response.reply,/0\.00 income, R0\.00 expenses/);
  const noOwner=interpretCompassCommand('What were my expenses this month?',{...ctx,ownerBudgetDraft:null});
  assert.match(noOwner.reply,/does not mean zero spending/i);
