@@ -3,6 +3,7 @@ import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Refresh
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
+import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
 import { parseOwnerBudgetView, type OwnerBudgetView } from '@/lib/ownerBudgetView';
 import OwnerBudgetPanel from '@/components/OwnerBudgetPanel';
@@ -111,6 +112,7 @@ export default function VoiceAssistant({
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
   const [ownerBudget, setOwnerBudget] = useState<OwnerBudgetView | null>(null);
   const [ownerBudgetAvailable, setOwnerBudgetAvailable] = useState(false);
+  const [sourceHealth, setSourceHealth] = useState<FinancialSourceHealth | null>(null);
   const [luno, setLuno] = useState<LunoStatus | null>(null);
   const [sourceError, setSourceError] = useState('');
   const [sourceLoading, setSourceLoading] = useState(false);
@@ -305,6 +307,9 @@ export default function VoiceAssistant({
           const sources = inventoryResult.value;
           if (sources.ok === true && sources.inventory && typeof sources.inventory === 'object') {
             setSourceInventory(sources.inventory as SourceInventory);
+            // Older desktop bridges have no health field: show inventory but
+            // never infer freshness or bank connectivity from that omission.
+            setSourceHealth(parseFinancialSourceHealth(sources.health));
           } else {
             errors.push('Financial documents: invalid source inventory response.');
           }
@@ -869,6 +874,35 @@ export default function VoiceAssistant({
       </div>
       {sourceLoading && <p className="mt-3 text-[12px] text-muted-foreground">Reading the private source inventory…</p>}
       <OwnerBudgetPanel view={ownerBudget} connected={connected} available={ownerBudgetAvailable}/>
+      {sourceHealth ? <div className="mt-3 rounded-xl border border-border p-3" aria-label="Financial source freshness">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-[12px] font-semibold">Source freshness · read only</h3>
+          <span className="text-[11px] text-muted-foreground">Checked {sourceHealth.checkedAt.slice(0,16).replace('T',' ')} UTC</span>
+        </div>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          These are dated local records, not live bank feeds or verified spendable cash.
+          {connected ? ' Source metadata was refreshed from HYPRBOX.' : ' HYPRBOX is offline; this is the last retrieved snapshot.'}
+        </p>
+        <ul className="mt-3 space-y-2">
+          {sourceHealth.sources.map(source => <li key={source.id} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+            <span className="text-[12px] font-medium">{sourceLabels[source.id]}</span>
+            <span className="text-[11px] font-semibold">{statusLabels[source.status]}</span>
+            <span className="w-full text-[11px] text-muted-foreground">
+              {source.recordCount} {source.recordCount===1 ? 'record' : 'records'}
+              {' · '}Recorded {source.lastRecordedAt || 'date unavailable'}
+              {source.ageDays !== null ? ' · '+source.ageDays+' days ago' : ''}
+              {' · Not bank-verified'}
+            </span>
+          </li>)}
+        </ul>
+        {sourceHealth.warningCount>0 && <p className="mt-2 text-[11px] text-muted-foreground">
+          {sourceHealth.warningCount} local import warnings; review source files on HYPRBOX.
+        </p>}
+        <p className="mt-3 text-[11px] font-medium">Live bank connections: not configured.</p>
+      </div> : sourceInventory ? <p className="mt-3 text-[11px] text-muted-foreground">
+        This bridge has not supplied the source-freshness report yet. Inventory counts below are not evidence of current balances.
+      </p> : null}
+
       {sourceInventory ? <div className="mt-3 space-y-2 text-[12px]">
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Financial Advisor documents</span><strong>{sourceInventory.documentSources.length} local files</strong></div>
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Historic baseline</span><strong>{sourceInventory.historicalSnapshotDate ?? 'Not found'}</strong></div>
