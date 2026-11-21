@@ -6,6 +6,12 @@ export type CompassCommandContext = {
   currency: string;
   accounts: { name: string; balance: string; apr: string; minimumPayment: string }[];
   monthlyExtra: string;
+  /** Owner-reported private device draft, never bank verified or synced. */
+  ownerBudgetDraft?: {
+    recordedAt:string;salary:number;hourlyRate:number;conditionalIncentive:number;
+    recurringMin:number;recurringMax:number;
+    salaryOnlyDifferenceMin:number;salaryOnlyDifferenceMax:number;
+  } | null;
   privateBudget?: { monthlyIncome: string; monthlyEssentials: string; liquidFunds: string; reserveTarget: string } | null;
   marketCache?: { symbol: string; currency: string; candles?: { date: string; close: number }[] } | null;
   draftCount: number;
@@ -53,6 +59,22 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
       currency(e.debtPayments,ctx.currency)+' debt repayments across '+e.entryCount+
       ' entries. Internal transfers of '+currency(e.transfers,ctx.currency)+
       ' are tracked separately. These are manually entered figures, not verified bank balances.'};
+  }
+  // Safari-only fallback: a user-reviewed budget draft remains in the
+  // origin-specific encrypted device vault. It is not a desktop Agent tool.
+  const asksOwnerPay = /\b(hourly|hourly rate|hours worked|pay rate|salary|incentive|wage|wages|recurring (?:costs|bills)|monthly costs|budget baseline)\b/.test(q);
+  if(asksOwnerPay && ctx.ownerBudgetDraft){
+    const b=ctx.ownerBudgetDraft;
+    return {type:'answer',reply:
+      'Your owner-reported LOCAL iPhone budget dated '+b.recordedAt+
+      ' lists salary '+currency(b.salary,'ZAR')+', a conditional incentive of '+
+      currency(b.conditionalIncentive,'ZAR')+' and hourly pay of '+
+      currency(b.hourlyRate,'ZAR')+' per hour. Listed normal monthly costs are '+
+      currency(b.recurringMin,'ZAR')+' to '+currency(b.recurringMax,'ZAR')+
+      '. The salary-only difference for those listed costs is '+
+      currency(b.salaryOnlyDifferenceMin,'ZAR')+' to '+
+      currency(b.salaryOnlyDifferenceMax,'ZAR')+
+      '. This is not bank verified or spendable cash. Hourly pay may already be included in payroll. This draft is not yet mirrored to HYPRBOX or the other PWA.'};
   }
   if (/\b(help|what can you do|commands|how do i use you)\b/.test(q)) {
     return { type:'answer', reply:'You can ask: What is my total debt? Which debt has the highest APR? What are my minimum payments? How much extra can I afford? What market data is saved? Or say open Expenses, Debt Plan, Markets, Drafts or Home. I can speak replies aloud, but never initiate payments or trades.' };
