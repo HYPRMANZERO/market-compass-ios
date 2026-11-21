@@ -92,6 +92,20 @@ export function extractVehicleFinanceLines(text:string):FinanceLine[]{
   }
   return results;
 }
+/** Reassess only a previously stored, already-masked excerpt label.
+ * Never synthesize amounts, effective dates or payment events. */
+export function classifyFinanceLabel(label:string):Pick<FinanceLine,'semanticRole'|'semanticField'|'ratePercent'> {
+  const spec=specs.find(x=>x.match.test(label));
+  if(!spec)return {semanticRole:'unclassified'};
+  const result:Pick<FinanceLine,'semanticRole'|'semanticField'|'ratePercent'>={
+    semanticRole:spec.role,semanticField:spec.field
+  };
+  if(spec.role==='rate-reference'){
+    const n=percentFrom(label);
+    if(n!==undefined)result.ratePercent=n;
+  }
+  return result;
+}
 /** Existing imported items without semanticRole also need protection. */
 export function isFinanceReferenceLabel(label:string):boolean{
   const role=specs.find(x=>x.match.test(label))?.role;
