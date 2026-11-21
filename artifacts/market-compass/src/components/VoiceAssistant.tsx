@@ -29,7 +29,7 @@ type RecognitionWindow = Window & {
 type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string };
 type AgentRunResult = {
   ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
-  answer: string; workspaceWritten: false; approvalExecutionEnabled: false;
+  answer: string; answerSource:'private-desktop-model'; workspaceWritten: false; approvalExecutionEnabled: false;
   trace: {tool:string;label:string;status:'ok'|'unavailable';effect:'read'}[];
   results: Record<string,{available?:boolean;connected?:boolean;reason?:string}>;
   approval: null | {
@@ -520,16 +520,18 @@ export default function VoiceAssistant({
           !('readOnly' in payload) || payload.readOnly !== true ||
           !('approvalExecutionEnabled' in payload) || payload.approvalExecutionEnabled !== false ||
           !('workspaceWritten' in payload) || payload.workspaceWritten !== false ||
+          !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model' ||
           !('trace' in payload) || !Array.isArray(payload.trace)) {
           throw Error('Desktop agent did not confirm a read-only response.');
         }
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
-        setStatus(`Read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+        setStatus(`Desktop Ollama · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
       } else {
-        if (!('reply' in payload) || typeof payload.reply !== 'string')
-          throw Error('Desktop AI returned an invalid chat response.');
+        if (!('reply' in payload) || typeof payload.reply !== 'string' ||
+          !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model')
+          throw Error('Desktop did not confirm an Ollama-generated chat response.');
         const reply = payload.reply.slice(0,1800);
         const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
           ? payload.answerSource : 'private-desktop-model';
@@ -698,7 +700,7 @@ export default function VoiceAssistant({
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`max-w-[92%] rounded-[16px] px-4 py-3 text-[13px] leading-6 ${message.source === 'owner' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted/75 text-foreground'}`}>
             {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
-            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Market Compass · Read-only Agent</span>}
+            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama · Read-only agent</span>}
             {message.text}
           </div>
         </div>)}
