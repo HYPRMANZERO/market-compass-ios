@@ -164,7 +164,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         Review {preview.lines.length} extracted lines · {preview.label}
       </p>
       <p className="rounded-lg border border-primary/20 bg-background p-3 text-[12px] font-semibold">
-        Classified as: {preview.accountProfile?.category.replaceAll('-',' ')??financeLabel(preview.documentKind)}
+        Document classification: {preview.accountProfile?.category.replaceAll('-',' ')??financeLabel(preview.documentKind)}
         <span className="mt-1 block font-normal text-muted-foreground">
           Account label: {preview.accountProfile?.name??'Unidentified account'} ·
           {preview.accountProfile?.confidence==='matched-terms'?' Matched document terms':' Needs owner verification'}
