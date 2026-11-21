@@ -37,16 +37,16 @@ test('password, raw bytes, identifiers and file paths never become vault excerpt
 test('PDF data must first be extracted with PDF.js; no fake parsing of raw PDF bytes',()=>{
   assert.throws(()=>extractLocalFinanceDocument('locked.pdf','%PDF-1.7','Synthetic PDF'),/recognisable amounts/i);
   assert.throws(()=>extractLocalFinanceDocument('image.png','R100.00','Synthetic image'),/Supported/i);
-  assert.ok(MAX_LOCAL_PDF_BYTES<=2_000_000);
-  assert.ok(MAX_LOCAL_PDF_PAGES<=12);
-  assert.ok(MAX_LOCAL_PDF_TEXT_CHARS<=200_000);
+  assert.ok(MAX_LOCAL_PDF_BYTES>=32_000_000);
+  assert.equal(MAX_LOCAL_PDF_PAGES,Infinity);
+  assert.ok(MAX_LOCAL_PDF_TEXT_CHARS>=1_000_000);
 });
 test('UI uses a transient input, not state or settings, for the PDF password',async()=>{
   const ui=await readFile(new URL('../artifacts/market-compass/src/components/LocalFinanceFiles.tsx',import.meta.url),'utf8');
   const parser=await readFile(new URL('../artifacts/market-compass/src/lib/localPdfText.ts',import.meta.url),'utf8');
   assert.match(ui,/passwordInput=useRef/);
   assert.match(ui,/passwordInput\.current\.value=''/);
-  assert.match(ui,/extractLocalPdfText\(file,temporaryPassword\)/);
+  assert.match(ui,/extractLocalPdfText\(file,temporaryPassword,\{/);
   assert.doesNotMatch(ui,/setPassword|password:\s*settings|localStorage\.setItem|fetch\(/i);
   assert.match(parser,/task\.destroy\(\)/);
   assert.doesNotMatch(parser,/localStorage|indexedDB|fetch\(/);
