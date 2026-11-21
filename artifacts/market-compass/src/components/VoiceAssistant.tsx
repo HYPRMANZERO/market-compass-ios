@@ -3,6 +3,7 @@ import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Refresh
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
+import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, type VoicePace } from '@/lib/speechVoices';
 
 type RecognitionResult = { 0: { transcript: string }; isFinal: boolean };
 type RecognitionEvent = { results: ArrayLike<RecognitionResult>; resultIndex: number };
@@ -76,6 +77,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [query, setQuery] = useState('');
   const [recognitionSupported] = useState(micAvailable);
   const [speakingSupported] = useState(voiceAvailable);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState('');
   const [formError, setFormError] = useState('');
@@ -122,6 +124,15 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!speakingSupported) return;
+    const synth=window.speechSynthesis;
+    const refresh=()=>setAvailableVoices(sortedEnglishVoices(synth.getVoices()));
+    refresh();
+    synth.addEventListener('voiceschanged',refresh);
+    return ()=>synth.removeEventListener('voiceschanged',refresh);
+  }, [speakingSupported]);
 
   useEffect(() => () => {
     probeSerial.current++;
@@ -364,13 +375,18 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, settings.url, settings.token]);
 
-  function speak(answer: string) {
-    if (!settings.speakReplies || !voiceAvailable()) return;
+  function speak(answer: string, preview=false) {
+    if ((!settings.speakReplies && !preview) || !voiceAvailable()) return;
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(answer.slice(0, 1000));
-      utterance.lang = 'en-ZA'; utterance.rate = 0.96;
-      window.speechSynthesis.speak(utterance);
+      const synth=window.speechSynthesis;
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(voiceFriendlyText(answer));
+      const best=chooseSpeechVoice(synth.getVoices(),settings.voiceURI);
+      if(best){utterance.voice=best;utterance.lang=best.lang;}
+      else utterance.lang='en-ZA';
+      utterance.rate=speakingRate(settings.voicePace);
+      utterance.pitch=1;
+      synth.speak(utterance);
     } catch { setStatus('Audio playback is unavailable; the reply is still available as text.'); }
   }
 
@@ -378,6 +394,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     setFormError('');
     try {
       const saved = validateDesktopAiSettings({
+        ...settings,
         url: urlOverride ?? host, token: secret, enabled: true, shareFinancialContext,
         speakReplies: settings.speakReplies,
       });
@@ -398,7 +415,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   function forgetConnection() {
     if (!window.confirm('Forget this desktop AI connection and delete its saved access token from the encrypted workspace?')) return;
     onSettingsChange({
-      url: '', token: '', enabled: false, shareFinancialContext: false,
+      ...settings, url: '', token: '', enabled: false, shareFinancialContext: false,
       speakReplies: settings.speakReplies,
     });
     setHost(''); setSecret(''); setShareFinancialContext(false);
@@ -587,6 +604,11 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
           Financial records and sources can be reviewed, not edited. Reminders and expense entries are drafts only; banking and trading are disabled.
         </p>
+        {agentMode && !settings.shareFinancialContext && (
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+            Your unlocked iPhone vault figures are not shared with HYPRBOX. To analyse them, enable financial-context sharing under Desktop Ollama settings below. Other device vaults are not synchronized.
+          </p>
+        )}
       </div>
       <div className="max-h-[340px] min-h-[160px] space-y-3 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
@@ -638,6 +660,42 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         {status && <p role="status" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
+
+    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
+      <summary className="cursor-pointer text-[13px] font-bold">Spoken replies · voice &amp; pace</summary>
+      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+        Choose an English voice offered by this iPhone or browser. Preview voices without sending your financial replies to another speech service.
+      </p>
+      <label className="mt-3 block text-[12px] font-semibold">
+        Spoken voice
+        <select value={availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
+          onChange={e=>onSettingsChange({...settings,voiceURI:e.target.value})}
+          disabled={!speakingSupported}
+          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
+          <option value="">Automatic · best available English voice</option>
+          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
+        </select>
+      </label>
+      <label className="mt-3 block text-[12px] font-semibold">
+        Speaking pace
+        <select value={settings.voicePace||'natural'}
+          onChange={e=>onSettingsChange({...settings,voicePace:e.target.value as VoicePace})}
+          disabled={!speakingSupported}
+          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
+          <option value="natural">Natural · relaxed</option>
+          <option value="calm">Calm · slower</option>
+          <option value="brisk">Brisk · quicker</option>
+        </select>
+      </label>
+      <button type="button" disabled={!speakingSupported}
+        onClick={()=>speak('Hello, I am Compass. I can help you review your financial records and make a plan.',true)}
+        className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
+        <Speaker size={15} className="mr-1 inline"/> Preview this voice
+      </button>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        Voice availability and audio quality depend on Safari and installed system voices. This setting is stored in your existing encrypted workspace; no new voice service is installed.
+      </p>
+    </details>
 
     <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Encrypted desktop conversation memory">
       <div className="flex items-center justify-between gap-2">
