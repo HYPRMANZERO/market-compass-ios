@@ -93,10 +93,10 @@ export function parseBankStatementRow(raw:string):BankStatementLine|null{
       semanticRole:'transaction',runningBalance:balance};
   }
   const line=raw.replace(/[\t\u00a0]+/g,' ').replace(/\s+/g,' ').trim();
-  if(line.length<7||line.length>1800||HEADING.test(line))return null;
+  if(line.length<7||line.length>1800||(HEADING.test(line)&&!BALANCE_ONLY.test(line)))return null;
   const date=bankStatementDate(line);
   const body=date?line.replace(date.matched,' ').replace(/\s+/g,' ').trim():line;
-  const nums=tokens(body);
+  const nums=tokens(BALANCE_ONLY.test(body)?body.replace(/:\s*/g,' '):body);
   if(BALANCE_ONLY.test(body)&&nums.length===1){
     const amount=statementMoney(nums[0].raw);
     if(amount===null)return null;
