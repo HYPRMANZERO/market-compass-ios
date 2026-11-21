@@ -53,7 +53,7 @@ test('bank statements can show an account name and dated balance without automat
   const doc=extractLocalFinanceDocument('synthetic.pdf',
     'Nedbank Bank Statement\n2026-10-31 Closing balance R12 500,30\n2026-10-03 Payment received R450,00',
     'Synthetic October statement',opts);
-  assert.equal(doc.accountProfile?.name,'Nedbank Bank account');
+  assert.equal(doc.accountProfile?.name,'Nedbank account');
   assert.equal(doc.accountProfile?.facts.some(f=>f.field==='statement-balance'&&f.amount===12500.3),true);
   assert.equal(doc.bankVerified,false);
 });
