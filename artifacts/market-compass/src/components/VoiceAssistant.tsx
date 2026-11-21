@@ -501,7 +501,8 @@ export default function VoiceAssistant({
       } : undefined;
       // Only personal-data reads and draft requests use agent tools. A public
       // Bitcoin/market quote belongs to Ollama chat, not a Luno balance tool.
-      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
+      const personalSourceIntent = /\b(?:my|private|saved|local|connected|available|financial)\s+sources?\b|\bsource\s+inventory\b/i.test(prompt);
+      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt) || personalSourceIntent;
       const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
       const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
