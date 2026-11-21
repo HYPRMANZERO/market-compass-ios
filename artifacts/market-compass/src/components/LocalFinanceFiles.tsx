@@ -1,6 +1,8 @@
 import {useRef,useState} from 'react';
 import ReviewedDocumentLedger from './ReviewedDocumentLedger';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
+import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
+import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
@@ -10,6 +12,16 @@ import {
 const money=(n:number|null)=>n===null?'Amount unavailable':
   new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',
     minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const financeLabel=(kind:string|undefined)=>kind==='absa-vehicle-finance'?'ABSA vehicle finance · financing evidence':
+  kind==='vehicle-finance'?'Vehicle-finance contract · financing evidence':'Financial document · owner review';
+const roleLabel=(role:string|undefined)=>role==='contract-term'?'Contract term, NOT a payment':
+  role==='balance-reference'?'Historical/reference balance, NOT spendable cash':
+  role==='rate-reference'?'Quoted rate, NOT a payment':
+  role==='transaction'?'Possible completed payment — verify':'Unclassified · owner review';
+const lineDateLabel=(line:{date:string|null;semanticRole?:string})=>
+  (line.semanticRole==='contract-term'||line.semanticRole==='balance-reference')?
+  (line.date?'Reference/effective date '+line.date:'Reference date not identified'):
+  (line.date??'Transaction date not confirmed');
 type Props={
   documents:LocalFinanceDocument[];
   onAdd:(value:LocalFinanceDocument)=>void;
@@ -53,7 +65,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       const privateLabel=label.trim() || 'iPhone financial export';
       const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
       setPreview(draft);
-      setFeedback('Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
+      setFeedback(draft.documentKind&&draft.documentKind!=='unclassified'?
+        'Vehicle-finance document recognised locally. Review the labelled terms and reference values below; they are NOT posted as payments. The original document and PDF password are not stored or uploaded.':
+        'Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
     }catch(e){
       setError(e instanceof Error?e.message:'Could not read this financial file privately.');
     }finally{
@@ -136,6 +150,15 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       <p className="text-[12px] font-semibold">
         Review {preview.lines.length} extracted lines · {preview.label}
       </p>
+      <p className="rounded-lg border border-primary/20 bg-background p-3 text-[12px] font-semibold">
+        Document classification: {financeLabel(preview.documentKind)}
+      </p>
+      {preview.documentKind&&preview.documentKind!=='unclassified'&&
+        <p className="text-[11px] leading-5 text-muted-foreground">
+          The importer recognises contractual instalments, residuals, financing principals,
+          settlement quotations and quoted rates separately. An effective date is NOT a debit date.
+          Nothing is assumed paid, outstanding today or verified by ABSA.
+        </p>}
       <p className="text-[11px] leading-5 text-muted-foreground">
         Excerpts can contain private financial information. Verify the date,
         labels, positive/negative sign and amounts. The parser does not claim a
@@ -149,7 +172,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
             <span className="break-words font-medium">{line.label}</span>
             <strong>{money(line.amount)}</strong>
           </div>
-          <p className="text-muted-foreground">{line.date??'Date not identified'} · {line.direction==='unclassified'?'Direction unconfirmed':line.direction}</p>
+          <p className="text-muted-foreground">{lineDateLabel(line)} · {roleLabel(line.semanticRole)}</p>
+          {line.ratePercent!==undefined&&<p className="font-semibold">Quoted rate {line.ratePercent}%</p>}
         </div>)}
       </div>
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
@@ -175,6 +199,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">
           {document.label} · {document.lines.length} lines
         </summary>
+        <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+          {financeLabel(document.documentKind??detectFinanceDocument(document.lines.map(l=>l.label).join(' '),document.label))}
+        </p>
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
           Owner-selected on {new Date(document.importedAt).toLocaleDateString('en-ZA')}.
           This is not a full document or verified bank record. Only reviewed
@@ -183,10 +210,18 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         </p>
         <ul className="mt-2 max-h-56 space-y-2 overflow-auto text-[11px]">
           {document.lines.map((line,index)=><li key={index} className="flex flex-wrap justify-between gap-2">
-            <span>{line.date??'Unspecified date'} · {line.label}</span>
+            <span>{lineDateLabel(line)} · {line.label}<span className="block text-[10px] text-muted-foreground">{roleLabel(line.semanticRole)}</span></span>
             <strong>{money(line.amount)}</strong>
           </li>)}
         </ul>
+        {documentAppliedIndices(document,ledgerEntries).size>0&&
+          document.lines.some((line,i)=>documentAppliedIndices(document,ledgerEntries).has(i)&&
+            (isFinanceReferenceLabel(line.label)||line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'))&&
+          <p role="alert" className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-[11px] leading-5 text-destructive">
+            Existing Spend entries include loan terms or reference values. They may have been
+            classified as payments in an earlier version. Inspect them under Spend → Activity.
+            No existing entry has been silently removed or changed.
+          </p>}
         <ReviewedDocumentLedger key={document.id} document={document}
           entries={ledgerEntries} currency={currency}
           currencyReviewRequired={currencyReviewRequired}
