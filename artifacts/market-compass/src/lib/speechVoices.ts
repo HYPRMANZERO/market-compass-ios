@@ -3,6 +3,8 @@
  * no reply text is sent to a new TTS service.
  */
 export type VoicePace = 'natural' | 'calm' | 'brisk';
+/** Deliberate selection: leave utterance.voice unset and let iOS choose. */
+export const DEVICE_DEFAULT_VOICE = '__device_default__';
 
 function voiceScore(voice: SpeechSynthesisVoice): number {
   const name = voice.name.toLowerCase();
@@ -25,15 +27,18 @@ export function sortedEnglishVoices(voices: readonly SpeechSynthesisVoice[]): Sp
 }
 
 export function chooseSpeechVoice(voices: readonly SpeechSynthesisVoice[], preferredURI=''): SpeechSynthesisVoice | null {
+  // Safari controls whether its system default and downloaded voices are exposed.
+  // Explicit device-default mode must not be overridden by the first English voice.
+  if (preferredURI===DEVICE_DEFAULT_VOICE) return null;
   const available=sortedEnglishVoices(voices);
   return available.find(voice => voice.voiceURI === preferredURI) || available[0] || null;
 }
 
 export function speakingRate(pace: VoicePace | undefined): number {
   switch (pace) {
-    case 'calm': return 0.88;
-    case 'brisk': return 1.03;
-    default: return 0.94;
+    case 'calm': return 0.92;
+    case 'brisk': return 1.05;
+    default: return 1.0;
   }
 }
 
