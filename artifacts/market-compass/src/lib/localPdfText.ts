@@ -1,3 +1,4 @@
+import {layoutStandardBankPdfLines} from './standardBankPdfLayout.ts';
 /**
  * Bounded, device-only extraction of selectable text from a PDF.
  *
@@ -89,7 +90,18 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
       // PDF text order is not always reading order. Reconstruct line positions
       // from transform x/y so "R 3 543,36" stays beside its source label.
       // Keep explicit EOL fallback for PDFs without usable coordinates.
-      const pageLines=layoutSelectablePdfLines(content.items);
+      const genericLines=layoutSelectablePdfLines(content.items);
+      // Where a native five-column statement table is present, preserve the
+      // actual Payments/Deposits positions using PDF geometry. Keep only
+      // institution/header context and available-balance notes from the generic
+      // text to avoid treating the same row as two transactions.
+      const tableLines=layoutStandardBankPdfLines(content.items);
+      const pageLines=tableLines?[
+        ...genericLines.filter(line=>
+          /\b(?:standard bank|three.month statement|3.month statement|available balance)\b/i.test(line) &&
+          !/^\d{1,2}\s+[a-z]{3,9}\s+\d{2,4}\b/i.test(line)).slice(0,12),
+        ...tableLines
+      ]:genericLines;
       for(const line of pageLines){
         length+=line.length+1;
         if(length>MAX_LOCAL_PDF_TEXT_CHARS)
