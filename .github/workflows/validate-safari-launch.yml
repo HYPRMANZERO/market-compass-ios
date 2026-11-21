@@ -22,6 +22,7 @@ jobs:
       - run: node --experimental-strip-types --test tests/owner-budget-view.test.mjs tests/ios-speech-voices.test.mjs tests/owner-budget-draft.test.mjs tests/offline-agent-queue.test.mjs
       - run: node --experimental-strip-types --test tests/ios-speech-playback.test.mjs
       - run: node --experimental-strip-types --test tests/offline-owner-budget-analysis.test.mjs tests/local-finance-docs.test.mjs
+      - run: node --experimental-strip-types --test tests/reviewed-document-ledger.test.mjs tests/mobile-spend-workspace.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/financial-readiness.test.mjs tests/local-launch-guideline.test.mjs
       - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs tests/financial-source-health.test.mjs
       - run: node --experimental-strip-types --test tests/live-crypto-quotes.test.mjs
       - run: node --test tests/iphone-mobile-shell.test.mjs

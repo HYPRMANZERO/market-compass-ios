@@ -1,0 +1,91 @@
+/**
+ * Explicit owner-approval bridge between bounded imported document excerpts
+ * and the ordinary local Spend ledger.
+ *
+ * NO automatic posting, bank validation, balance reconciliation, provider
+ * execution, or HYPRBOX transmission. Document lines are incomplete evidence.
+ * Entry IDs are stable for retries and edits, preventing accidental reimport.
+ */
+import {validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
+import {
+  validateExpenseEntry,EXPENSE_CATEGORIES,
+  type ExpenseEntry,type ExpenseKind,type ExpenseCategory
+} from './monthlyExpenses.ts';
+
+export type ReviewedLedgerDecision={
+  lineIndex:number;
+  date:string;
+  kind:ExpenseKind;
+  category:ExpenseCategory;
+};
+export const documentLedgerEntryId=(documentId:string,lineIndex:number)=>
+  'doc-'+documentId+'-'+lineIndex;
+const allowedKinds=new Set<ExpenseKind>(['income','expense','debt-payment','transfer']);
+const categoryValues=new Set<ExpenseCategory>(EXPENSE_CATEGORIES.map(c=>c.value));
+const validCategories:Record<ExpenseKind,ExpenseCategory[]>={
+  income:['salary','side-income'],
+  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','car','credit-card','other'],
+  'debt-payment':['car','credit-card','other'],
+  transfer:['savings','other']
+};
+export function allowedDocumentCategories(kind:ExpenseKind):ExpenseCategory[]{
+  return validCategories[kind]??[];
+}
+export function documentAppliedIndices(doc:LocalFinanceDocument,existing:ExpenseEntry[]):Set<number>{
+  const ids=new Set(existing.map(e=>e.id));
+  return new Set(doc.lines.map((_,i)=>i).filter(i=>ids.has(documentLedgerEntryId(doc.id,i))));
+}
+export function applyReviewedDocumentToLedger(
+  source:LocalFinanceDocument,
+  current:ExpenseEntry[],
+  choices:ReviewedLedgerDecision[],
+  currency:string,
+  now=new Date()
+):ExpenseEntry[]{
+  const doc=validateLocalFinanceDocument(source);
+  if(!doc)throw Error('The saved document is invalid. Export your encrypted backup and review it.');
+  if(!Array.isArray(current) || !Array.isArray(choices) ||
+    choices.length===0 || choices.length>doc.lines.length)
+    throw Error('Select one or more specific document rows for review.');
+  if(currency!=='ZAR')throw Error('Document amounts require owner-confirmed ZAR. Check your workspace currency first.');
+  if(!(now instanceof Date)||!Number.isFinite(now.valueOf()))
+    throw Error('Invalid entry timestamp.');
+  const existing=new Set(current.map(x=>x.id));
+  const chosen=new Set<number>();
+  const incoming:ExpenseEntry[]=[];
+  for(const choice of choices){
+    if(!choice || !Number.isInteger(choice.lineIndex) ||
+      choice.lineIndex<0 || choice.lineIndex>=doc.lines.length ||
+      chosen.has(choice.lineIndex))
+      throw Error('Invalid or repeated document row. No entries were added.');
+    chosen.add(choice.lineIndex);
+    const line=doc.lines[choice.lineIndex];
+    if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
+      throw Error('A selected row has no usable nonzero amount.');
+    if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||
+       !validCategories[choice.kind].includes(choice.category))
+      throw Error('Classify each row with an appropriate entry type and category.');
+    if(line.direction==='incoming' && !['income','transfer'].includes(choice.kind))
+      throw Error('A source-labelled credit cannot be posted as spending without correcting the source first.');
+    if(line.direction==='outgoing' && !['expense','debt-payment','transfer'].includes(choice.kind))
+      throw Error('A source-labelled debit cannot be posted as income without correcting the source first.');
+    const id=documentLedgerEntryId(doc.id,choice.lineIndex);
+    if(existing.has(id))throw Error('One or more selected rows were already added to Spend. Nothing was added twice.');
+    const entry:ExpenseEntry={
+      id,
+      date:choice.date,
+      recordedAt:now.toISOString(),
+      kind:choice.kind,
+      category:choice.category,
+      description:line.label.slice(0,100),
+      paidVia:'Owner-reviewed document',
+      amount:Math.round(Math.abs(line.amount)*100)/100,
+      currency:'ZAR',
+      note:'Owner-approved partial file excerpt, not a verified bank balance. Source line '+(choice.lineIndex+1)+'.'
+    };
+    incoming.push(validateExpenseEntry(entry));
+  }
+  // The caller uses one React setData transaction so either all reviewed rows
+  // are appended or none are. Never rewrite the saved source document.
+  return [...current,...incoming];
+}
