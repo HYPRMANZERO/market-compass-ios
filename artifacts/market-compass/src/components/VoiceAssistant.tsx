@@ -490,8 +490,13 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
       /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
     const asksPublicResearch = /^(?:search public (?:reference|information|info)|research (?:public )?(?:topic|information)|search wikipedia for)\b/i.test(question);
-    if ((!agentMode || !connected) && result.type !== 'unknown' &&
-      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch))) {
+    // Navigation and non-negotiable payment/trading refusals remain local even
+    // with Agent mode enabled: a model must never override these guards.
+    const localSafetyRefusal = result.type === 'answer' &&
+      result.reply.startsWith('I cannot transfer money');
+    if (result.type === 'navigate' || localSafetyRefusal ||
+      ((!agentMode || !connected) && result.type !== 'unknown' &&
+      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
