@@ -26,7 +26,7 @@ export type OwnerBudgetView = {
   salaryOnlyUnallocatedMin:number;salaryOnlyUnallocatedMax:number;
   conditionalIncentiveUnallocatedMin:number;conditionalIncentiveUnallocatedMax:number;
   historicalCycles:OwnerBudgetCycle[];scheduledMonths:OwnerBudgetMonth[];
-  creditCardFigureStatus:'not_provided'|'unknown_balance_or_limit';
+  creditCardFigureStatus:'not_provided'|'unknown_balance_or_limit'|'owner_reported_outstanding_balance';
   creditCardFigure:number|null;
   coverage:'owner_reported_partial';
   note:string;
@@ -58,7 +58,7 @@ export function parseOwnerBudgetView(data:unknown):OwnerBudgetView|null {
      !Array.isArray(data.scheduledOverrides)||data.scheduledOverrides.length>24||
      !Array.isArray(data.historicalCycles)||data.historicalCycles.length>12||
      !Array.isArray(data.scheduledMonths)||data.scheduledMonths.length>24||
-     !['not_provided','unknown_balance_or_limit'].includes(String(data.creditCardFigureStatus))||
+     !['not_provided','unknown_balance_or_limit','owner_reported_outstanding_balance'].includes(String(data.creditCardFigureStatus))||
      (data.creditCardFigure!==null&&!money(data.creditCardFigure))||
      typeof data.note!=='string'||data.note.length>450) return null;
   const recurring:OwnerBudgetLine[]=[];
