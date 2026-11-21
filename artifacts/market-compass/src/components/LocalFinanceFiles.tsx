@@ -194,7 +194,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           {line.ratePercent!==undefined&&<p className="font-semibold">Quoted rate {line.ratePercent}%</p>}
           {line.runningBalance!==undefined&&<p className="text-muted-foreground">
             Running balance after transaction: {money(line.runningBalance)} · historical, not another payment
-          </p>
+          </p>}
         </div>)}
       </div>
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
