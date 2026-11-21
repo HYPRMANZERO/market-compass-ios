@@ -4,7 +4,9 @@ import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compa
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
-import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, type VoicePace } from '@/lib/speechVoices';
+import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
+import { parseOwnerBudgetView, type OwnerBudgetView } from '@/lib/ownerBudgetView';
+import OwnerBudgetPanel from '@/components/OwnerBudgetPanel';
 
 type RecognitionResult = { 0: { transcript: string }; isFinal: boolean };
 type RecognitionEvent = { results: ArrayLike<RecognitionResult>; resultIndex: number };
@@ -99,6 +101,8 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
   const [agentMode, setAgentMode] = useState(false);
   const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
+  const [ownerBudget, setOwnerBudget] = useState<OwnerBudgetView | null>(null);
+  const [ownerBudgetAvailable, setOwnerBudgetAvailable] = useState(false);
   const [sourceHealth, setSourceHealth] = useState<FinancialSourceHealth | null>(null);
   const [luno, setLuno] = useState<LunoStatus | null>(null);
   const [sourceError, setSourceError] = useState('');
@@ -133,9 +137,16 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
     if (!speakingSupported) return;
     const synth=window.speechSynthesis;
     const refresh=()=>setAvailableVoices(sortedEnglishVoices(synth.getVoices()));
+    const whenVisible=()=>{ if(document.visibilityState==='visible') refresh(); };
     refresh();
     synth.addEventListener('voiceschanged',refresh);
-    return ()=>synth.removeEventListener('voiceschanged',refresh);
+    window.addEventListener('focus',refresh);
+    document.addEventListener('visibilitychange',whenVisible);
+    return ()=>{
+      synth.removeEventListener('voiceschanged',refresh);
+      window.removeEventListener('focus',refresh);
+      document.removeEventListener('visibilitychange',whenVisible);
+    };
   }, [speakingSupported]);
 
   useEffect(() => () => {
@@ -245,10 +256,15 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       // Preserve the last retrieved status for reference while disconnected.
       // On reconnection, the endpoints are queried again with fresh data.
       setSourceLoading(false);
+      setOwnerBudget(null);
+      setOwnerBudgetAvailable(false);
       return;
     }
     const origin = privateTailnetOrigin(settings.url);
     if (!origin) return;
+    // Avoid showing a private snapshot from a previously connected host/token.
+    setOwnerBudget(null);
+    setOwnerBudgetAvailable(false);
     let active = true;
     let inFlight = false;
     const controllers = new Set<AbortController>();
@@ -273,8 +289,8 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         // A slow/unavailable provider must never hide the independent
         // document inventory. Always settle both requests and display
         // the specific endpoint that failed.
-        const [inventoryResult, balanceResult] = await Promise.allSettled([
-          request('/api/sources'), request('/api/balances')
+        const [inventoryResult, balanceResult, budgetResult] = await Promise.allSettled([
+          request('/api/sources'), request('/api/balances'), request('/api/owner-budget')
         ]);
         if (!active) return;
         const errors: string[] = [];
@@ -300,6 +316,25 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
           }
         } else {
           errors.push('Luno: ' + explainError(balanceResult.reason));
+        }
+        if (budgetResult.status === 'fulfilled') {
+          const response=budgetResult.value;
+          if (response.ok===true && response.readOnly===true &&
+              response.bankVerified===false && response.browserVaultSynchronized===false &&
+              Object.prototype.hasOwnProperty.call(response,'ownerBudget')) {
+            const view=response.ownerBudget===null ? null : parseOwnerBudgetView(response.ownerBudget);
+            if (response.ownerBudget===null || view) {
+              setOwnerBudget(view);
+              setOwnerBudgetAvailable(true);
+            } else {
+              setOwnerBudget(null);setOwnerBudgetAvailable(false);
+              errors.push('Shared budget: invalid read-only response.');
+            }
+          } else {
+            errors.push('Shared budget: unavailable or old bridge version.');
+          }
+        } else {
+          errors.push('Shared budget: '+explainError(budgetResult.reason));
         }
         setSourceError(errors.length
           ? 'Private source refresh was incomplete. ' + errors.join(' ') + ' Offline planning still works.'
@@ -388,8 +423,12 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       const synth=window.speechSynthesis;
       synth.cancel();
       const utterance = new SpeechSynthesisUtterance(voiceFriendlyText(answer));
+      // Safari can use iPhone's own default voice when no explicit voice is set.
+      // This mode must not be overridden by the automatic voice ranking.
       const best=chooseSpeechVoice(synth.getVoices(),settings.voiceURI);
-      if(best){utterance.voice=best;utterance.lang=best.lang;}
+      if (settings.voiceURI===DEVICE_DEFAULT_VOICE) {
+        // Leave voice and lang unspecified: the iPhone selects both.
+      } else if(best){utterance.voice=best;utterance.lang=best.lang;}
       else utterance.lang='en-ZA';
       utterance.rate=speakingRate(settings.voicePace);
       utterance.pitch=1;
@@ -678,11 +717,13 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
       </p>
       <label className="mt-3 block text-[12px] font-semibold">
         Spoken voice
-        <select value={availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
+        <select value={settings.voiceURI===DEVICE_DEFAULT_VOICE ? DEVICE_DEFAULT_VOICE :
+          availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
           onChange={e=>onSettingsChange({...settings,voiceURI:e.target.value})}
           disabled={!speakingSupported}
           className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="">Automatic · best available English voice</option>
+          <option value="">Automatic · best Safari-listed English voice</option>
+          <option value={DEVICE_DEFAULT_VOICE}>Use iPhone system default voice</option>
           {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
         </select>
       </label>
@@ -702,8 +743,16 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
         <Speaker size={15} className="mr-1 inline"/> Preview this voice
       </button>
+      <button type="button" disabled={!speakingSupported}
+        onClick={()=>setAvailableVoices(sortedEnglishVoices(window.speechSynthesis.getVoices()))}
+        className="ml-2 mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
+        <RefreshCw size={14} className="mr-1 inline"/> Refresh iPhone voices
+      </button>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-        Voice availability and audio quality depend on Safari and installed system voices. This setting is stored in your existing encrypted workspace; no new voice service is installed.
+        Safari reports {availableVoices.length} English voices on this device. The iPhone system default
+        option lets iOS choose instead. Safari may not expose all downloaded Enhanced/Premium
+        iPhone voices; unavailable voices cannot be forced by a web app. Try voice previews
+        and keep the one you prefer. No financial reply is sent to a new voice service.
       </p>
     </details>
 
@@ -758,6 +807,7 @@ export default function VoiceAssistant({ context, onNavigate, settings, onSettin
         </button>
       </div>
       {sourceLoading && <p className="mt-3 text-[12px] text-muted-foreground">Reading the private source inventory…</p>}
+      <OwnerBudgetPanel view={ownerBudget} connected={connected} available={ownerBudgetAvailable}/>
       {sourceHealth ? <div className="mt-3 rounded-xl border border-border p-3" aria-label="Financial source freshness">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-[12px] font-semibold">Source freshness · read only</h3>
