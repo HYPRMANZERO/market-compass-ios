@@ -43,23 +43,36 @@ export function speakingRate(pace: VoicePace | undefined): number {
 }
 
 function spokenRand(value: string): string {
-  const amount=Number(value.replace(/,/g,''));
+  const amount=Number(value.replace(/[\s,]/g,''));
   if(!Number.isFinite(amount) || amount<0 || amount>1e11) return value+' rand';
   const totalCents=Math.round(amount*100);
   const whole=Math.floor(totalCents/100);
   const cents=totalCents%100;
-  return whole.toLocaleString('en-ZA')+' rand'+(cents?' and '+cents+' cents':'');
+  return whole.toLocaleString('en-ZA')+' rand'+(cents?' and '+cents+(cents===1?' cent':' cents'):'');
 }
+
+// Handle both "ZAR 1,200.50" and "1,200.50 ZAR" without changing
+// the displayed model response or converting currencies.
+const amountPattern = '(\\d+(?:[ ,]\\d{3})*(?:\\.\\d{1,2})?)';
+const prefixedRand = new RegExp('\\bZAR\\s*' + amountPattern + '\\b','gi');
+const suffixedRand = new RegExp('\\b' + amountPattern + '\\s*ZAR\\b','gi');
+const symbolRand = new RegExp('(^|[\\s(])R\\s*' + amountPattern + '\\b','gi');
 
 export function voiceFriendlyText(text: string): string {
   return text
     .replace(/https?:\/\/\S+/g, 'a reference link')
     .replace(/[*#_\u0060]/g,'')
+    .replace(/\bS\s*&\s*P\s*500\b/gi,'S and P five hundred')
+    .replace(/\bBTC\s*\/\s*USD\b/gi,'Bitcoin to US dollars')
     .replace(/\bAPR\b/g,'annual interest rate')
-    .replace(/\bZAR\s*(\d[\d,]*(?:\.\d+)?)/g,(_match,amount:string)=>spokenRand(amount))
+    .replace(prefixedRand,(_match,amount:string)=>spokenRand(amount))
+    .replace(suffixedRand,(_match,amount:string)=>spokenRand(amount))
+    .replace(symbolRand,(_match,leading:string,amount:string)=>leading+spokenRand(amount))
+    .replace(/\b(\d+(?:\.\d+)?)\s*%/g,'$1 percent')
     .replace(/\bBTC\b/g,'Bitcoin')
     .replace(/\bETH\b/g,'Ethereum')
     .replace(/\bUSD\b/g,'US dollars')
+    .replace(/\bZAR\b/g,'South African rand')
     .replace(/\s+/g,' ')
     .trim()
     .slice(0,1200);
