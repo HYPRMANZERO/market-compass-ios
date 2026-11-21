@@ -1,4 +1,4 @@
-import {detectFinanceDocument,extractVehicleFinanceLines,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
+import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -229,6 +229,25 @@ export function extractLocalFinanceDocument(
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
   return validated;
 }
+/** Owner-confirmed migration of saved, already-redacted excerpt labels.
+ * Keeps the same document and line IDs, dates, amounts, and ledger entries.
+ * Cannot recover source text absent from a previous partial import. */
+export function reclassifySavedFinanceDocument(input:LocalFinanceDocument):LocalFinanceDocument{
+  const existing=validateLocalFinanceDocument(input);
+  if(!existing)throw Error('The encrypted document summary is invalid. Export a backup first.');
+  const kind=detectFinanceDocument(existing.lines.map(l=>l.label).join('\n'),existing.label);
+  if(kind==='unclassified')throw Error('Not enough saved context to classify this as vehicle finance. Reopen the original PDF if available.');
+  const result=validateLocalFinanceDocument({...existing,documentKind:kind,
+    lines:existing.lines.map(line=>{
+      if(line.semanticRole)return line;
+      const semantic=classifyFinanceLabel(line.label);
+      return {...line,...semantic};
+    })
+  });
+  if(!result)throw Error('Cannot safely classify stored excerpts.');
+  return result;
+}
+
 export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDocument):LocalFinanceDocument[]{
   if(!Array.isArray(current))throw Error('Invalid existing encrypted document list. Export a backup first.');
   const checked=current.map(validateLocalFinanceDocument);
