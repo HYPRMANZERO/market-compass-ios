@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
+import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
 import {
   addLocalFinanceDocument,removeLocalFinanceDocument,
@@ -761,6 +762,7 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
   const total = accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   return <>
     <PageIntro eyebrow="Plan with your own numbers" title="Debt payoff" description="Build a local payoff plan and prepare secure provider payment handoffs without connecting your bank accounts. No payments are initiated from this page." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><ShieldCheck size={14} /> Encrypted device workspace</div>} />
+    <FinancialReadinessChecklist data={data} />
     <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
       <div className="space-y-4">
         <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50</span>}>
@@ -865,38 +867,106 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
 }
 
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
+  // A mobile-first workflow: documents and parsing first, then the dated
+  // transaction ledger, then the read-only planning evidence checklist.
+  const [section,setSection]=useState<SpendSection>('documents');
+  const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
+  const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
+  const options=[
+    {id:'documents' as const,title:'Documents',subtitle:'Import & review',count:docs.length,Icon:Upload},
+    {id:'activity' as const,title:'Activity',subtitle:'Spending ledger',count:ledger.length,Icon:ReceiptText},
+    {id:'plan' as const,title:'Plan',subtitle:'Next steps',count:null,Icon:ListChecks}
+  ];
   return <>
-    <OwnerBudgetDraftEditor
-      profile={data.ownerBudgetDraft??null}
-      onSave={profile=>setData(old=>({...old,ownerBudgetDraft:profile}))}
-    />
-    <LocalFinanceFiles
-      documents={Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[]}
-      onAdd={document=>setData(old=>({
-        ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
-      }))}
-      onRemove={id=>setData(old=>({
-        ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
-      }))}
-    />
-    <MonthlyExpenses
-    entries={Array.isArray(data.expenseEntries)?data.expenseEntries:[]}
-    settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
-    desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
-    currency={data.currency}
-    debtAccounts={data.accounts}
-    onSave={(entry,syncDebtBalance)=>setData(old=>({
-      ...old,
-      expenseEntries:[
-        ...(old.expenseEntries??[]).filter(saved=>saved.id!==entry.id),entry
-      ],
-      accounts:syncDebtBalance && entry.debtAccountId && entry.remainingBalance!==null && entry.remainingBalance!==undefined
-        ? old.accounts.map(a=>a.id===entry.debtAccountId?{...a,balance:String(entry.remainingBalance)}:a)
-        : old.accounts,
-    }))}
-    onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
-    onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
-  />
+    <PageIntro eyebrow="Evidence first, decisions second" title="Your finances"
+      description="Start with a document, review its information, and decide what should become a transaction. Your local financial plan updates only from the records you approve."
+      trailing={<StatusTag tone="warn">Owner-reviewed · not bank verified</StatusTag>} />
+    <section aria-label="Spend workspace" className="mb-6 rounded-[24px] border border-border bg-card p-3 shadow-sm sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3 px-1 sm:mb-4">
+        <div>
+          <h2 className="text-[14px] font-bold">Your workspace</h2>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Three focused views. Your saved records stay in the same encrypted vault.</p>
+        </div>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">Private · on device</span>
+      </div>
+      <nav aria-label="Spend sections" className="grid grid-cols-3 gap-2">
+        {options.map(({id,title,subtitle,count,Icon})=><button key={id} type="button"
+          aria-pressed={section===id}
+          onClick={()=>setSection(id)}
+          className={`flex min-h-[104px] min-w-0 flex-col items-start justify-between rounded-[18px] border px-3 py-3 text-left transition-colors sm:min-h-[112px] sm:px-4 ${section===id?
+            'border-primary/40 bg-primary/[.07] text-foreground shadow-sm':
+            'border-border bg-background text-foreground hover:bg-muted/50'}`}>
+          <div className="flex w-full items-center justify-between gap-1">
+            <Icon size={19} className={section===id?'text-primary':'text-muted-foreground'} aria-hidden="true"/>
+            {count!==null&&<span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{count}</span>}
+          </div>
+          <span className="mt-2 block min-w-0">
+            <span className="block truncate text-[12px] font-bold sm:text-[14px]">{title}</span>
+            <span className="mt-1 block text-[10px] leading-[1.4] text-muted-foreground">{subtitle}</span>
+          </span>
+        </button>)}
+      </nav>
+    </section>
+    <div aria-label={section==='documents'?'Document importer and reviewed files':
+      section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
+      className="min-w-0 space-y-5">
+      {section==='documents'&&<>
+        <div className="rounded-2xl border border-primary/15 bg-primary/[.045] px-4 py-3">
+          <p className="text-[12px] font-semibold">1. Import · 2. Review · 3. Add approved lines to Spend</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+            Saving an excerpt alone does not alter your ledger. Open a saved document
+            and choose Review and add to Spend to classify real entries.
+          </p>
+        </div>
+        <LocalFinanceFiles
+          documents={docs}
+          onAdd={document=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          }))}
+          onRemove={id=>setData(old=>({
+            ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
+          }))}
+          ledgerEntries={ledger}
+          currency={data.currency}
+          currencyReviewRequired={data.currencyReviewRequired}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+        />
+      </>}
+      {section==='activity'&&<>
+        <div className="rounded-2xl border border-border bg-card px-4 py-3">
+          <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+            The salary cycle runs from the 26th to the 25th. Imported entries are
+            dated but not reconciled with a live bank; confirm the selected cycle.
+          </p>
+        </div>
+        <MonthlyExpenses
+          entries={ledger}
+          settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+          desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
+          currency={data.currency}
+          debtAccounts={data.accounts}
+          onSave={(entry,syncDebtBalance)=>setData(old=>({
+            ...old,
+            expenseEntries:[
+              ...(old.expenseEntries??[]).filter(saved=>saved.id!==entry.id),entry
+            ],
+            accounts:syncDebtBalance && entry.debtAccountId && entry.remainingBalance!==null && entry.remainingBalance!==undefined
+              ? old.accounts.map(a=>a.id===entry.debtAccountId?{...a,balance:String(entry.remainingBalance)}:a)
+              : old.accounts,
+          }))}
+          onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
+          onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
+        />
+      </>}
+      {section==='plan'&&<>
+        <FinancialReadinessChecklist data={data} />
+        <OwnerBudgetDraftEditor
+          profile={data.ownerBudgetDraft??null}
+          onSave={profile=>setData(old=>({...old,ownerBudgetDraft:profile}))}
+        />
+      </>}
+    </div>
   </>;
 }
 
