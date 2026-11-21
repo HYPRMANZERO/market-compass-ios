@@ -54,9 +54,9 @@ function spokenRand(value: string): string {
 // Handle both "ZAR 1,200.50" and "1,200.50 ZAR" without changing
 // the displayed model response or converting currencies.
 const amountPattern = '(\\d+(?:[ ,]\\d{3})*(?:\\.\\d{1,2})?)';
-const prefixedRand = new RegExp('\\bZAR\\s*' + amountPattern + '\\b','gi');
-const suffixedRand = new RegExp('\\b' + amountPattern + '\\s*ZAR\\b','gi');
-const symbolRand = new RegExp('(^|[\\s(])R\\s*' + amountPattern + '\\b','gi');
+const prefixedRand = new RegExp('\\bZAR\\s*' + amountPattern + '(?![\\d.,])','gi');
+const suffixedRand = new RegExp('(^|[\\s(])' + amountPattern + '\\s*ZAR\\b','gi');
+const symbolRand = new RegExp('(^|[\\s(])R\\s*' + amountPattern + '(?![\\d.,])','gi');
 
 export function voiceFriendlyText(text: string): string {
   return text
@@ -66,7 +66,7 @@ export function voiceFriendlyText(text: string): string {
     .replace(/\bBTC\s*\/\s*USD\b/gi,'Bitcoin to US dollars')
     .replace(/\bAPR\b/g,'annual interest rate')
     .replace(prefixedRand,(_match,amount:string)=>spokenRand(amount))
-    .replace(suffixedRand,(_match,amount:string)=>spokenRand(amount))
+    .replace(suffixedRand,(_match,leading:string,amount:string)=>leading+spokenRand(amount))
     .replace(symbolRand,(_match,leading:string,amount:string)=>leading+spokenRand(amount))
     .replace(/\b(\d+(?:\.\d+)?)\s*%/g,'$1 percent')
     .replace(/\bBTC\b/g,'Bitcoin')
