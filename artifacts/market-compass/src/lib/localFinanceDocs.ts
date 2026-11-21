@@ -4,8 +4,8 @@
  * Text-based CSV, TXT and JSON can be parsed inside Safari without uploading
  * any file. Keep ONLY bounded, redacted, human-reviewed excerpts in the
  * existing passphrase-encrypted workspace. This is not OCR or bank verification.
- * PDF, DOCX, XLSX, images and password-protected documents are deliberately
- * NOT parsed, rather than implying that unsupported files were read.
+ * Locally extracted selectable PDF text is supported, including PDFs opened
+ * with a temporary password; images, DOCX, XLSX and OCR are NOT supported.
  */
 export type LocalFinanceLine={
   label:string;
@@ -17,7 +17,7 @@ export type LocalFinanceDocument={
   id:string;
   label:string;
   importedAt:string;
-  format:'csv'|'txt'|'json';
+  format:'csv'|'txt'|'json'|'pdf';
   source:'owner-selected-iphone-file';
   bankVerified:false;
   complete:false;
@@ -165,7 +165,7 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     !Number.isFinite(Date.parse(input.importedAt))||
     input.source!=='owner-selected-iphone-file'||input.bankVerified!==false||
     input.complete!==false||input.truncated!==true&&input.truncated!==false||
-    !['csv','txt','json'].includes(String(input.format))||
+    !['csv','txt','json','pdf'].includes(String(input.format))||
     !Array.isArray(input.lines)||input.lines.length<1||input.lines.length>MAX_FINANCE_LINES)return null;
   const lines:LocalFinanceLine[]=[];
   for(const v of input.lines){
@@ -191,9 +191,9 @@ export function extractLocalFinanceDocument(
   if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>MAX_FINANCE_FILE_BYTES)
     throw Error('Files must be 256 KB or smaller. Choose a short export.');
   const extension=fileName.toLowerCase().split('.').pop();
-  if(extension!=='csv'&&extension!=='txt'&&extension!=='json')
-    throw Error('This version accepts local CSV, TXT and transaction JSON. PDF, photos and spreadsheets need a separate offline extractor; nothing was uploaded.');
-  const lines=extension==='csv'?parseCsv(text):extension==='txt'?parseText(text):parseJson(text);
+  if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
+    throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
+  const lines=extension==='csv'?parseCsv(text):extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
   if(!lines.length)throw Error('No financial rows with recognisable amounts were found. Nothing was saved.');
   const document={
     id,label:ownerLabel.trim(),importedAt:now.toISOString(),
