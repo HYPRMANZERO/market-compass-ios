@@ -6,7 +6,9 @@
  * JavaScript cannot guarantee immediate erasure of immutable password strings
  * from browser-managed memory; we drop references after each attempt instead.
  */
-export const MAX_LOCAL_PDF_BYTES = 2_000_000;
+// Browser PDF.js currently materialises the source in memory. This is a
+// device-safety ceiling, not a business/document-page limit.
+export const MAX_LOCAL_PDF_BYTES = 64*1024*1024;
 /** Rebuild selectable text lines without saving PDF coordinates or raw bytes. */
 export function layoutSelectablePdfLines(items:ReadonlyArray<unknown>):string[]{
   const fragments:{text:string;x:number;y:number;order:number;end:boolean}[]=[];
@@ -44,15 +46,17 @@ export function layoutSelectablePdfLines(items:ReadonlyArray<unknown>):string[]{
   if(current)out.push(current);
   return out;
 }
-export const MAX_LOCAL_PDF_PAGES = 12;
-export const MAX_LOCAL_PDF_TEXT_CHARS = 200_000;
+export const MAX_LOCAL_PDF_PAGES = Number.POSITIVE_INFINITY;
+export const MAX_LOCAL_PDF_TEXT_CHARS = 2_000_000;
+export type PdfProgress={page:number;total:number;stage:'reading'|'extracting'};
+export type PdfReadOptions={signal?:AbortSignal;onProgress?:(progress:PdfProgress)=>void};
 
-export async function extractLocalPdfText(file: File, temporaryPassword = ''): Promise<string> {
+export async function extractLocalPdfText(file: File, temporaryPassword = '',options:PdfReadOptions={}): Promise<string> {
   if (!(file instanceof File) || !/\.pdf$/i.test(file.name)) {
     throw Error('Select a PDF document from iPhone Files.');
   }
   if (!file.size || file.size > MAX_LOCAL_PDF_BYTES) {
-    throw Error('Choose a text-based PDF smaller than 2 MB. No file was saved.');
+    throw Error('This PDF exceeds the 64 MB on-device memory safety limit. Use a local desktop parser or split the export; nothing was saved.');
   }
 
   // Lazy-load the matching parser and worker from this PWA, not a public CDN.
@@ -62,6 +66,8 @@ export async function extractLocalPdfText(file: File, temporaryPassword = ''): P
   ]);
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
 
+  if(options.signal?.aborted)throw Error('PDF processing cancelled; nothing was saved.');
+  options.onProgress?.({page:0,total:0,stage:'reading'});
   const bytes = new Uint8Array(await file.arrayBuffer());
   let task: ReturnType<typeof pdfjs.getDocument> | undefined;
   try {
@@ -72,12 +78,12 @@ export async function extractLocalPdfText(file: File, temporaryPassword = ''): P
       useSystemFonts: false,
     });
     const pdf = await task.promise;
-    if (pdf.numPages < 1 || pdf.numPages > MAX_LOCAL_PDF_PAGES) {
-      throw Error('PDF must contain 1–12 pages. Export a shorter statement first.');
-    }
+    if (pdf.numPages < 1) throw Error('The PDF contains no pages. Nothing was saved.');
     const lines: string[] = [];
     let length = 0;
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      if(options.signal?.aborted)throw Error('PDF processing cancelled; nothing was saved.');
+      options.onProgress?.({page:pageNumber,total:pdf.numPages,stage:'extracting'});
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
       // PDF text order is not always reading order. Reconstruct line positions
@@ -91,6 +97,8 @@ export async function extractLocalPdfText(file: File, temporaryPassword = ''): P
         lines.push(line);
       }
       page.cleanup();
+      // Yield between pages so Safari can repaint the progress dialog.
+      if(pageNumber%2===0)await new Promise<void>(resolve=>setTimeout(resolve,0));
       if (length > MAX_LOCAL_PDF_TEXT_CHARS) {
         throw Error('PDF contains too much extractable text. Select fewer pages.');
       }
@@ -105,7 +113,7 @@ export async function extractLocalPdfText(file: File, temporaryPassword = ''): P
       throw Error('This PDF requires a password or the temporary password was incorrect. Enter the PDF password and choose the file again. Nothing was saved.');
     }
     // Do not expose parser stack traces, document contents or a password.
-    if (error instanceof Error && /^(PDF must|PDF contains|PDF exceeds|This PDF has)/.test(error.message)) {
+    if (error instanceof Error && /^(PDF must|PDF contains|PDF exceeds|This PDF has|This PDF exceeds|PDF processing cancelled|The PDF contains)/.test(error.message)) {
       throw error;
     }
     throw Error('The PDF could not be read privately. Try a smaller, text-based PDF or export CSV/TXT; nothing was saved.');
