@@ -29,6 +29,8 @@ type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; tex
 type AgentRunResult = {
   ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
   answer: string; workspaceWritten: false; approvalExecutionEnabled: false;
+  answerSource?: 'private-desktop-model' | 'verified-read-only-tools';
+  verifiedSummary?: string | null;
   trace: {tool:string;label:string;status:'ok'|'unavailable';effect:'read'}[];
   results: Record<string,{available?:boolean;connected?:boolean;reason?:string}>;
   approval: null | {
@@ -497,7 +499,9 @@ export default function VoiceAssistant({
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
       } : undefined;
-      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
+      // Only personal-data reads and draft requests use agent tools. A public
+      // Bitcoin/market quote belongs to Ollama chat, not a Luno balance tool.
+      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
       const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
       const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
@@ -519,7 +523,8 @@ export default function VoiceAssistant({
         }
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
-        add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
+        add(agentResult.answerSource === 'private-desktop-model' ? 'ollama' : 'agent',
+          agentResult.answer.slice(0,1600)); speak(agentResult.answer);
         setStatus(`Read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
       } else {
         if (!('reply' in payload) || typeof payload.reply !== 'string')
@@ -565,9 +570,8 @@ export default function VoiceAssistant({
     const localSafetyRefusal = result.type === 'answer' &&
       result.reply.startsWith('I cannot transfer money');
     if (result.type === 'navigate' || localSafetyRefusal ||
-      ((!agentMode || !connected) && result.type !== 'unknown' &&
-      !(!connected && result.needsHistoricalSources) &&
-      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
+      (!connected && result.type !== 'unknown' &&
+       !result.needsHistoricalSources && !asksLiveWallet && !asksPublicResearch)) {
       add('local', result.reply); speak(result.reply);
       if (result.destination) onNavigate(result.destination);
       return;
@@ -739,7 +743,11 @@ export default function VoiceAssistant({
                 <p className="mt-1 text-[11px] leading-5">{lastAgent.results[item.tool].reason}</p>
               )}
             </li>)}
-          </ul> : <p className="mt-2 text-[11px] text-muted-foreground">No private financial tool was accessed. This request only created a review draft.</p>}
+          </ul> : <p className="mt-2 text-[11px] text-muted-foreground">{lastAgent.approval ? 'No private financial tool was accessed. This request is a review-only draft or blocked action.' : 'No private financial tool was accessed. Ollama answered as a conversation.'}</p>}
+          {lastAgent.verifiedSummary && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
+            <strong>Verified read-only source summary</strong>
+            <p className="mt-1 leading-5">{lastAgent.verifiedSummary}</p>
+          </div>}
           {lastAgent.approval && <div className="mt-3 rounded-lg border border-border bg-background p-3 text-[12px]">
             <strong>{lastAgent.approval.status === 'blocked' ? 'Execution blocked' : 'Action proposal · review only'}</strong>
             <p className="mt-1 leading-5">{lastAgent.approval.description}</p>
