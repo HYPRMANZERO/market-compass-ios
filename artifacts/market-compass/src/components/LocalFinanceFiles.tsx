@@ -153,5 +153,5 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
       wait for the encrypted auto-save to finish, then choose Export encrypted backup.
       Keep the original files separately; only bounded excerpts are stored.
     </p>
-  </details>;
+  </section>;
 }
