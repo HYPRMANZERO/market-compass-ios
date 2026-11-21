@@ -18,9 +18,9 @@ export default function FinancialReadinessChecklist({data}:Props){
   const plan=buildLocalLaunchGuideline(data);
   const [copyState,setCopyState]=useState('');
   async function copyApprovedBrief(){
-    if(!window.confirm('Copy this limited owner-reported planning brief? It includes entered financial totals but NO raw document text or password. You choose whether to paste it into private HYPRBOX Ollama.'))return;
+    if(!window.confirm('Copy this bounded owner-reported Agent brief? It contains entered totals but NO raw documents or password. You control whether it is sent to HYPRBOX Ollama.'))return;
     try{
-      await navigator.clipboard.writeText(plan.reviewBrief);
+      await navigator.clipboard.writeText(plan.agentBrief);
       setCopyState('Planning brief copied. Review it before pasting into the private Assistant. Nothing has been sent automatically.');
     }catch{
       setCopyState('Clipboard unavailable on this device. Select and copy the preview below manually.');
@@ -104,14 +104,14 @@ export default function FinancialReadinessChecklist({data}:Props){
         Agent mode on; its tools remain read-only.
       </p>
       <label className="mt-2 block text-[11px] font-semibold">
-        Reviewable brief · no raw file text
-        <textarea readOnly value={plan.reviewBrief} rows={9}
+        Reviewable Agent brief (500 characters maximum) · no raw file text
+        <textarea readOnly value={plan.agentBrief} rows={7}
           aria-label="Private financial planning brief for optional Ollama review"
           className="mt-2 w-full resize-y rounded-xl border border-input bg-muted/40 p-3 font-mono text-[11px] leading-5"/>
       </label>
       <button type="button" onClick={()=>{void copyApprovedBrief();}}
         className="mt-3 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">
-        Copy approved summary for optional private Ollama review
+        Copy approved Agent brief for optional private Ollama review
       </button>
       {copyState&&<p role="status" className="mt-2 text-[11px] leading-5">{copyState}</p>}
     </details>
