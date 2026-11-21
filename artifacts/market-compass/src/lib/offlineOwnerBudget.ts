@@ -66,7 +66,7 @@ export function answerFromOfflineOwnerBudget(
   }
   if(/\b(credit card|creditcard)\b/.test(q)&&/\b(limit|balance|owe|debt|card|amount)\b/.test(q)){
     return preface+(budget.creditCardFigureStatus==='unknown_balance_or_limit'
-      ?'the '+(finite(budget.creditCardFigure)?money(budget.creditCardFigure):'reported')+
+      ?'the '+(typeof budget.creditCardFigure==='number'&&Number.isFinite(budget.creditCardFigure)?money(budget.creditCardFigure):'reported')+
         ' credit-card figure is not confirmed as an outstanding balance rather than a credit limit. Do not use it as verified debt.'
       :'there is no verified outstanding credit-card balance in this draft.')+
       ' Card payments and fees may appear in the recurring-cost breakdown. '+marker;
