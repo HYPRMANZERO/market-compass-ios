@@ -33,7 +33,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
     }
     try{
       const data=await file.text();
-      const draft=extractLocalFinanceDocument(file.name,data,label);
+      const privateLabel=label.trim() || 'iPhone financial export';
+      const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
       setPreview(draft);
       setFeedback('Local review ready. Only the extracted excerpts below will be saved if you approve. The original file has not been uploaded.');
     }catch(e){
@@ -48,10 +49,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
       setFeedback('Reviewed document excerpts added to the unlocked workspace. Wait for Last saved in Vault & Settings, then export a new encrypted backup into iPhone Files.');
     }catch(e){setError(e instanceof Error?e.message:'Document could not be saved.');}
   }
-  return <details className="mb-5 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Import selected financial files privately">
-    <summary className="min-h-11 cursor-pointer text-[14px] font-bold">
-      Private finance files · {safe.length} saved in this vault
-    </summary>
+  return <section id="mc-financial-files" className="mb-5 scroll-mt-28 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Import selected financial files privately">
+    <h2 className="text-[15px] font-bold">
+      Import financial statement exports · {safe.length} saved
+    </h2>
     <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
       Select CSV, TXT or transaction JSON files from iPhone Files. Market Compass
       extracts up to 60 labelled financial lines from each selected file, lets you
@@ -59,23 +60,24 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
       workspace. No files are uploaded to GitHub, HYPRBOX or another service.
     </p>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      PDF payslips and statements, screenshots, XLSX and DOCX are not parsed in
-      this version. We will need a bundled, on-device text/PDF extractor
-      before claiming support for those files. Do not upload them to an
-      online converter to work around this restriction.
+      Supported: CSV transaction tables, plain text, or transaction JSON.
+      A CSV file exported from your bank may work; PDF payslips, scans,
+      photographs, XLSX and DOCX are not parsed yet. Selecting an unsupported
+      file produces an on-screen error without uploading it. Do not use an
+      online converter for private financial documents.
     </p>
     <label className="mt-3 block text-[12px] font-semibold">
-      File label · e.g. October bank export
+      Optional file label · e.g. October bank export
       <input type="text" autoComplete="off" maxLength={70} value={label}
         onChange={e=>{setLabel(e.target.value);setPreview(null);setError('');setFeedback('');}}
-        placeholder="My October statement (reviewed)"
+        placeholder="Optional · defaults to iPhone financial export"
         className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
     </label>
     <label className="mt-3 block text-[12px] font-semibold">
-      Choose a local financial file (max 256 KB)
-      <input type="file" accept=".csv,.txt,.json,text/csv,text/plain,application/json"
-        aria-label="Select a private financial CSV TXT or JSON file from iPhone"
-        disabled={safe.length>=MAX_FINANCE_FILES||label.trim().length<2}
+      Choose a file from iPhone Files (max 256 KB)
+      <input type="file"
+        aria-label="Choose private CSV TXT or transaction JSON file from iPhone Files"
+        disabled={safe.length>=MAX_FINANCE_FILES}
         onChange={event=>{
           const selectedFile=event.currentTarget.files?.[0];
           event.currentTarget.value='';
@@ -83,6 +85,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove}:Props){
         }}
         className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px] disabled:opacity-40"/>
     </label>
+    <p className="mt-2 text-[11px] text-muted-foreground">
+      You can choose a file without entering a label first. The app reviews
+      extracted information locally; you must approve it before saving.
+    </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[12px] font-semibold">
         Review {preview.lines.length} extracted lines · {preview.label}
