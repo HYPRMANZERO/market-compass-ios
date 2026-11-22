@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { encryptWorkspace, decryptWorkspace, readVault, writeVault, shareVaultToFiles, storeDailySnapshot, validateRecord, compressionSummary, type EncryptedRecord } from '@/lib/localVault';
+import {persistLatestAfterPending} from '@/lib/vaultWriteCoordinator';
 import { backupDue, localDate, loadDailyBackupSettings, persistDailyBackupSettings, type DailyBackupSettings } from '@/lib/dailyBackup';
 
 const queryClient = new QueryClient();
@@ -71,12 +72,19 @@ function useWorkspaceVault() {
   const [savedAt, setSavedAt] = useState('');
   const [lastRecord, setLastRecord] = useState<EncryptedRecord | null>(null);
   const [saving, setSaving] = useState(false);
+  const [locking, setLocking] = useState(false);
+  const writeEpoch = useRef(0);
+  const lockInProgress = useRef(false);
   const [backupSettings, setBackupSettings] = useState<DailyBackupSettings>(loadDailyBackupSettings);
   const [backupMessage, setBackupMessage] = useState('');
   const [dailyBackupPending, setDailyBackupPending] = useState(() => { const settings = loadDailyBackupSettings(); return settings.enabled && settings.lastSnapshotDate === localDate() && settings.lastExportRequestedAt.slice(0, 10) !== localDate(); });
   const snapshotRunning = useRef(false);
   const dataRef = useRef(data);
   dataRef.current = data;
+  // Referential dirty flag: blocks exporting an earlier ciphertext during
+  // the debounce before the next encrypted IndexedDB transaction completes.
+  const lastSavedDataRef = useRef<WorkspaceData|null>(null);
+  const unsavedChanges = password!==null && data!==lastSavedDataRef.current;
   const passwordRef = useRef(password);
   passwordRef.current = password;
 
@@ -96,7 +104,9 @@ function useWorkspaceVault() {
       if (!stored) throw new Error('There is no encrypted vault yet. Create one below.');
       const restored = await decryptWorkspace<WorkspaceData>(stored, entered);
       if (!restored || !Array.isArray(restored.drafts) || !Array.isArray(restored.accounts) || !Array.isArray(restored.queue)) throw new Error('Vault contains an invalid workspace.');
-      setEnabled(false); setData({ ...defaultData, ...restored }); setPassword(entered); setHasVault(true);
+      const restoredData={...defaultData,...restored};
+      lastSavedDataRef.current=restoredData;
+      setEnabled(false); setData(restoredData); setPassword(entered); setHasVault(true);
       setSavedAt(stored.updatedAt); setLastRecord(stored); setGeneration((n) => n + 1);
       // The saved vault is authoritative. Never restore old plaintext over it.
       localStorage.removeItem(STORE_KEY);
@@ -111,34 +121,75 @@ function useWorkspaceVault() {
       const initial = readLegacyWorkspace();
       const record = await encryptWorkspace(initial, entered);
       await writeVault(record);
+      lastSavedDataRef.current=initial;
       setEnabled(false); setData(initial); setPassword(entered); setHasVault(true);
       setSavedAt(record.updatedAt); setLastRecord(record); setGeneration((n) => n + 1);
       localStorage.removeItem(STORE_KEY); setHasLegacy(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
-  const lock = () => { setEnabled(false); setPassword(null); setData(defaultData); setGeneration((n) => n + 1); setRevision(0); };
+  const lock = async (): Promise<void> => {
+    const activePassword=passwordRef.current;
+    if(!activePassword||lockInProgress.current)return;
+    lockInProgress.current=true;
+    // Fence older debounce and queued jobs. Already-running writes finish
+    // before the final full snapshot is committed; failed final writes keep
+    // the workspace unlocked rather than discarding unsaved data.
+    writeEpoch.current++;
+    setLocking(true);
+    setSaving(true);
+    setError('');
+    try {
+      const snapshot=dataRef.current;
+      const operation=persistLatestAfterPending(
+        writeQueue.current,snapshot,
+        value=>encryptWorkspace(value,activePassword),
+        record=>writeVault(record)
+      );
+      writeQueue.current=operation.then(()=>{});
+      const record=await operation;
+      setSavedAt(record.updatedAt);
+      setLastRecord(record);
+      lastSavedDataRef.current=snapshot;
+      setEnabled(false);
+      setPassword(null);
+      setData(defaultData);
+      setGeneration(n=>n+1);
+      setRevision(0);
+    }catch(e){
+      setError('Lock prevented to protect unsaved changes: '+
+        (e instanceof Error?e.message:String(e))+'. Retry after checking local storage.');
+    }finally{
+      lockInProgress.current=false;
+      setLocking(false);
+      setSaving(false);
+    }
+  };
   // Debounced, serialized saves. The active generation is invalidated on lock/unlock.
   useEffect(() => {
-    if (!enabled || !password) return;
+    if (!enabled || !password || locking) return;
+    const epoch=writeEpoch.current;
     let cancelled = false;
     setSaving(true);
     const t = window.setTimeout(async () => {
       try {
         const record = await encryptWorkspace(data, password);
-        if (cancelled) return;
+        if (cancelled || writeEpoch.current!==epoch) return;
         // Serialize IndexedDB commits so an older auto-save cannot land after a newer one.
         const next = writeQueue.current.catch(() => {}).then(async () => {
-          if (cancelled) return;
+          if (cancelled || writeEpoch.current!==epoch) return;
           await writeVault(record);
         });
         writeQueue.current = next;
         await next;
-        if (!cancelled) { setSavedAt(record.updatedAt); setLastRecord(record); setError(''); }
+        if (!cancelled && writeEpoch.current===epoch) {
+          lastSavedDataRef.current=data;
+          setSavedAt(record.updatedAt); setLastRecord(record); setError('');
+        }
       } catch (e) { if (!cancelled) setError(`Auto-save failed: ${e instanceof Error ? e.message : String(e)}. Export a backup.`); }
       finally { if (!cancelled) setSaving(false); }
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [data, password, enabled, generation, revision]);
+  }, [data, password, enabled, generation, revision, locking]);
   // Enables saving only after the restored workspace has rendered, so default data
   // can never overwrite an existing encrypted vault before unlock.
   useEffect(() => { if (password) setEnabled(true); }, [password, generation]);
@@ -163,18 +214,17 @@ function useWorkspaceVault() {
         // Run behind pending auto-saves and serialize against future saves.
         const operation = writeQueue.current.catch(() => {}).then(async () => {
           if (disposed) return;
-          await writeVault(record);
+          // Daily snapshots must NEVER rewrite the live workspace: a snapshot
+          // was captured at an earlier instant and may now be stale.
           await storeDailySnapshot(record, localDate());
         });
         writeQueue.current = operation;
         await operation;
         if (disposed) return;
-        if (disposed) return;
         const updated = { ...settings, lastSnapshotDate: localDate() };
         persistDailyBackupSettings(updated); setBackupSettings(updated);
         setDailyBackupPending(true);
-        setBackupMessage('Daily encrypted backup prepared locally. Tap Save to Files to export it.');
-        setSavedAt(record.updatedAt); setLastRecord(record);
+        setBackupMessage('Daily encrypted restore point saved locally. Use Export encrypted backup to share the current live vault.');
       } catch (e) {
         if (!disposed) setError(`Scheduled backup failed: ${e instanceof Error ? e.message : String(e)}`);
       } finally { snapshotRunning.current = false; }
@@ -187,7 +237,10 @@ function useWorkspaceVault() {
   }, [password, backupSettings.enabled, backupSettings.time]);
   const exportBackup = async (): Promise<boolean> => {
     if (!password || !lastRecord) return false;
-    if (saving) { setBackupMessage('Please wait for the encrypted auto-save to finish before exporting.'); return false; }
+    if (saving || locking || lockInProgress.current || unsavedChanges) {
+      setBackupMessage('Unsaved changes are pending. Confirm Last saved has updated before exporting.');
+      return false;
+    }
     try {
       // Safari's navigator.share requires direct user activation. Call it before
       // any await, using the already-encrypted latest saved record.
@@ -210,12 +263,14 @@ function useWorkspaceVault() {
       if (!restored || !Array.isArray(restored.drafts) || !Array.isArray(restored.accounts) || !Array.isArray(restored.queue)) throw new Error('Backup is not a Market Compass workspace.');
       setEnabled(false);
       await writeVault(incoming);
-      setData({ ...defaultData, ...restored }); setHasVault(true); setPassword(entered);
+      const restoredData={...defaultData,...restored};
+      lastSavedDataRef.current=restoredData;
+      setData(restoredData); setHasVault(true); setPassword(entered);
       setSavedAt(incoming.updatedAt); setLastRecord(incoming); setGeneration((n) => n + 1);
       localStorage.removeItem(STORE_KEY); setHasLegacy(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
-  return { data, setData, password, initializing, hasVault, hasLegacy, error, savedAt, saving, compressionInfo: compressionSummary(lastRecord), backupSettings, setSchedule, backupMessage, dailyBackupPending, unlock, create, lock, exportBackup, importBackup };
+  return { data, setData, password, initializing, hasVault, hasLegacy, error, savedAt, saving, locking, unsavedChanges, compressionInfo: compressionSummary(lastRecord), backupSettings, setSchedule, backupMessage, dailyBackupPending, unlock, create, lock, exportBackup, importBackup };
 }
 
 function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
@@ -1127,7 +1182,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(165,19%,91%)] text-primary"><ShieldCheck size={18}/></span>
       <span className="min-w-0 flex-1">
         <span className="block text-[12px] font-bold">Encrypted vault &amp; settings</span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.saving ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.locking ? 'Securing changes before lock…' : vault.saving || vault.unsavedChanges ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>
       </span>
       <ChevronDown size={18} className="text-muted-foreground transition-transform group-open:rotate-180"/>
     </summary>
@@ -1157,10 +1212,12 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
         {data.currencyReviewRequired && <p className="mt-2 font-semibold text-[11px] text-destructive">Review previously entered amounts in Debt Plan before calculating.</p>}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+        <button type="button" disabled={vault.saving || vault.locking || vault.unsavedChanges || !vault.savedAt} onClick={() => { void vault.exportBackup(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
           <ShieldCheck size={16}/> Export encrypted backup
         </button>
-        <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup().then(saved => { if (saved) vault.lock(); }); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-[12px] font-semibold disabled:opacity-40">Backup &amp; lock app</button>
+        <button type="button" disabled={vault.saving || vault.locking || vault.unsavedChanges || !vault.savedAt} onClick={() => { void vault.exportBackup().then(saved => {
+          if(saved && window.confirm('Confirm you saved the encrypted backup to Files before locking. A completed share sheet is not proof a file was kept. Lock this workspace now?'))void vault.lock();
+        }); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-[12px] font-semibold disabled:opacity-40">Backup &amp; lock app</button>
       </div>
       <button type="button" onClick={() => setDailyOpen(value => !value)} className="flex min-h-11 w-full items-center justify-between rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
         <span>Daily backup settings</span><ChevronDown size={17} className={dailyOpen ? 'rotate-180' : ''}/>
@@ -1199,7 +1256,19 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} /></Route>
     <Route component={NotFound} />
-  </Switch></AppShell></RoutedErrorBoundary>;
+  </Switch></AppShell>
+    {vault.locking&&<div role="alertdialog" aria-modal="true" aria-label="Securing encrypted workspace"
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/70 px-5">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-5 text-center text-foreground shadow-xl">
+        <ShieldCheck className="mx-auto text-primary" size={28}/>
+        <p className="mt-3 text-[15px] font-bold">Saving changes before locking</p>
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+          The app stays unlocked if its final encrypted write fails. Keep this page open
+          until the workspace has locked.
+        </p>
+      </div>
+    </div>}
+  </RoutedErrorBoundary>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
