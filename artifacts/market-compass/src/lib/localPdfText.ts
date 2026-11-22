@@ -71,7 +71,7 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
   const bytes = new Uint8Array(await file.arrayBuffer());
   let task: ReturnType<typeof pdfjs.getDocument> | undefined;
   try {
-    if (bytes.byteLength > MAX_LOCAL_PDF_BYTES) throw Error('PDF exceeds the 2 MB limit.');
+    if (bytes.byteLength > MAX_LOCAL_PDF_BYTES) throw Error('PDF exceeds the on-device memory safety limit.');
     task = pdfjs.getDocument({
       data: bytes,
       password: temporaryPassword || undefined,

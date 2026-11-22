@@ -1,5 +1,5 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
-import {makeAccountProfile,maskDocumentPII,safeAccountProfile,type AccountProfile} from './documentIntelligence.ts';
+import {classifyDocument,makeAccountProfile,maskDocumentPII,safeAccountProfile,type AccountProfile} from './documentIntelligence.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -41,17 +41,33 @@ const asObject=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='ob
 function dateOf(value:unknown):string|null{
   if(typeof value!=='string')return null;
   const v=value.trim();
-  let match=v.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  let match=v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})(?:T.*)?$/);
   let year:string,month:string,day:string;
   if(match){[year,month,day]=match.slice(1,4);}
   else {
     match=v.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-    if(!match)return null;
-    day=match[1].padStart(2,'0');month=match[2].padStart(2,'0');year=match[3];
+    if(match){
+      day=match[1].padStart(2,'0');month=match[2].padStart(2,'0');year=match[3];
+    }else{
+      const named=v.match(/^(\d{1,2})[\s-]+([a-z]{3,9})[\s,-]+(\d{4})$/i);
+      if(!named)return null;
+      const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      const monthIndex=months.indexOf(named[2].slice(0,3).toLowerCase());
+      if(monthIndex<0)return null;
+      day=named[1].padStart(2,'0');month=String(monthIndex+1).padStart(2,'0');year=named[3];
+    }
   }
   const date=year+'-'+month+'-'+day;
   const stamp=new Date(date+'T00:00:00Z');
   return Number.isFinite(stamp.getTime())&&stamp.toISOString().slice(0,10)===date?date:null;
+}
+/** Only an explicit payroll payment date may date an otherwise undated pay row.
+ * A statement period, contract date or import timestamp is never a debit date. */
+function payslipPayDate(text:string):string|null{
+  const matched=text.slice(0,30_000).match(
+    /(?:^|\n)\s*(?:pay date|payment date|date paid|payday)\s*[:=-]?\s*(\d{4}[-/]\d{2}[-/]\d{2}|\d{1,2}[/.]\d{1,2}[/.]\d{4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/im
+  );
+  return matched?dateOf(matched[1]):null;
 }
 function maskText(value:unknown,max=130):string{
   if(typeof value!=='string')return '';
@@ -139,11 +155,11 @@ function parseText(text:string):LocalFinanceLine[]{
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const trimmed=raw.trim();if(trimmed.length<3)continue;
     const rand=trimmed.match(/\b(?:ZAR|R)\s*([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
-    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|payment|total|insurance|fuel|rent|car payment)\b[^0-9]{0,12}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
+    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|gross earnings|net pay|paye|tax|deduction|payment|total|subtotal|amount paid|amount due|total paid|receipt total|vat|insurance|fuel|rent|car payment)\b[^0-9]{0,20}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
     const token=rand?.[1]??known?.[1];
     const amount=moneyOf(token??null);
     if(amount===null)continue;
-    const dateMatch=trimmed.match(/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{4}\b/);
+    const dateMatch=trimmed.match(/\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{4}\b|\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b/);
     const desc=maskText(trimmed,130);if(!desc)continue;
     out.push({label:desc,amount,date:dateMatch?dateOf(dateMatch[0]):null,direction:'unclassified'});
   }
@@ -220,10 +236,19 @@ export function extractLocalFinanceDocument(
   const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+ownerLabel):'unclassified';
   // A finance contract is NOT a transaction CSV. Recognise its terms before
   // the generic R-amount extractor can conflate contract values with payments.
-  const lines:LocalFinanceLine[]=documentKind!=='unclassified'?
+  let lines:LocalFinanceLine[]=documentKind!=='unclassified'?
     extractVehicleFinanceLines(text).map(line=>({...line,label:maskText(line.label,130)})):
     extension==='csv'?parseCsv(text):
     extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
+  // A payslip normally lists one payment date in its header rather than on
+  // every earnings/deduction line. Apply that ONLY to explicit pay fields,
+  // and keep other document/statement reference dates untouched.
+  if(classifyDocument(text,ownerLabel).category==='payslip'){
+    const paidOn=payslipPayDate(text);
+    if(paidOn)lines=lines.map(line=>line.date===null&&
+      /\b(?:net pay|take home pay|gross pay|gross earnings|basic pay|paye)\b/i.test(line.label)
+      ?{...line,date:paidOn}:line);
+  }
   if(!lines.length)throw Error('No financial rows with recognisable amounts were found. Nothing was saved.');
   const document={
     id,label:ownerLabel.trim(),importedAt:now.toISOString(),

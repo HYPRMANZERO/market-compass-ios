@@ -23,16 +23,12 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
   const [snapshot,setSnapshot]=useState<CryptoMarketSnapshot|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
-  const lastRequest=useRef(0);
   const pending=useRef<AbortController|null>(null);
-  const refresh=useCallback(async(force=false)=>{
-    const time=Date.now();
-    if(time-lastRequest.current<90_000){
-      if(force)setError('Market refresh is limited to one request every 90 seconds to protect free provider limits.');
-      return;
-    }
-    lastRequest.current=time;
-    pending.current?.abort();
+  const refresh=useCallback(async()=>{
+    // Explicit refresh never uses an arbitrary 90-second UI lockout. The
+    // provider remains authoritative about its quota (HTTP 429). Coalesce
+    // overlapping requests instead of cancelling and restarting them.
+    if(pending.current)return;
     const controller=new AbortController();
     pending.current=controller;
     setBusy(true);setError('');
@@ -50,8 +46,9 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
     }
   },[selected,privateToken,privateEnabled]);
   useEffect(()=>{
-    lastRequest.current=0;
     setSnapshot(null);
+    pending.current?.abort();
+    pending.current=null;
     void refresh();
     const tick=()=>{if(document.visibilityState==='visible'&&navigator.onLine)void refresh();};
     const id=window.setInterval(tick,CRYPTO_REFRESH_MS);
@@ -75,7 +72,7 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
           Provider-sourced prices and 24-hour movement, separate from completed historical candles.
         </p>
       </div>
-      <button type="button" onClick={()=>void refresh(true)} disabled={busy}
+      <button type="button" onClick={()=>void refresh()} disabled={busy}
         className="min-h-10 rounded-xl border border-border bg-background px-4 text-[12px] font-semibold disabled:opacity-40"
         aria-label="Refresh live cryptocurrency quotes">
         {busy?'Fetching…':'Refresh quotes'}

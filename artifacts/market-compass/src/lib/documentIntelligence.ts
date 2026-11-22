@@ -4,11 +4,11 @@
  * Store only masked/allowlisted summary facts, never the source document.
  */
 export type DocumentCategory='bank-statement'|'vehicle-finance'|'payslip'|
-  'credit-card'|'personal-loan'|'mortgage'|'utility-bill'|'invoice'|
+  'credit-card'|'personal-loan'|'mortgage'|'utility-bill'|'invoice'|'receipt'|
   'investment-statement'|'tax-document'|'unclassified';
 export type DocumentFactField='statement-balance'|'settlement-quotation'|
   'original-principal'|'instalment'|'previous-instalment'|'residual-value'|
-  'annual-rate'|'net-pay'|'amount-due';
+  'annual-rate'|'net-pay'|'gross-pay'|'tax-withheld'|'receipt-total'|'amount-due';
 export type DocumentFact={field:DocumentFactField;amount:number|null;ratePercent?:number;
   asOf:string|null;sourceLabel:string;historical:true};
 export type AccountProfile={name:string;institution:string;category:DocumentCategory;
@@ -23,7 +23,7 @@ const names:Record<DocumentCategory,string>={
   'bank-statement':'Bank account','vehicle-finance':'Vehicle finance',
   'payslip':'Employment income','credit-card':'Credit card',
   'personal-loan':'Personal loan','mortgage':'Home loan',
-  'utility-bill':'Utilities','invoice':'Invoice',
+  'utility-bill':'Utilities','invoice':'Invoice','receipt':'Purchase receipt',
   'investment-statement':'Investment account','tax-document':'Tax document',
   'unclassified':'Unclassified document'
 };
@@ -44,8 +44,8 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
     /\bpayslip\b|\bpay slip\b|\bpay advice\b/i,
     /\bnet pay\b|\bgross pay\b|\bPAYE\b/i]},
   {category:'bank-statement',matches:[
-    /\bbank statement\b|\bstatement of account\b/i,
-    /\btransaction date\b|\bopening balance\b|\bclosing balance\b/i]},
+    /\bbank statement\b|\bstatement of account\b|\bbank export\b/i,
+    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bdate[,;]\s*description[,;]\s*(?:debit|credit)\b/i]},
   {category:'investment-statement',matches:[
     /\binvestment statement\b|\bportfolio statement\b/i,
     /\bunits held\b|\bholdings statement\b|\bmarket value\b/i]},
@@ -55,6 +55,9 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
   {category:'invoice',matches:[
     /\btax invoice\b|\binvoice number\b/i,
     /\binvoice date\b|\bamount payable\b/i]},
+  {category:'receipt',matches:[
+    /\breceipt\b|\btill slip\b|\bproof of purchase\b/i,
+    /\btotal paid\b|\bpayment receipt\b|\bchange given\b/i]},
   {category:'tax-document',matches:[
     /\bIRP5\b|\bIT3\b|\bincome tax assessment\b/i,
     /\bSARS\b|\btax return\b/i]}
@@ -85,7 +88,8 @@ export function maskDocumentPII(text:string):string{
 }
 const factFields=new Set<DocumentFactField>([
   'statement-balance','settlement-quotation','original-principal','instalment',
-  'previous-instalment','residual-value','annual-rate','net-pay','amount-due'
+  'previous-instalment','residual-value','annual-rate','net-pay','gross-pay',
+  'tax-withheld','receipt-total','amount-due'
 ]);
 export function isFactField(x:unknown):x is DocumentFactField{
   return typeof x==='string'&&factFields.has(x as DocumentFactField);
@@ -134,6 +138,9 @@ export function makeAccountProfile(
       const l=e.label.toLowerCase();
       if(/\b(?:closing balance|outstanding balance|statement balance)\b/.test(l))field='statement-balance';
       else if(/\b(?:net pay|take home pay)\b/.test(l))field='net-pay';
+      else if(/\b(?:gross pay|gross earnings|gross salary)\b/.test(l))field='gross-pay';
+      else if(/\b(?:paye|tax withheld|income tax deduction)\b/.test(l))field='tax-withheld';
+      else if(/\b(?:receipt total|total paid|amount paid)\b/.test(l))field='receipt-total';
       else if(/\b(?:amount due|total due|payment due)\b/.test(l))field='amount-due';
     }
     if(!field || (e.amount===null&&e.ratePercent===undefined))continue;
