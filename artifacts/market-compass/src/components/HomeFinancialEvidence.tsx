@@ -1,10 +1,11 @@
 import {Link} from 'wouter';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import type {ExpenseEntry,ExpenseSettings} from '@/lib/monthlyExpenses';
-import {DEFAULT_EXPENSE_SETTINGS,cycleAnalysis,salaryCycle} from '@/lib/monthlyExpenses';
+import {DEFAULT_EXPENSE_SETTINGS,cycleAnalysis,cycleEntries,salaryCycle} from '@/lib/monthlyExpenses';
 import type {PrivateBudget} from '@/components/DebtAdvisor';
 import {localDate} from '@/lib/dailyBackup';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
+import {summarizeDocumentHistory} from '@/lib/documentHistory';
 
 type Props={
   documents:LocalFinanceDocument[];
@@ -35,13 +36,20 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
   const cycle=salaryCycle(localDate());
   const stats=cycleAnalysis(safeEntries,cycle.start,currency,
     (settings??DEFAULT_EXPENSE_SETTINGS).cycleBudget);
+  const activeEntries=cycleEntries(safeEntries,cycle.start,currency);
+  const hasRecordedIncome=activeEntries.some(entry=>entry.kind==='income');
+  const hasRecordedOutflow=activeEntries.some(entry=>
+    entry.kind==='expense'||entry.kind==='debt-payment');
   const budgetFields=[
     {title:'Monthly income',value:budget?.monthlyIncome},
     {title:'Essential monthly costs',value:budget?.monthlyEssentials},
     {title:'Liquid funds',value:budget?.liquidFunds},
     {title:'Emergency reserve target',value:budget?.reserveTarget}
   ].filter(f=>hasAmount(f.value));
+  const documentMoney=(amount:number)=>money(amount,'ZAR');
   const reviewedLines=safeDocs.reduce((n,d)=>n+d.lines.length,0);
+  const importedHistory=summarizeDocumentHistory(safeDocs);
+  const recentEvidence=importedHistory.months.slice(0,3);
   const incompleteAccounts=accounts.filter(a=>!hasAmount(a.balance)).length;
 
   return <section aria-label="Saved financial evidence dashboard"
@@ -70,12 +78,12 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
       </div>
       <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Current-cycle income</p>
-        <p className="mt-1 text-[17px] font-bold">{stats.count?money(stats.income,currency):'Not recorded'}</p>
+        <p className="mt-1 text-[17px] font-bold">{hasRecordedIncome?money(stats.income,currency):'Not recorded'}</p>
         <p className="text-[10px] text-muted-foreground">Recorded only · not bank-verified</p>
       </div>
       <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Current-cycle outflows</p>
-        <p className="mt-1 text-[17px] font-bold">{stats.count?money(stats.expenses+stats.debtPayments,currency):'Not recorded'}</p>
+        <p className="mt-1 text-[17px] font-bold">{hasRecordedOutflow?money(stats.expenses+stats.debtPayments,currency):'Not recorded'}</p>
         <p className="text-[10px] text-muted-foreground">Expenses + repayments · no transfers</p>
       </div>
     </div>
@@ -83,6 +91,48 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
       Salary cycle: {cycle.start} to {cycle.lastDay}. Missing entries are not assumed to be zero.
       Documents only affect the transaction totals after you approve individual rows in Spend.
     </p>
+    {safeDocs.length>0&&<section aria-label="Historical document evidence" className="mt-4 rounded-xl border border-border bg-card p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[12px] font-bold">Historical income &amp; spending evidence</h3>
+        <Link href="/expenses" className="min-h-9 rounded-lg border border-border px-3 py-2 text-[11px] font-semibold">
+          Review source documents
+        </Link>
+      </div>
+      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+        Unverified historical excerpts, not current balances or posted Spend entries.
+        Payslips, receipts and bank debits may describe the same event; do not add them together.
+      </p>
+      {currency!=='ZAR'?<p role="status" className="mt-2 text-[11px] font-semibold text-muted-foreground">
+        Source amounts have not been currency converted. Switch to ZAR and verify
+        each source currency before interpreting this evidence.
+      </p>:recentEvidence.length===0?<p className="mt-2 text-[11px] text-muted-foreground">
+        No dated payslip net pay, receipt total or transaction debit is available yet.
+      </p>:<div className="mt-3 space-y-2">
+        {recentEvidence.map(month=><div key={month.month} className="rounded-lg bg-muted/30 p-3">
+          <p className="text-[12px] font-semibold">{month.month}</p>
+          <dl className="mt-2 grid gap-2 text-[11px] sm:grid-cols-3">
+            <div><dt className="text-muted-foreground">Payslip net pay</dt>
+              <dd className="font-semibold">{month.payslipSources?money(month.netPay,'ZAR'):'Not recorded'}</dd>
+              <p className="text-[10px] text-muted-foreground">{month.payslipSources} source(s)</p>
+            </div>
+            <div><dt className="text-muted-foreground">Receipt totals</dt>
+              <dd className="font-semibold">{month.receiptSources?money(month.receiptSpend,'ZAR'):'Not recorded'}</dd>
+              <p className="text-[10px] text-muted-foreground">{month.receiptSources} source(s)</p>
+            </div>
+            <div><dt className="text-muted-foreground">Bank statement debits</dt>
+              <dd className="font-semibold">{month.debitRows?money(month.statementDebits,'ZAR'):'Not recorded'}</dd>
+              <p className="text-[10px] text-muted-foreground">{month.debitRows} dated debit row(s)</p>
+            </div>
+          </dl>
+        </div>)}
+      </div>}
+      {importedHistory.undatedEvidence>0&&<p className="mt-2 text-[11px] text-muted-foreground">
+        {importedHistory.undatedEvidence} undated or ambiguous source entries were excluded from monthly evidence.
+      </p>}
+      <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
+        These entries can overlap. No bank reconciliation or document deduplication is claimed.
+      </p>
+    </section>}
     <div className="mt-4 grid gap-3 md:grid-cols-2">
       <div className="rounded-xl border border-border p-3">
         <h3 className="text-[12px] font-semibold">Saved document evidence</h3>
@@ -98,14 +148,14 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
               {Boolean(d.accountProfile?.facts.length)&&<dl className="my-3 divide-y divide-border rounded-xl border border-border bg-card px-3">
                 {d.accountProfile?.facts.slice(0,4).map((fact,index)=><div key={index} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-xs">
                   <dt className="capitalize">{fact.field.replaceAll('-', ' ')}{fact.asOf&&<small className="block text-muted-foreground">{fact.asOf}</small>}</dt>
-                  <dd className="font-semibold tabular-nums">{fact.ratePercent!==undefined?fact.ratePercent+'%':fact.amount!==null?money(fact.amount,currency):'Unspecified'}</dd>
+                  <dd className="font-semibold tabular-nums">{fact.ratePercent!==undefined?fact.ratePercent+'%':fact.amount!==null?documentMoney(fact.amount):'Unspecified'}</dd>
                 </div>)}
               </dl>}
               <ul className="mt-2 space-y-1">
                 {d.lines.slice(0,5).map((line,index)=><li key={index}
                   className="flex flex-wrap justify-between gap-2 text-[11px]">
                   <span className="min-w-0 break-words">{line.date??'Undated'} · {maskDocumentPII(line.label)}</span>
-                  <span className="font-semibold">{line.amount===null?'Unspecified':money(line.amount,currency)}</span>
+                  <span className="font-semibold">{line.amount===null?'Unspecified':documentMoney(line.amount)}</span>
                 </li>)}
               </ul>
               {d.lines.length>5&&<p className="mt-2 text-[10px] text-muted-foreground">
@@ -117,6 +167,8 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
             </p>}
           </div>}
         <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
+          Extracted document amounts are displayed as ZAR for source review, not
+          currency-converted. Confirm their currency before relying on them.
           A settlement quote, financed principal or instalment is NOT a verified current debt balance.
         </p>
       </div>

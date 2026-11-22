@@ -3,12 +3,12 @@ import ReviewedDocumentLedger from './ReviewedDocumentLedger';
 import DocumentHistorySummary from './DocumentHistorySummary';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
-import {maskDocumentPII} from '@/lib/documentIntelligence';
+import {classifyDocument,maskDocumentPII} from '@/lib/documentIntelligence';
 import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
 import {listConsentedFinanceFiles,type ReadableFolder,type DiscoveredFinanceFile} from '@/lib/consentedFolderScan';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
-  extractLocalFinanceDocument,validateLocalFinanceDocument,
+  addLocalFinanceDocument,extractLocalFinanceDocument,validateLocalFinanceDocument,
   MAX_FINANCE_FILE_BYTES,MAX_FINANCE_FILES,type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
 
@@ -49,7 +49,13 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const waitingFiles=useRef<File[]>([]);
   const lockedFile=useRef<File|null>(null);
   const [remaining,setRemaining]=useState(0);
+  const [batchTotal,setBatchTotal]=useState(0);
+  const [batchCompleted,setBatchCompleted]=useState(0);
+  const [batchWarning,setBatchWarning]=useState('');
   const [needsPassword,setNeedsPassword]=useState(false);
+  // Wait for the parent vault state to acknowledge a save before moving to
+  // the next file. An asynchronous React state update is not a save receipt.
+  const [pendingSaveId,setPendingSaveId]=useState<string|null>(null);
   // A browser folder grant lives in memory only while this unlocked view is
   // mounted. No path or FileSystemHandle enters the encrypted vault.
   const watchedFolder=useRef<ReadableFolder|null>(null);
@@ -130,18 +136,30 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       document.removeEventListener('visibilitychange',tick);
       scanGeneration.current++;
       watchedFolder.current=null;
+      scannedFingerprints.current.clear();
+      readController.current?.abort();
+      waitingFiles.current=[];
+      lockedFile.current=null;
+      if(passwordInput.current)passwordInput.current.value='';
+      if(retryPasswordInput.current)retryPasswordInput.current.value='';
     };
   },[]);
   function startSelection(files:File[],oneTimePassword=''){
-    if(reading||!files.length)return;
+    // Do not silently throw away the previous preview, an encrypted retry,
+    // or the remaining selected File objects when another picker is opened.
+    if(reading||preview||needsPassword||waitingFiles.current.length>0||!files.length)return;
     const capacity=Math.max(0,MAX_FINANCE_FILES-safe.length);
     if(!capacity){setError('Encrypted document-summary capacity reached. Back up and review saved documents first.');return;}
     const accepted=files.slice(0,capacity);
     waitingFiles.current=accepted.slice(1);
+    setBatchTotal(accepted.length);
+    setBatchCompleted(0);
     setRemaining(waitingFiles.current.length);
     lockedFile.current=null;
     setNeedsPassword(false);
-    if(files.length>capacity)setFeedback('Only '+capacity+' additional files fit the current encrypted workspace capacity.');
+    setBatchWarning(files.length>capacity?
+      'Only '+capacity+' documents can fit in the current encrypted workspace; '+
+      (files.length-capacity)+' other selected files were not queued.':'');
     void selected(accepted[0],oneTimePassword);
   }
   function advanceQueue(){
@@ -149,12 +167,29 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     setNeedsPassword(false);
     setPreview(null);
     const next=waitingFiles.current.shift();
+    setBatchCompleted(value=>value+1);
     setRemaining(waitingFiles.current.length);
     if(next)void selected(next,'');
+    else {setBatchTotal(0);setBatchWarning('');}
+  }
+  function cancelBatch(){
+    if(reading||pendingSaveId)return;
+    waitingFiles.current=[];
+    lockedFile.current=null;
+    if(passwordInput.current)passwordInput.current.value='';
+    if(retryPasswordInput.current)retryPasswordInput.current.value='';
+    setNeedsPassword(false);
+    setPreview(null);
+    setRemaining(0);
+    setBatchTotal(0);
+    setBatchCompleted(0);
+    setBatchWarning('');
+    setError('');
+    setFeedback('Selected documents discarded without saving any unapproved excerpts.');
   }
   async function selected(file:File|undefined,oneTimePassword:string){
     setPreview(null);setFeedback('');setError('');
-    if(!file||reading)return;
+    if(!file||readController.current)return;
     const pdf=/\.pdf$/i.test(file.name);
     const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
     if(!file.size||file.size>limit){
@@ -176,7 +211,11 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       }):await file.text();
       if(controller.signal.aborted)throw Error('Document processing cancelled; nothing was saved.');
       setProgress(old=>({...old,stage:'classifying'}));
-      const privateLabel=label.trim() || 'iPhone financial export';
+      // Stable, descriptive and PII-safe labels let owners distinguish
+      // multiple documents without retaining raw filenames or account numbers.
+      const account=classifyDocument(data,file.name);
+      const privateLabel=maskDocumentPII(label.trim() ||
+        (account.category==='unclassified'?'Financial export':account.name)).slice(0,70);
       const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
       setPreview(draft);
       lockedFile.current=null;
@@ -202,14 +241,28 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     }
   }
   function save(){
-    if(!preview)return;
+    if(!preview||pendingSaveId||reading)return;
     try{
+      // Validate synchronously against the current saved-vault snapshot. This
+      // surfaces capacity and duplicate errors before changing the UI.
+      addLocalFinanceDocument(documents,preview);
+      setPendingSaveId(preview.id);
+      setError('');
+      setFeedback('Submitting reviewed excerpts to your unlocked workspace…');
       onAdd(preview);
-      setPreview(null);setLabel('');setError('');
-      setFeedback('Reviewed excerpts saved to the unlocked workspace. Confirm Last saved in Vault & Settings and export an encrypted backup.');
-      advanceQueue();
-    }catch(e){setError(e instanceof Error?e.message:'Document could not be saved.');}
+    }catch(e){
+      setPendingSaveId(null);
+      setError(e instanceof Error?e.message:'Document could not be saved.');
+    }
   }
+  useEffect(()=>{
+    if(!pendingSaveId||!documents.some(document=>document.id===pendingSaveId))return;
+    setPendingSaveId(null);
+    setError('');
+    setFeedback('Reviewed excerpts accepted by the workspace. Confirm Last saved in Vault & Settings, then export an encrypted backup.');
+    if(waitingFiles.current.length===0)setLabel('');
+    advanceQueue();
+  },[documents,pendingSaveId]);
   return <section id="mc-financial-files" className="mb-5 scroll-mt-28 rounded-[24px] border border-border bg-card p-4 shadow-sm sm:p-6" aria-label="Import selected financial files privately">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -238,8 +291,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     <label className="mt-3 block text-[12px] font-semibold">
       Optional file label · e.g. October bank export
       <input type="text" autoComplete="off" maxLength={70} value={label}
-        onChange={e=>{setLabel(e.target.value);setPreview(null);setError('');setFeedback('');}}
-        placeholder="Optional · defaults to iPhone financial export"
+        disabled={reading||!!preview||needsPassword||remaining>0}
+        onChange={e=>{setLabel(e.target.value);setError('');setFeedback('');}}
+        placeholder="Optional · defaults to recognised document category"
         className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
     </label>
     <details className="mt-3 rounded-xl border border-border bg-background px-3 py-2">
@@ -261,7 +315,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       Choose documents from Files (read access to selected files only)
       <input type="file" multiple accept=".csv,.txt,.json,.pdf,text/plain,text/csv,application/json,application/pdf"
         aria-label="Choose one or more private CSV TXT JSON or PDF documents from iPhone Files"
-        disabled={safe.length>=MAX_FINANCE_FILES||reading}
+        disabled={safe.length>=MAX_FINANCE_FILES||reading||!!preview||needsPassword||remaining>0}
         onChange={event=>{
           const chosen=Array.from(event.currentTarget.files??[]);
           event.currentTarget.value='';
@@ -302,7 +356,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       </p>}
       {scanStatus&&<p role="status" className="mt-2 text-[11px] leading-5 text-muted-foreground">{scanStatus}</p>}
       {discovered.length>0&&<button type="button"
-        disabled={reading||!!preview||needsPassword||safe.length>=MAX_FINANCE_FILES}
+        disabled={reading||!!preview||needsPassword||remaining>0||safe.length>=MAX_FINANCE_FILES}
         onClick={()=>{
           const capacity=Math.max(0,MAX_FINANCE_FILES-safe.length);
           startSelection(discovered.slice(0,capacity).map(item=>item.file));
@@ -312,9 +366,21 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         Review {Math.min(discovered.length,MAX_FINANCE_FILES-safe.length)} discovered files, individually
       </button>}
     </details>
-    {remaining>0&&<p role="status" className="mt-2 text-[11px] font-semibold">
-      {remaining} more selected {remaining===1?'document':'documents'} waiting for individual review.
-    </p>}
+    {batchTotal>0&&<section aria-label="Batch document review status" className="mt-3 rounded-xl border border-border bg-muted/30 p-3">
+      <p role="status" className="text-[12px] font-semibold">
+        Reviewing document {batchCompleted+1} of {batchTotal}
+        {remaining>0?' · '+remaining+' waiting':''}
+      </p>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Save or skip each preview before continuing. You can cancel the remaining
+        selection without saving unreviewed files.
+      </p>
+      {batchWarning&&<p role="alert" className="mt-2 text-[11px] font-semibold">{batchWarning}</p>}
+      {!reading&&<button type="button" disabled={!!pendingSaveId} onClick={cancelBatch}
+        className="mt-2 min-h-10 rounded-lg border border-border px-3 text-[11px] font-semibold">
+        Cancel selected batch
+      </button>}
+    </section>}
     {needsPassword&&<section aria-label="Unlock encrypted document" className="mt-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[12px] font-semibold">Encrypted PDF · password required</p>
       <p className="mt-1 text-[11px] text-muted-foreground">The document was not imported. Its password is used once by the local PDF reader and not saved.</p>
@@ -323,7 +389,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           placeholder="Password for this document"
           className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]" />
       </label>
-      <button type="button" disabled={reading} onClick={()=>{
+      <button type="button" disabled={reading||!!pendingSaveId} onClick={()=>{
         const file=lockedFile.current;
         const password=retryPasswordInput.current?.value??'';
         if(retryPasswordInput.current)retryPasswordInput.current.value='';
@@ -331,10 +397,11 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       }} className="mt-2 min-h-11 w-full rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground">
         Unlock &amp; review this PDF
       </button>
-      <button type="button" onClick={()=>{setError('');advanceQueue();}}
-        className="mt-2 min-h-10 w-full rounded-xl border border-border text-[12px]">Skip encrypted file</button>
+      <button type="button" disabled={reading||!!pendingSaveId}
+        onClick={()=>{setError('');advanceQueue();}}
+        className="mt-2 min-h-10 w-full rounded-xl border border-border text-[12px] disabled:opacity-40">Skip encrypted file</button>
     </section>}
-    {error&&!needsPassword&&remaining>0&&<button type="button"
+    {error&&!needsPassword&&!reading&&!pendingSaveId&&remaining>0&&<button type="button"
       className="mt-2 min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold"
       onClick={()=>{setError('');advanceQueue();}}>Skip unreadable file &amp; continue</button>}
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
@@ -381,12 +448,12 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
         The saved excerpt is partial. The original remains in iPhone Files; review further source entries separately.
       </p>}
-      <button type="button" onClick={save}
-        className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
-        Save these reviewed excerpts to encrypted workspace
+      <button type="button" onClick={save} disabled={!!pendingSaveId||reading}
+        className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+        {pendingSaveId?'Saving reviewed excerpts…':'Save these reviewed excerpts to encrypted workspace'}
       </button>
-      <button type="button" onClick={()=>{setFeedback('');advanceQueue();}}
-        className="min-h-11 w-full rounded-xl border border-border px-4 text-[12px] font-medium">
+      <button type="button" disabled={!!pendingSaveId} onClick={()=>{setFeedback('');advanceQueue();}}
+        className="min-h-11 w-full rounded-xl border border-border px-4 text-[12px] font-medium disabled:opacity-40">
         Skip this document without saving
       </button>
     </section>}
