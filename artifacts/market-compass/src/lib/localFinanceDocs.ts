@@ -189,6 +189,10 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     input.complete!==false||input.truncated!==true&&input.truncated!==false||
     !['csv','txt','json','pdf'].includes(String(input.format))||
     !Array.isArray(input.lines)||input.lines.length<1||input.lines.length>MAX_FINANCE_LINES)return null;
+  // Existing encrypted excerpts may predate the masked-label importer.
+  // Normalize at the validation/persistence boundary without changing dates or amounts.
+  const safeDocumentLabel=maskText(input.label,70);
+  if(!labelOk(safeDocumentLabel))return null;
   const lines:LocalFinanceLine[]=[];
   for(const v of input.lines){
     if(!asObject(v)||typeof v.label!=='string'||
@@ -200,7 +204,9 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     if(v.semanticField!==undefined && !['original-principal','previous-instalment','instalment','residual-value','settlement-quotation','statement-balance','annual-rate','completed-payment'].includes(String(v.semanticField)))return null;
     if(v.ratePercent!==undefined && (typeof v.ratePercent!=='number'||!Number.isFinite(v.ratePercent)||v.ratePercent<0||v.ratePercent>100))return null;
     if(v.runningBalance!==undefined && (typeof v.runningBalance!=='number'||!Number.isFinite(v.runningBalance)||Math.abs(v.runningBalance)>10_000_000||v.semanticRole!=='transaction'||v.date===null))return null;
-    const line:LocalFinanceLine={label:v.label,amount:v.amount as number|null,date:v.date as string|null,
+    const safeLineLabel=maskText(v.label,130);
+    if(safeLineLabel.length<2)return null;
+    const line:LocalFinanceLine={label:safeLineLabel,amount:v.amount as number|null,date:v.date as string|null,
       direction:v.direction as LocalFinanceLine['direction']};
     if(v.semanticRole!==undefined)line.semanticRole=v.semanticRole as FinanceRole;
     if(v.semanticField!==undefined)line.semanticField=v.semanticField as FinanceField;
@@ -210,7 +216,7 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
   }
   if(input.documentKind!==undefined &&
     !['absa-vehicle-finance','vehicle-finance','unclassified'].includes(String(input.documentKind)))return null;
-  const validated:LocalFinanceDocument={id:input.id,label:input.label.trim(),importedAt:input.importedAt,
+  const validated:LocalFinanceDocument={id:input.id,label:safeDocumentLabel,importedAt:input.importedAt,
     source:'owner-selected-iphone-file',bankVerified:false,complete:false,
     format:input.format as LocalFinanceDocument['format'],
     lines,truncated:input.truncated as boolean};
@@ -227,14 +233,16 @@ export function extractLocalFinanceDocument(
   {now=new Date(),id=crypto.randomUUID()}={}
 ):LocalFinanceDocument{
   if(!labelOk(ownerLabel))throw Error('Enter a short label describing the file (2–70 characters).');
+  const safeOwnerLabel=maskText(ownerLabel,70);
+  if(!labelOk(safeOwnerLabel))throw Error('Enter a descriptive label without private identifiers.');
   if(!(now instanceof Date)||!Number.isFinite(now.getTime()))throw Error('Invalid current date.');
   if(typeof text!=='string'||new TextEncoder().encode(text).byteLength>MAX_FINANCE_FILE_BYTES)
     throw Error('This text export exceeds the on-device processing safety capacity. Nothing was saved.');
   const extension=fileName.toLowerCase().split('.').pop();
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
-  const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+ownerLabel):'unclassified';
-  const classified=classifyDocument(text,fileName+' '+ownerLabel);
+  const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+safeOwnerLabel):'unclassified';
+  const classified=classifyDocument(text,fileName+' '+safeOwnerLabel);
   const bankStatement=(extension==='pdf'||extension==='txt')&&
     classified.category==='bank-statement'&&documentKind==='unclassified'?
       parseBankStatementText(text,MAX_FINANCE_LINES):null;
@@ -249,12 +257,12 @@ export function extractLocalFinanceDocument(
     'Bank statement found, but no complete dated transaction or labelled balance rows were read. Try a bank CSV export or check the PDF layout; nothing was saved.':
     'No financial rows with recognisable amounts were found. Nothing was saved.');
   const document={
-    id,label:ownerLabel.trim(),importedAt:now.toISOString(),
+    id,label:safeOwnerLabel,importedAt:now.toISOString(),
     source:'owner-selected-iphone-file' as const,format:extension,
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
-    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
+    accountProfile:{...makeAccountProfile(text,safeOwnerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
