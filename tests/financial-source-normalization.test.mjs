@@ -88,6 +88,20 @@ test('normalizer rejects invalid bank dates, currencies, NaN and PII account lab
   assert.equal(normalizeReadOnlyBankRows(rows,'ABSA','Account 123456789012').candidates.length,0);
 });
 
+test('read-only bank feeds reject subcent precision and amounts rounded to zero',()=>{
+  const rows=[
+    {date:'2026-03-27',description:'Fractional bank amount',amount:10.005,currency:'ZAR',status:'posted'},
+    {date:'2026-03-27',description:'Tiny reversal',amount:-0.004,currency:'ZAR',status:'posted'},
+    {date:'2026-03-27',description:'Valid one cent',amount:0.01,currency:'ZAR',status:'posted'},
+    {date:'2026-03-27',description:'Valid debit',amount:-19.99,currency:'ZAR',direction:'outgoing',status:'posted'},
+    {date:'2026-03-27',description:'Fractional debit',amount:9.999,currency:'ZAR',status:'posted'}
+  ];
+  const result=normalizeReadOnlyBankRows(rows,'ABSA','ABSA Current');
+  assert.equal(result.rejected,3);
+  assert.deepEqual(result.candidates.map(c=>[c.amount,c.direction]),
+    [[0.01,'unclassified'],[-19.99,'outgoing']]);
+});
+
 test('cannot mistake duplicate-looking fees for unique transaction keys',()=>{
   const result=normalizeReadOnlyBankRows([
     {date:'2026-03-27',description:'FEE: PAYMENT',amount:-7,currency:'ZAR',status:'posted',runningBalance:2622.72},
