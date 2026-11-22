@@ -16,7 +16,11 @@ export type CompassCommandContext = {
   privateBudget?: { monthlyIncome: string; monthlyEssentials: string; liquidFunds: string; reserveTarget: string } | null;
   marketCache?: { symbol: string; currency: string; candles?: { date: string; close: number }[] } | null;
   draftCount: number;
-  expenseSummary?: {cycleStart:string;cycleEnd:string;income:number;expenses:number;debtPayments:number;transfers:number;recordedDifference:number;entryCount:number;cycleLimit:number|null;flags:string[]};
+  expenseSummary?: {cycleStart:string;cycleEnd:string;income:number;expenses:number;debtPayments:number;transfers:number;recordedDifference:number;entryCount:number;cycleLimit:number|null;flags:string[];
+    unsortedCount?:number;unsortedOutflow?:number;illustrativeSavings?:number;
+    cutIdeas?:{category:string;recorded:number;illustrativeSavings:number;rate:number}[];
+    categories?:{category:string;amount:number}[];
+    paymentMethods?:{app:string;amount:number;count:number}[]};
 };
 export type CompassCommandResult = {
   type: 'answer' | 'navigate' | 'unknown';
@@ -63,6 +67,12 @@ export function interpretCompassCommand(raw: string, ctx: CompassCommandContext)
       currency(e.debtPayments,ctx.currency)+' debt repayments across '+e.entryCount+
       ' entries. Internal transfers of '+currency(e.transfers,ctx.currency)+
       ' are tracked separately. These are manually entered figures, not verified bank balances.'};
+  }
+  if(/\b(?:unsorted|uncategorized|uncategorised)\b/.test(q)&&ctx.expenseSummary){
+    const e=ctx.expenseSummary;
+    return {type:'answer',reply:'For the recorded salary cycle, '+(e.unsortedCount??0)+
+      ' entries remain Unsorted, including '+currency(e.unsortedOutflow??0,ctx.currency)+
+      ' in recorded outflows. These amounts are already included in the movement totals. You can label them optionally in Spend without changing the amount or date. This is not a bank-verified report.'};
   }
   // Local-first, deterministic financial analysis of the OWNER-REVIEWED
   // encrypted PWA budget. No request to HYPRBOX, cloud model or bank provider.
