@@ -21,6 +21,8 @@ export type FinancialCandidate={
 };
 export type ReadOnlyBankRow={
   date:string;description:string;amount:number;currency:string;
+  /** Explicit provider-adapter debit/credit direction. Sign alone is NOT enough. */
+  direction?:FinancialDirection;
   runningBalance?:number;
   status:'posted'|'pending';
 };
@@ -52,12 +54,16 @@ function candidate(source:FinancialSource, institution:string, accountLabel:stri
   if(!date||!validAmount(input.amount)||description.length<3||
      safeInstitution.length<2||safeAccountLabel.length<3||
      safeAccountLabel!==accountLabel.trim()||/\d/.test(safeAccountLabel)||
-     (input.runningBalance!==undefined&&!validBalance(input.runningBalance)))return null;
+     (input.runningBalance!==undefined&&!validBalance(input.runningBalance))||
+     (input.direction!==undefined&&
+       !['incoming','outgoing','unclassified'].includes(input.direction)))return null;
   const amount=amountRound(input.amount);
   const result:FinancialCandidate={
     source,institution:safeInstitution,accountLabel:safeAccountLabel,
     date,description,amount,currency:'ZAR',
-    direction:input.direction??(amount<0?'outgoing':amount>0?'incoming':'unclassified'),
+    // A bank API may report positive absolute debits. Require an explicitly
+    // normalised provider direction; never infer flow solely from amount sign.
+    direction:input.direction??'unclassified',
     matchHint:[safeAccountLabel.toLowerCase(),date,description.toLowerCase(),amount.toFixed(2)].join('|'),
     approval:'pending-owner-review',status:input.status
   };
@@ -99,7 +105,7 @@ export function normalizeReadOnlyBankRows(
     }
     const v=candidate('bank-api-readonly',institution,accountLabel,{
       date:row.date,description:row.description,amount:row.amount,
-      runningBalance:row.runningBalance,
+      direction:row.direction,runningBalance:row.runningBalance,
       status:row.status==='pending'?'pending-bank':'posted'
     });
     if(v)candidates.push(v);else rejected++;
