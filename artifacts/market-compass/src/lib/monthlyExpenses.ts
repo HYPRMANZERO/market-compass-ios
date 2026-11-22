@@ -87,6 +87,9 @@ export function cycleCashflowCutIdeas(entries:ExpenseEntry[],cycleStart:string,c
   }).filter(x=>x.recorded>0&&x.illustrativeSavings>0);
   return {ideas,totalIllustrativeSavings:Math.round(ideas.reduce((sum,x)=>sum+x.illustrativeSavings,0)*100)/100};
 }
+/** Legacy “other” was the importer’s fallback; treat it as needing optional
+ * category review for display, without mutating older encrypted records. */
+export const expenseCategoryNeedsSorting=(category:ExpenseCategory)=>category==='unsorted'||category==='other';
 const pad=(n:number)=>String(n).padStart(2,'0');
 const iso=(year:number, monthIndex:number, day:number)=>String(year)+'-'+pad(monthIndex+1)+'-'+pad(day);
 function dateParts(date:string) {
@@ -146,14 +149,15 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
   const sum=(kind:ExpenseKind)=>within.filter(e=>e.kind===kind).reduce((a,e)=>a+e.amount,0);
   const income=sum('income'),expenses=sum('expense'),debtPayments=sum('debt-payment'),transfers=sum('transfer');
   const outflow=expenses+debtPayments;
-  const unsorted=within.filter(e=>e.category==='unsorted');
+  const unsorted=within.filter(e=>expenseCategoryNeedsSorting(e.category));
   const unsortedOutflow=unsorted.filter(e=>e.kind==='expense'||e.kind==='debt-payment').reduce((sum,e)=>sum+e.amount,0);
   const unsortedIncome=unsorted.filter(e=>e.kind==='income').reduce((sum,e)=>sum+e.amount,0);
   const budget=budgetInput.trim()?parseMoneyAmount(budgetInput):null;
   const percent=budget&&budget>0?outflow/budget*100:null;
-  const byCategory=EXPENSE_CATEGORIES.map(c=>({
+  const byCategory=EXPENSE_CATEGORIES.filter(c=>c.value!=='other').map(c=>({
     category:c.value,label:c.label,
-    amount:within.filter(e=>e.category===c.value && (e.kind==='expense'||e.kind==='debt-payment')).reduce((a,e)=>a+e.amount,0),
+    amount:within.filter(e=>(e.category===c.value || c.value==='unsorted'&&e.category==='other') &&
+      (e.kind==='expense'||e.kind==='debt-payment')).reduce((a,e)=>a+e.amount,0),
   })).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
   // Payment-app totals only represent manually recorded outflows, not bank feeds.
   const byPaymentMethod=Object.values(within.filter(e=>e.kind==='expense'||e.kind==='debt-payment')
