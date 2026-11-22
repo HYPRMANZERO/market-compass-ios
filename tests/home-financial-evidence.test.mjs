@@ -29,8 +29,8 @@ test('financial evidence shows saved documents and approved salary-cycle entries
 
 test('Home avoids interpreting unknown transaction or budget entries as actual zero',async()=>{
   const s=await read('components/HomeFinancialEvidence.tsx');
-  assert.match(s,/stats\.count\?money\(stats\.income,currency\):'Not recorded'/);
-  assert.match(s,/stats\.count\?money\(stats\.expenses\+stats\.debtPayments,currency\):'Not recorded'/);
+  assert.match(s,/hasRecordedIncome\?money\(stats\.income,currency\):'Not recorded'/);
+  assert.match(s,/hasRecordedOutflow\?money\(stats\.expenses\+stats\.debtPayments,currency\):'Not recorded'/);
   assert.match(s,/Missing entries are not assumed to be zero/);
   assert.match(s,/hasAmount\(f\.value\)/);
 });

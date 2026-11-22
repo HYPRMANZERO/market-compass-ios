@@ -189,7 +189,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     else {setBatchTotal(0);setBatchWarning('');}
   }
   function cancelBatch(){
-    if(reading)return;
+    if(reading||pendingSaveId)return;
     waitingFiles.current=[];
     lockedFile.current=null;
     if(passwordInput.current)passwordInput.current.value='';
