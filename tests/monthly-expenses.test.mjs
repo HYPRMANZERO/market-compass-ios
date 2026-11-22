@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry,cycleSpendingTrends} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry,cycleSpendingTrends,suggestKnownSpendCategory,cycleCashflowCutIdeas} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
 const make=(date,kind,amount,category='other',extras={})=>({
   id:date+kind+amount,recordedAt:'2026-11-20T12:00:00Z',date,kind,amount,
   category,description:'Sample payment',paidVia:'Local bank app',currency:'ZAR',...extras,
@@ -67,4 +67,48 @@ test('completed-cycle insights avoid over-interpreting partial salary cycles',()
   assert.equal(insights.available,true);
   assert.equal(insights.first,'2026-09-26'); // not the incomplete Oct 26 cycle
   assert.ok(insights.highlights.some(x=>/Subscriptions/.test(x)));
+});
+
+test('unknown transactions stay unsorted while explicit known spending gets a category',()=>{
+ assert.equal(suggestKnownSpendCategory('expense','Unknown QR PAYEE XYZ'),'unsorted');
+ assert.equal(suggestKnownSpendCategory('expense','CHECKERS SUPERMARKET'),'groceries');
+ assert.equal(suggestKnownSpendCategory('expense','MONTHLY BANK SERVICE FEE'),'fees');
+ assert.equal(suggestKnownSpendCategory('expense','NETFLIX SUBSCRIPTION'),'subscriptions');
+ assert.equal(suggestKnownSpendCategory('expense','ENGEN PETROL PURCHASE'),'transport');
+ assert.equal(suggestKnownSpendCategory('income','TRANSFER RECEIVED'),'unsorted');
+ assert.equal(suggestKnownSpendCategory('income','NET PAY SALARY'),'salary');
+ assert.equal(suggestKnownSpendCategory('debt-payment','CAR LOAN REPAYMENT'),'car');
+ assert.equal(suggestKnownSpendCategory('transfer','Transfer to savings pocket'),'savings');
+ const sample=validateExpenseEntry(make('2026-11-20','expense',47,'unsorted'));
+ assert.equal(sample.category,'unsorted');
+});
+test('unsorted movements remain in outflow and optional labeling does not change money totals',()=>{
+ const entries=[
+   make('2026-11-01','income',1500,'salary'),
+   make('2026-11-02','expense',125,'unsorted'),
+   make('2026-11-03','expense',200,'subscriptions'),
+   make('2026-11-04','expense',20,'fees'),
+   make('2026-11-05','expense',100,'transport'),
+   make('2026-11-06','expense',100,'groceries'),
+   make('2026-11-07','transfer',300,'unsorted'),
+   make('2026-11-08','income',50,'unsorted')
+ ];
+ const analysis=cycleAnalysis(entries,'2026-10-26','ZAR');
+ assert.equal(analysis.unsortedCount,3);
+ assert.equal(analysis.unsortedOutflow,125);
+ assert.equal(analysis.unsortedIncome,50);
+ assert.equal(analysis.expenses,545);
+ assert.equal(analysis.transfers,300);
+ assert.equal(analysis.recordedDifference,1005);
+ const relabelled=entries.map(e=>e.kind==='expense'&&e.category==='unsorted'?
+   {...e,category:'other'}:e);
+ const revised=cycleAnalysis(relabelled,'2026-10-26','ZAR');
+ assert.equal(revised.expenses,analysis.expenses);
+ assert.equal(revised.recordedDifference,analysis.recordedDifference);
+ assert.equal(revised.unsortedOutflow,0);
+ const cuts=cycleCashflowCutIdeas(entries,'2026-10-26','ZAR');
+ assert.deepEqual(cuts.ideas.map(c=>c.category),
+   ['subscriptions','fees','transport','groceries']);
+ assert.equal(cuts.totalIllustrativeSavings,58);
+ assert.equal(cycleCashflowCutIdeas(entries,'2026-11-26','ZAR').totalIllustrativeSavings,0);
 });
