@@ -1,6 +1,6 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
-export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'savings' | 'other';
+export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
   id: string;
   date: string;
@@ -34,11 +34,59 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'insurance',label:'Insurance'},{value:'fees',label:'Bank and finance fees'},
   {value:'subscriptions',label:'Subscriptions and gym'},{value:'health',label:'Healthcare'},
   {value:'savings',label:'Savings transfer'},{value:'other',label:'Other expense'},
+  {value:'unsorted',label:'Unsorted · needs category'},
 ];
 export const EXPENSE_KINDS: {value:ExpenseKind;label:string}[] = [
   {value:'expense',label:'Expense'},{value:'debt-payment',label:'Debt repayment'},
   {value:'income',label:'Income received'},{value:'transfer',label:'Internal transfer (not spending)'},
 ];
+/**
+ * Conservative local suggestion based on explicit transaction descriptions.
+ * An unknown merchant is UNSORTED, not silently called groceries or income.
+ * These suggestions never write to the ledger until the owner approves.
+ */
+export function suggestKnownSpendCategory(kind:ExpenseKind,description:string):ExpenseCategory{
+  const text=description.toLowerCase().replace(/\s+/g,' ');
+  if(kind==='income'){
+    if(/\b(?:salary|payroll|wages|pay cheque|paycheck|net pay)\b/.test(text))return 'salary';
+    if(/\b(?:freelance|side income|consulting income|interest earned|commission earned)\b/.test(text))return 'side-income';
+    return 'unsorted';
+  }
+  if(kind==='transfer'){
+    return /\b(?:savings|save to|saving pocket|savings pocket)\b/.test(text)?'savings':'unsorted';
+  }
+  if(kind==='debt-payment'){
+    if(/\b(?:vehicle finance|car (?:loan|instalment|installment|repayment)|auto loan)\b/.test(text))return 'car';
+    if(/\b(?:credit card (?:repayment|payment)|card repayment)\b/.test(text))return 'credit-card';
+    return 'unsorted';
+  }
+  if(/\b(?:bank (?:charge|fee)|service (?:charge|fee)|account (?:fee|charge)|transaction fee|payshap fee|monthly fee|commission fee|fees?)\b/.test(text))return 'fees';
+  if(/\b(?:netflix|spotify|showmax|disney\+?|youtube premium|subscription|membership|gym|icloud|apple music)\b/.test(text))return 'subscriptions';
+  if(/\b(?:rent|rental|housing|board payment|body corporate|levy)\b/.test(text))return 'housing';
+  if(/\b(?:grocery|groceries|supermarket|checkers|pick n pay|pnp|spar|food lovers|foodlovers|shoprite)\b/.test(text))return 'groceries';
+  if(/\b(?:fuel|petrol|diesel|transport|uber|bolt ride|taxi|bus ticket|engen|caltex|shell fuel|bp fuel)\b/.test(text))return 'transport';
+  if(/\b(?:electricity|municipal|water bill|airtime|mobile data|fibre|wifi|internet bill|utilities)\b/.test(text))return 'utilities';
+  if(/\b(?:insurance|premium|assurance|policy debit)\b/.test(text))return 'insurance';
+  if(/\b(?:pharmacy|doctor|hospital|clinic|medical aid|healthcare|dentist)\b/.test(text))return 'health';
+  if(/\b(?:vehicle service|car service|vehicle repair|car repair)\b/.test(text))return 'car';
+  return 'unsorted';
+}
+
+/** Scenario amounts are *illustrations* from approved entries, not AI predictions or guaranteed savings. */
+export function cycleCashflowCutIdeas(entries:ExpenseEntry[],cycleStart:string,currency:string){
+  const selected=cycleEntries(entries,cycleStart,currency).filter(e=>e.kind==='expense'&&e.category!=='unsorted');
+  const targets=[
+    {category:'subscriptions' as const,rate:0.20,action:'Check unused memberships, gym charges and streaming renewals before cancelling.'},
+    {category:'fees' as const,rate:0.15,action:'Compare actual bank charges and payment methods; avoid fees you can safely reduce.'},
+    {category:'transport' as const,rate:0.10,action:'Review repeated trips and fuel costs; preserve essential commuting.'},
+    {category:'groceries' as const,rate:0.05,action:'Compare prices and reduce waste without cutting essential food.'}
+  ];
+  const ideas=targets.map(target=>{
+    const recorded=selected.filter(e=>e.category===target.category).reduce((sum,e)=>sum+e.amount,0);
+    return {...target,recorded,illustrativeSavings:Math.round(recorded*target.rate*100)/100};
+  }).filter(x=>x.recorded>0&&x.illustrativeSavings>0);
+  return {ideas,totalIllustrativeSavings:Math.round(ideas.reduce((sum,x)=>sum+x.illustrativeSavings,0)*100)/100};
+}
 const pad=(n:number)=>String(n).padStart(2,'0');
 const iso=(year:number, monthIndex:number, day:number)=>String(year)+'-'+pad(monthIndex+1)+'-'+pad(day);
 function dateParts(date:string) {
@@ -98,6 +146,9 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
   const sum=(kind:ExpenseKind)=>within.filter(e=>e.kind===kind).reduce((a,e)=>a+e.amount,0);
   const income=sum('income'),expenses=sum('expense'),debtPayments=sum('debt-payment'),transfers=sum('transfer');
   const outflow=expenses+debtPayments;
+  const unsorted=within.filter(e=>e.category==='unsorted');
+  const unsortedOutflow=unsorted.filter(e=>e.kind==='expense'||e.kind==='debt-payment').reduce((sum,e)=>sum+e.amount,0);
+  const unsortedIncome=unsorted.filter(e=>e.kind==='income').reduce((sum,e)=>sum+e.amount,0);
   const budget=budgetInput.trim()?parseMoneyAmount(budgetInput):null;
   const percent=budget&&budget>0?outflow/budget*100:null;
   const byCategory=EXPENSE_CATEGORIES.map(c=>({
@@ -120,6 +171,7 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
   if(within.some(e=>e.kind==='expense' && ['subscriptions','fees'].includes(e.category)))
     flags.push('Review bank fees, subscriptions and gym charges for services you no longer use.');
   if(transfers>0)flags.push('Internal transfers are tracked separately from spending. Reconcile them before classifying any as leakage.');
+  if(unsorted.length>0)flags.push('Unsorted entries need optional category review; they remain included in the correct income/outflow/transfer movement, not automatically treated as waste.');
   if(within.some(e=>e.kind==='expense' && /virtual.card|cash.advance/i.test(e.description+' '+e.note)))
     flags.push('Review virtual-card loads and cash advances: verify their destination and any associated fees.');
   const latestBalances=within.filter(e=>e.kind==='debt-payment' && typeof e.remainingBalance==='number')
@@ -127,7 +179,8 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
     .filter((e,i,arr)=>arr.findIndex(x=>(x.accountLabel||x.category)===(e.accountLabel||e.category))===i)
     .map(e=>({account:e.accountLabel||e.category,balance:e.remainingBalance!,date:e.date}));
   return {cycle:salaryCycle(cycleStart),count:within.length,income,expenses,debtPayments,transfers,outflow,
-    recordedDifference:income-outflow,budget,percent,byCategory,byPaymentMethod,flags,latestBalances};
+    recordedDifference:income-outflow,budget,percent,byCategory,byPaymentMethod,flags,latestBalances,
+    unsortedCount:unsorted.length,unsortedOutflow,unsortedIncome};
 }
 
 /** Compare only two FINISHED salary cycles; do not overstate an incomplete month. */
