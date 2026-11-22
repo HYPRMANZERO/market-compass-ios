@@ -1,3 +1,4 @@
+import {bankStatementDate} from './bankStatementParser.ts';
 import {layoutStandardBankPdfLines} from './standardBankPdfLayout.ts';
 /**
  * Bounded, device-only extraction of selectable text from a PDF.
@@ -101,9 +102,11 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
       // text to avoid treating the same row as two transactions.
       const tableLines=layoutStandardBankPdfLines(content.items);
       const pageLines=tableLines?[
-        ...genericLines.filter(line=>
-          /\b(?:standard bank|three.month statement|3.month statement|available balance)\b/i.test(line) &&
-          !/^\d{1,2}\s+[a-z]{3,9}\s+\d{2,4}\b/i.test(line)).slice(0,12),
+        ...genericLines.filter(line=>{
+          const date=bankStatementDate(line);
+          return /\b(?:standard bank|three.month statement|3.month statement|available balance)\b/i.test(line) &&
+          !(date && line.trimStart().startsWith(date.matched));
+        }).slice(0,12),
         ...tableLines
       ]:genericLines;
       for(const line of pageLines){
