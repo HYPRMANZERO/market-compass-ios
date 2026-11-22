@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry,cycleSpendingTrends,suggestKnownSpendCategory,cycleCashflowCutIdeas} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
 const make=(date,kind,amount,category='other',extras={})=>({
   id:date+kind+amount,recordedAt:'2026-11-20T12:00:00Z',date,kind,amount,
@@ -111,4 +112,20 @@ test('unsorted movements remain in outflow and optional labeling does not change
    ['subscriptions','fees','transport','groceries']);
  assert.equal(cuts.totalIllustrativeSavings,58);
  assert.equal(cycleCashflowCutIdeas(entries,'2026-11-26','ZAR').totalIllustrativeSavings,0);
+});
+
+test('Spend UI keeps Unsorted and money movements visible and links only to private Assistant',async()=>{
+ const ui=await readFile(new URL('../artifacts/market-compass/src/components/MonthlyExpenses.tsx',import.meta.url),'utf8');
+ const review=await readFile(new URL('../artifacts/market-compass/src/components/ReviewedDocumentLedger.tsx',import.meta.url),'utf8');
+ assert.match(ui,/Filter money movements/);
+ assert.match(ui,/Unsorted outflow \(included\)/);
+ assert.match(ui,/Unsorted income \(included\)/);
+ assert.match(ui,/Label this entry \(optional\)/);
+ assert.match(ui,/cycleCashflowCutIdeas/);
+ assert.match(ui,/Open Compass AI .* cash-flow review/);
+ assert.match(review,/Unreviewed credits/);
+ assert.match(review,/Unreviewed debits/);
+ assert.match(review,/Unknown direction/);
+ assert.match(review,/no unapproved row affects your budget/);
+ assert.doesNotMatch(ui,/fetch\(|sendBeacon\(/);
 });
