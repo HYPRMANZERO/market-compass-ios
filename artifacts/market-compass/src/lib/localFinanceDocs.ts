@@ -80,8 +80,9 @@ function moneyOf(value:unknown):number|null{
   if(negative)s=s.slice(1,-1);
   // South African exports commonly use 1,234.56; only accept the decimal
   // comma when there is a single ungrouped comma and <=2 decimal digits.
-  if(/^\d+,\d{1,2}$/.test(s))s=s.replace(',','.');
-  else s=s.replace(/,/g,'');
+  if(/^[+-]?\d+,\d{1,2}$/.test(s))s=s.replace(',','.');
+  else if(/^[+-]?\d{1,3}(?:\.\d{3})+,\d{2}$/.test(s))s=s.replace(/\./g,'').replace(',','.');
+  else if(/^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$/.test(s))s=s.replace(/,/g,'');
   if(!/^[+-]?\d+(?:\.\d{1,2})?$/.test(s))return null;
   const n=Number(s)*(negative?-1:1);
   return Number.isFinite(n)&&Math.abs(n)<=10_000_000?Math.round(n*100)/100:null;
