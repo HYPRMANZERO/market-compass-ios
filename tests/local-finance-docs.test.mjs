@@ -98,3 +98,20 @@ test('signed decimal commas preserve cents and reject malformed grouping',()=>{
  const doc=extract('example.csv','Date;Description;Amount\n12/09/2026;Fee;-7,50\n13/09/2026;Deposit;+1.234,56\n14/09/2026;Invalid;1,2,34');
  assert.deepEqual(doc.lines.map(row=>row.amount),[-7.50,1234.56]);
 });
+
+test('document labels and legacy saved line labels mask PII before vault persistence',()=>{
+ const doc=extract('synthetic.csv',csv,'Account 123456789012345 statement');
+ assert.doesNotMatch(JSON.stringify(doc),/123456789012345/);
+ assert.match(doc.label,/redacted identifier/i);
+ const injected={...doc,label:'Account 987654321012345 statement',
+   lines:doc.lines.map((line,i)=>i===0?
+     {...line,label:'Payment account 123456789012345 to demo@example.com'}:line)};
+ const checked=validateLocalFinanceDocument(injected);
+ assert.ok(checked);
+ const stored=addLocalFinanceDocument([],injected)[0];
+ assert.deepEqual(stored,checked);
+ assert.doesNotMatch(JSON.stringify(stored),
+   /987654321012345|123456789012345|demo@example\.com/i);
+ assert.equal(stored.lines[0].amount,doc.lines[0].amount);
+ assert.equal(stored.lines[0].date,doc.lines[0].date);
+});
