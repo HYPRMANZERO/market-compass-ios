@@ -12,6 +12,7 @@ import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
+import SolanaTrackingBar from '@/components/SolanaTrackingBar';
 import {
   addLocalFinanceDocument,removeLocalFinanceDocument,
   type LocalFinanceDocument
@@ -49,11 +50,11 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; localFinanceDocuments: LocalFinanceDocument[]; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; localFinanceDocuments: LocalFinanceDocument[]; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; solanaSeries: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 // The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
 // All new installations start in ZAR; the user can change country and currency explicitly.
 const initialRegion = 'ZA';
-const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, localFinanceDocuments: [], offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, localFinanceDocuments: [], offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, solanaSeries: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -643,6 +644,17 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   };
   return <>
     <PageIntro eyebrow="Observe before interpreting" title="Markets" description="View provider-sourced cryptocurrency quotes and analyse completed spot candles. JSE shares and other markets require authorized data feeds." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Read-only market research</div>} />
+    <SolanaTrackingBar cachedSeries={data.solanaSeries}
+      privateEnabled={data.desktopAi.enabled} privateUrl={data.desktopAi.url}
+      privateToken={data.desktopAi.token} preferZar={data.currency!=='USD'}
+      onCache={solanaSeries=>setData(old=>({...old,solanaSeries}))}
+      onSaveDraft={info=>{
+        const draft:Draft={id:crypto.randomUUID(),symbol:'SOLUSD',side:'buy',
+          quantity:info.quantity,limitPrice:info.limitPrice,rationale:info.rationale,
+          status:'pending',createdAt:new Date().toISOString()};
+        setData(old=>({...old,drafts:[draft,...old.drafts]}));
+      }}
+    />
     <LiveCryptoQuotes currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
