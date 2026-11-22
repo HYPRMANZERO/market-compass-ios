@@ -102,7 +102,7 @@ test('unsorted movements remain in outflow and optional labeling does not change
  assert.equal(analysis.transfers,300);
  assert.equal(analysis.recordedDifference,1005);
  const relabelled=entries.map(e=>e.kind==='expense'&&e.category==='unsorted'?
-   {...e,category:'other'}:e);
+   {...e,category:'groceries'}:e);
  const revised=cycleAnalysis(relabelled,'2026-10-26','ZAR');
  assert.equal(revised.expenses,analysis.expenses);
  assert.equal(revised.recordedDifference,analysis.recordedDifference);
