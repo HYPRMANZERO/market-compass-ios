@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {extractLocalFinanceDocument} from '../artifacts/market-compass/src/lib/localFinanceDocs.ts';
 import {
   applyReviewedDocumentToLedger,documentLedgerEntryId,documentAppliedIndices,
-  allowedDocumentCategories
+  allowedDocumentCategories,suggestDocumentClassification
 } from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
 import {cycleAnalysis} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
 
@@ -91,5 +91,28 @@ test('the iPhone interface offers explicit consent, saved excerpt and Spend inte
  assert.match(imported,/<ReviewedDocumentLedger/);
  assert.match(app,/onApplyEntries=\{approved=>setData\(/);
  assert.doesNotMatch(component,/fetch\(|sendBeacon|postMessage\(/);
- assert.deepEqual(allowedDocumentCategories('income'),['salary','side-income']);
+ assert.deepEqual(allowedDocumentCategories('income'),['salary','side-income','unsorted']);
+});
+
+test('unknown descriptions remain Unsorted with optional review and never auto-post',()=>{
+ const source=extractLocalFinanceDocument('synthetic.csv',
+  'Date;Description;Debit;Credit\n10/11/2026;Unknown merchant code;60,00;\n11/11/2026;MONTHLY BANK FEE;7,00;\n12/11/2026;Unclear deposit;;150,00\n13/11/2026;SALARY;;1000,00',
+  'Synthetic four rows',{now,id:'1b2c3d4e-0000-4000-8000-000000000001'});
+ assert.equal(source.lines.length,4);
+ assert.deepEqual(source.lines.map(line=>suggestDocumentClassification(line)?.category),
+  ['unsorted','fees','unsorted','salary']);
+ assert.deepEqual(documentAppliedIndices(source,[]),new Set());
+ const approved=applyReviewedDocumentToLedger(source,[],[
+   {lineIndex:0,date:'2026-11-10',kind:'expense',category:'unsorted'},
+   {lineIndex:1,date:'2026-11-11',kind:'expense',category:'fees'},
+   {lineIndex:2,date:'2026-11-12',kind:'income',category:'unsorted'}
+ ],'ZAR',now);
+ const totals=cycleAnalysis(approved,'2026-10-26','ZAR');
+ assert.equal(totals.expenses,67);
+ assert.equal(totals.income,150);
+ assert.equal(totals.unsortedOutflow,60);
+ assert.equal(totals.unsortedIncome,150);
+ assert.equal(approved.length,3);
+ const changed=approved.map(e=>e.category==='unsorted'?{...e,category:'other'}:e);
+ assert.equal(cycleAnalysis(changed,'2026-10-26','ZAR').recordedDifference,totals.recordedDifference);
 });
