@@ -96,3 +96,18 @@ test('Standard Bank keeps split posting dates and wide right-aligned payments',(
   ]);
   assert.equal(lines[1].label,'CARD PURCHASE 26 MAR CARD PAYMENT');
 });
+
+test('mixed posting dates retain source amounts, directions and balances in document review',()=>{
+  const dates=new Map([[682,'27/03/2026'],[646,'2026-03-28'],[619,'29 Mar 26']]);
+  const mixed=items.map(item=>item.str==='27 Mar 26'?
+    {...item,str:dates.get(item.transform[5])}:item);
+  const lines=layoutStandardBankPdfLines(mixed);
+  const doc=extractLocalFinanceDocument('synthetic.pdf',
+    ['Standard Bank statement',...lines].join('\n'),'Synthetic statement');
+  assert.deepEqual(doc.lines.slice(1).map(row=>
+    [row.date,row.amount,row.direction,row.runningBalance]),[
+      ['2026-03-27',-200,'outgoing',2629.72],
+      ['2026-03-28',-7,'outgoing',2622.72],
+      ['2026-03-29',1000,'incoming',2550.73]
+    ]);
+});
