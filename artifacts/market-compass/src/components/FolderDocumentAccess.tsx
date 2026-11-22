@@ -117,14 +117,29 @@ export default function FolderDocumentAccess({disabled,reviewPending,onImport}:P
    {connected&&<button type="button" onClick={disconnect}
      className="min-h-11 rounded-lg border border-border px-3 text-[12px] font-semibold">Disconnect folder</button>}
   </div>
-  {!supported&&<p className="mt-2 text-[11px] text-muted-foreground">Folder access is unavailable in this browser. Choose multiple files above.</p>}
+  {!supported&&<label className="mt-3 block text-[12px] font-semibold">
+    Choose a local folder snapshot (one-time selection, no monitoring)
+    <input type="file" multiple
+      ref={element=>{if(element)element.setAttribute('webkitdirectory','');}}
+      aria-label="Choose a folder containing financial documents, including subfolders"
+      onChange={event=>{
+        const files=Array.from(event.currentTarget.files??[]);
+        event.currentTarget.value='';
+        importFolderSnapshot(files);
+      }}
+      className="mt-2 block w-full rounded-xl border border-input bg-background p-3 text-[12px]"/>
+    <span className="mt-1 block text-[11px] text-muted-foreground">
+      Supported browsers include files from subfolders. No persistent folder permission
+      or background scanning is requested.
+    </span>
+  </label>}
   {connected&&<label className="mt-3 flex items-start gap-2 text-[12px]">
    <input type="checkbox" checked={autoScan} onChange={e=>setAutoScan(e.target.checked)}
       className="mt-1 h-4 w-4"/>
    <span>Check this granted folder every 5 minutes while Market Compass is open and unlocked.
     New files are discovered only; nothing is posted without review.</span>
   </label>}
-  {connected&&queued.length>0&&<div className="mt-3 space-y-2">
+  {queued.length>0&&<div className="mt-3 space-y-2">
    <p className="text-[12px] font-semibold">{queued.length} new or changed file(s) awaiting local review.</p>
    <label className="block text-[11px] font-semibold">One-time password for encrypted PDFs (if needed)
     <input type="password" ref={passwordInput} autoComplete="off" spellCheck={false}

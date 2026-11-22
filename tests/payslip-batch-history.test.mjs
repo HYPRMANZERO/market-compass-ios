@@ -78,3 +78,14 @@ test('batch importer processes multiple PDF selections locally with one temporar
  assert.equal(again.drafts.length,0);
  assert.equal(again.duplicateCount,1);
 });
+
+test('desktop folder snapshot fallback stays permission-bound and never uploads files',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const ui=await readFile(new URL('../artifacts/market-compass/src/components/FolderDocumentAccess.tsx',import.meta.url),'utf8');
+ assert.match(ui,/showDirectoryPicker/);
+ assert.match(ui,/setAttribute\('webkitdirectory',''\)/);
+ assert.match(ui,/importFolderSnapshot\(files\)/);
+ assert.match(ui,/Review discovered financial files/);
+ assert.match(ui,/One-time password for encrypted PDFs/);
+ assert.doesNotMatch(ui,/localStorage|indexedDB|axios|XMLHttpRequest|fetch\(/i);
+});
