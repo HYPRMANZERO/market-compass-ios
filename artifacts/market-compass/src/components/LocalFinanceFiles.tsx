@@ -20,7 +20,7 @@ const financeLabel=(kind:string|undefined)=>kind==='absa-vehicle-finance'?'ABSA 
 const roleLabel=(role:string|undefined)=>role==='contract-term'?'Contract term, NOT a payment':
   role==='balance-reference'?'Historical/reference balance, NOT spendable cash':
   role==='rate-reference'?'Quoted rate, NOT a payment':
-  role==='transaction'?'Possible completed payment — verify':'Unclassified · owner review';
+  role==='transaction'?'Dated transaction candidate — verify against source':'Unclassified · owner review';
 const lineDateLabel=(line:{date:string|null;semanticRole?:string})=>
   (line.semanticRole==='contract-term'||line.semanticRole==='balance-reference')?
   (line.date?'Reference/effective date '+line.date:'Reference date not identified'):
@@ -373,6 +373,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           </div>
           <p className="text-muted-foreground">{lineDateLabel(line)} · {roleLabel(line.semanticRole)}</p>
           {line.ratePercent!==undefined&&<p className="font-semibold">Quoted rate {line.ratePercent}%</p>}
+          {line.runningBalance!==undefined&&<p className="text-muted-foreground">
+            Running balance after transaction: {money(line.runningBalance)} · historical, not another payment
+          </p>}
         </div>)}
       </div>
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
@@ -399,6 +402,15 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">
           {maskDocumentPII(document.label)} · {document.lines.length} lines
         </summary>
+        {document.format==='pdf'&&document.accountProfile?.category==='bank-statement'&&
+          document.lines.some(l=>l.date===null&&l.semanticRole!=='balance-reference')&&
+          <p role="alert" className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] leading-5">
+            This earlier imported statement contains undated or unclassified entries.
+            Reimport the original PDF with the updated parser to recover dates and
+            separate payment amounts from running balances. Review the corrected
+            import before removing any old excerpts. Previously saved snippets
+            cannot reconstruct information missing from their source.
+          </p>}
         <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
           {document.accountProfile?
             document.accountProfile.name+' · '+document.accountProfile.category.replaceAll('-',' '):
@@ -412,7 +424,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         </p>
         <ul className="mt-2 max-h-56 space-y-2 overflow-auto text-[11px]">
           {document.lines.map((line,index)=><li key={index} className="flex flex-wrap justify-between gap-2">
-            <span>{lineDateLabel(line)} · {maskDocumentPII(line.label)}<span className="block text-[10px] text-muted-foreground">{roleLabel(line.semanticRole)}</span></span>
+            <span>{lineDateLabel(line)} · {maskDocumentPII(line.label)}<span className="block text-[10px] text-muted-foreground">{roleLabel(line.semanticRole)}{line.runningBalance!==undefined?' · Historical running balance '+money(line.runningBalance):''}</span></span>
             <strong>{money(line.amount)}</strong>
           </li>)}
         </ul>

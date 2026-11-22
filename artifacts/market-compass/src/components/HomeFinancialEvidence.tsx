@@ -45,10 +45,10 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
   const incompleteAccounts=accounts.filter(a=>!hasAmount(a.balance)).length;
 
   return <section aria-label="Saved financial evidence dashboard"
-    className="mb-5 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+    className="mb-5 overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5 shadow-sm sm:p-7">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 className="text-[15px] font-bold">Your saved financial picture</h2>
+        <h2 className="serif text-2xl font-semibold tracking-tight sm:text-3xl">Your financial picture</h2>
         <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
           Updated from this iPhone's unlocked encrypted workspace. Nothing here is a live bank balance.
         </p>
@@ -58,22 +58,22 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
       </Link>
     </div>
     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <div className="rounded-xl bg-muted/60 p-3">
+      <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Saved documents</p>
         <p className="mt-1 text-[20px] font-bold">{safeDocs.length}</p>
         <p className="text-[10px] text-muted-foreground">{reviewedLines} excerpt lines</p>
       </div>
-      <div className="rounded-xl bg-muted/60 p-3">
+      <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Approved transactions</p>
         <p className="mt-1 text-[20px] font-bold">{safeEntries.length}</p>
         <p className="text-[10px] text-muted-foreground">All recorded cycles</p>
       </div>
-      <div className="rounded-xl bg-muted/60 p-3">
+      <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Current-cycle income</p>
         <p className="mt-1 text-[17px] font-bold">{stats.count?money(stats.income,currency):'Not recorded'}</p>
         <p className="text-[10px] text-muted-foreground">Recorded only · not bank-verified</p>
       </div>
-      <div className="rounded-xl bg-muted/60 p-3">
+      <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Current-cycle outflows</p>
         <p className="mt-1 text-[17px] font-bold">{stats.count?money(stats.expenses+stats.debtPayments,currency):'Not recorded'}</p>
         <p className="text-[10px] text-muted-foreground">Expenses + repayments · no transfers</p>
@@ -88,13 +88,19 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
         <h3 className="text-[12px] font-semibold">Saved document evidence</h3>
         {safeDocs.length===0?<p className="mt-2 text-[11px] text-muted-foreground">No documents saved on this device.</p>:
           <div className="mt-2 space-y-2">
-            {safeDocs.slice(0,3).map(d=><details key={d.id} className="rounded-lg bg-muted/40 p-2">
+            {[...safeDocs].sort((a,b)=>b.importedAt.localeCompare(a.importedAt)).slice(0,3).map(d=><details key={d.id} className="rounded-lg bg-muted/40 p-2">
               <summary className="cursor-pointer text-[11px] font-semibold">
                 {maskDocumentPII(d.label)} · {d.lines.length} lines
               </summary>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Imported {d.importedAt.slice(0,10)} · partial, owner-reviewed evidence
+                {d.accountProfile?.category.replaceAll('-', ' ')??'Unclassified'} · Imported {d.importedAt.slice(0,10)}{d.truncated?' · Excerpt limit reached':''}
               </p>
+              {Boolean(d.accountProfile?.facts.length)&&<dl className="my-3 divide-y divide-border rounded-xl border border-border bg-card px-3">
+                {d.accountProfile?.facts.slice(0,4).map((fact,index)=><div key={index} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-xs">
+                  <dt className="capitalize">{fact.field.replaceAll('-', ' ')}{fact.asOf&&<small className="block text-muted-foreground">{fact.asOf}</small>}</dt>
+                  <dd className="font-semibold tabular-nums">{fact.ratePercent!==undefined?fact.ratePercent+'%':fact.amount!==null?money(fact.amount,currency):'Unspecified'}</dd>
+                </div>)}
+              </dl>}
               <ul className="mt-2 space-y-1">
                 {d.lines.slice(0,5).map((line,index)=><li key={index}
                   className="flex flex-wrap justify-between gap-2 text-[11px]">

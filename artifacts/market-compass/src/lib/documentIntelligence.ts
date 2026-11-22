@@ -8,7 +8,8 @@ export type DocumentCategory='bank-statement'|'vehicle-finance'|'payslip'|
   'investment-statement'|'tax-document'|'unclassified';
 export type DocumentFactField='statement-balance'|'settlement-quotation'|
   'original-principal'|'instalment'|'previous-instalment'|'residual-value'|
-  'annual-rate'|'net-pay'|'gross-pay'|'tax-withheld'|'receipt-total'|'amount-due';
+  'annual-rate'|'net-pay'|'gross-pay'|'tax-withheld'|'receipt-total'|
+  'amount-due'|'running-balance';
 export type DocumentFact={field:DocumentFactField;amount:number|null;ratePercent?:number;
   asOf:string|null;sourceLabel:string;historical:true};
 export type AccountProfile={name:string;institution:string;category:DocumentCategory;
@@ -44,8 +45,8 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
     /\bpayslip\b|\bpay slip\b|\bpay advice\b/i,
     /\bnet pay\b|\bgross pay\b|\bPAYE\b/i]},
   {category:'bank-statement',matches:[
-    /\bbank statement\b|\bstatement of account\b|\bbank export\b/i,
-    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bdate[,;]\s*description[,;]\s*(?:debit|credit)\b/i]},
+    /\bbank statement\b|\bstatement of account\b|\bbank export\b|\b3.month statement\b|\bthree.month statement\b/i,
+    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bdate[,;]\s*description[,;]\s*(?:debit|credit)\b|\bavailable balance\b|\bpayments\s+deposits\s+balance\b|\bSTDBANK\b/i]},
   {category:'investment-statement',matches:[
     /\binvestment statement\b|\bportfolio statement\b/i,
     /\bunits held\b|\bholdings statement\b|\bmarket value\b/i]},
@@ -70,10 +71,16 @@ export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'n
     score:p.matches.reduce((score,re)=>score+(re.test(haystack)?1:0),0)}))
     .sort((a,b)=>b.score-a.score);
   const best=ranked[0];
-  const category:DocumentCategory=best&&best.score>0?best.kind:'unclassified';
+  const tied=best.score>0&&ranked[1]?.score===best.score;
+  const header=text.split(/\r?\n/).slice(0,5).join(' ');
+  const headingMatches=tied?ranked.filter(candidate=>candidate.score===best.score&&
+    patterns.find(pattern=>pattern.category===candidate.kind)?.matches[0].test(header)):[];
+  const category:DocumentCategory=tied?(headingMatches.length===1?headingMatches[0].kind:
+    ranked.some(candidate=>candidate.kind==='bank-statement'&&candidate.score===best.score)?'bank-statement':'unclassified'):
+    best.score>0?best.kind:'unclassified';
   return {name:institution==='Unidentified provider'?names[category]:
-    institution+' '+names[category],
-    institution,category,confidence:best&&best.score>=2?'matched-terms':'uncertain'};
+    category==='bank-statement'?institution+' account':institution+' '+names[category],
+    institution,category,confidence:!tied&&best.score>=2?'matched-terms':'uncertain'};
 }
 /** Strong PII redaction for stored excerpts: never save full account/ID numbers. */
 export function maskDocumentPII(text:string):string{
@@ -89,7 +96,7 @@ export function maskDocumentPII(text:string):string{
 const factFields=new Set<DocumentFactField>([
   'statement-balance','settlement-quotation','original-principal','instalment',
   'previous-instalment','residual-value','annual-rate','net-pay','gross-pay',
-  'tax-withheld','receipt-total','amount-due'
+  'tax-withheld','receipt-total','amount-due','running-balance'
 ]);
 export function isFactField(x:unknown):x is DocumentFactField{
   return typeof x==='string'&&factFields.has(x as DocumentFactField);
@@ -111,7 +118,7 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
     const f=o as Record<string,unknown>;
     if(!isFactField(f.field)||f.historical!==true||
       (f.amount!==null&&(typeof f.amount!=='number'||!Number.isFinite(f.amount)||
-        f.amount<0||f.amount>10_000_000))||
+        (f.amount<0&&!['statement-balance','running-balance'].includes(String(f.field)))||Math.abs(f.amount)>10_000_000))||
       (f.asOf!==null&&(typeof f.asOf!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(f.asOf)))||
       typeof f.sourceLabel!=='string'||f.sourceLabel.length>130||
       (f.ratePercent!==undefined&&(typeof f.ratePercent!=='number'||
@@ -127,7 +134,7 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
 export function makeAccountProfile(
   text:string,label:string,excerpts:ReadonlyArray<{
     label:string;amount:number|null;date:string|null;semanticField?:string;
-    ratePercent?:number
+    ratePercent?:number;runningBalance?:number
   }>
 ):AccountProfile{
   const info=classifyDocument(text,label);
@@ -147,7 +154,21 @@ export function makeAccountProfile(
     facts.push({field,amount:e.amount,asOf:e.date,
       sourceLabel:maskDocumentPII(e.label).slice(0,130),historical:true,
       ...(e.ratePercent===undefined?{}:{ratePercent:e.ratePercent})});
-    if(facts.length>=32)break;
+    if(facts.length>=31)break;
+  }
+  // A dated running balance is observation of that statement row, not a
+  // current bank feed or a second transaction. Keep only the latest dated row.
+  // Reverse order before stable sorting, so the last occurrence on the
+  // latest date wins rather than the first entry from that same day.
+  const observed=[...excerpts].reverse().filter(e=>
+    typeof e.runningBalance==='number'&&Number.isFinite(e.runningBalance)&&
+    typeof e.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(e.date))
+    .sort((a,b)=>(b.date??'').localeCompare(a.date??''));
+  if(observed.length&&facts.length<32){
+    const latest=observed[0] as typeof observed[number]&{runningBalance:number};
+    facts.push({field:'running-balance',amount:latest.runningBalance,
+      asOf:latest.date,sourceLabel:'Running balance after dated transaction',
+      historical:true});
   }
   return {...info,facts};
 }

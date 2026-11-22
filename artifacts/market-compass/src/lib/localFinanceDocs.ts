@@ -1,5 +1,6 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
 import {classifyDocument,makeAccountProfile,maskDocumentPII,safeAccountProfile,type AccountProfile} from './documentIntelligence.ts';
+import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -18,6 +19,8 @@ export type LocalFinanceLine={
   semanticRole?:FinanceRole;
   semanticField?:FinanceField;
   ratePercent?:number;
+  /** Historical running balance on a dated bank statement row; NOT a payment. */
+  runningBalance?:number;
 };
 export type LocalFinanceDocument={
   id:string;
@@ -154,14 +157,25 @@ function parseText(text:string):LocalFinanceLine[]{
   for(const raw of text.split(/\r?\n/).slice(0,25000)){
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const trimmed=raw.trim();if(trimmed.length<3)continue;
-    const rand=trimmed.match(/\b(?:ZAR|R)\s*([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
-    const known=trimmed.match(/\b(?:salary|basic pay|gross pay|gross earnings|net pay|paye|tax|deduction|payment|total|subtotal|amount paid|amount due|total paid|receipt total|vat|insurance|fuel|rent|car payment)\b[^0-9]{0,20}([+-]?\d[\d ,]*(?:\.\d{1,2})?)\b/i);
-    const token=rand?.[1]??known?.[1];
-    const amount=moneyOf(token??null);
+    const sourceDate=bankStatementDate(trimmed);
+    const body=sourceDate?trimmed.replace(sourceDate.matched,' '):trimmed;
+    // Read a complete numeric token. Dates and second currency values
+    // must never be interpreted as amounts.
+    const currencyValues=[...body.matchAll(/(?:^|[^\w.,+-])([+-]?)\s*(?:ZAR|R)\s*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)/gi)];
+    if(currencyValues.length>1)continue;
+    const known=body.match(/\b(?:salary|basic pay|gross pay|gross earnings|net pay|paye|tax|deduction|amount due|invoice total|total due|take home pay|payment|total paid|receipt total|amount paid|subtotal|vat|insurance|fuel|rent|car payment)\b[\s:=]*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)(?![\d.,%])/i);
+    const match=currencyValues[0];
+    let token=match?match[1]+match[2]:known?.[1];
+    if(!token)continue;
+    token=token.replace(/\s/g,'');
+    if(/^[+-]?\d{1,3}(?:\.\d{3})+,\d{2}$/.test(token))token=token.replace(/\./g,'').replace(',','.');
+    else if(/^[+-]?\d+,\d{1,2}$/.test(token))token=token.replace(',','.');
+    else if(!/^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(token))continue;
+    const amount=moneyOf(token);
     if(amount===null)continue;
-    const dateMatch=trimmed.match(/\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{4}\b|\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b/);
+    const date=sourceDate?.date??null;
     const desc=maskText(trimmed,130);if(!desc)continue;
-    out.push({label:desc,amount,date:dateMatch?dateOf(dateMatch[0]):null,direction:'unclassified'});
+    out.push({label:desc,amount,date,direction:'unclassified'});
   }
   return out;
 }
@@ -201,11 +215,13 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     if(v.semanticRole!==undefined && !['contract-term','balance-reference','rate-reference','transaction','unclassified'].includes(String(v.semanticRole)))return null;
     if(v.semanticField!==undefined && !['original-principal','previous-instalment','instalment','residual-value','settlement-quotation','statement-balance','annual-rate','completed-payment'].includes(String(v.semanticField)))return null;
     if(v.ratePercent!==undefined && (typeof v.ratePercent!=='number'||!Number.isFinite(v.ratePercent)||v.ratePercent<0||v.ratePercent>100))return null;
+    if(v.runningBalance!==undefined && (typeof v.runningBalance!=='number'||!Number.isFinite(v.runningBalance)||Math.abs(v.runningBalance)>10_000_000||v.semanticRole!=='transaction'||v.date===null))return null;
     const line:LocalFinanceLine={label:v.label,amount:v.amount as number|null,date:v.date as string|null,
       direction:v.direction as LocalFinanceLine['direction']};
     if(v.semanticRole!==undefined)line.semanticRole=v.semanticRole as FinanceRole;
     if(v.semanticField!==undefined)line.semanticField=v.semanticField as FinanceField;
     if(v.ratePercent!==undefined)line.ratePercent=v.ratePercent as number;
+    if(v.runningBalance!==undefined)line.runningBalance=v.runningBalance as number;
     lines.push(line);
   }
   if(input.documentKind!==undefined &&
@@ -234,29 +250,35 @@ export function extractLocalFinanceDocument(
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
   const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+ownerLabel):'unclassified';
-  // A finance contract is NOT a transaction CSV. Recognise its terms before
-  // the generic R-amount extractor can conflate contract values with payments.
+  const classified=classifyDocument(text,fileName+' '+ownerLabel);
+  const bankStatement=(extension==='pdf'||extension==='txt')&&
+    classified.category==='bank-statement'&&documentKind==='unclassified'?
+      parseBankStatementText(text,MAX_FINANCE_LINES):null;
+  // Preserve dedicated bank statement and vehicle finance parsers so running
+  // balances and contract amounts never masquerade as completed transactions.
   let lines:LocalFinanceLine[]=documentKind!=='unclassified'?
     extractVehicleFinanceLines(text).map(line=>({...line,label:maskText(line.label,130)})):
+    bankStatement?bankStatement.lines.map(line=>({...line,label:maskText(line.label,130)})):
     extension==='csv'?parseCsv(text):
     extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
-  // A payslip normally lists one payment date in its header rather than on
-  // every earnings/deduction line. Apply that ONLY to explicit pay fields,
-  // and keep other document/statement reference dates untouched.
-  if(classifyDocument(text,ownerLabel).category==='payslip'){
+  // A payslip payment date is explicit evidence for payroll fields only,
+  // never a substitute for an undated bank statement transaction.
+  if(classified.category==='payslip'){
     const paidOn=payslipPayDate(text);
     if(paidOn)lines=lines.map(line=>line.date===null&&
       /\b(?:net pay|take home pay|gross pay|gross earnings|basic pay|paye)\b/i.test(line.label)
       ?{...line,date:paidOn}:line);
   }
-  if(!lines.length)throw Error('No financial rows with recognisable amounts were found. Nothing was saved.');
+  if(!lines.length)throw Error(bankStatement?
+    'Bank statement found, but no complete dated transaction or labelled balance rows were read. Try a bank CSV export or check the PDF layout; nothing was saved.':
+    'No financial rows with recognisable amounts were found. Nothing was saved.');
   const document={
     id,label:ownerLabel.trim(),importedAt:now.toISOString(),
     source:'owner-selected-iphone-file' as const,format:extension,
     bankVerified:false as const,complete:false as const,
-    lines:lines.slice(0,MAX_FINANCE_LINES),truncated:lines.length>MAX_FINANCE_LINES,
+    lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
-    accountProfile:makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES))
+    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
