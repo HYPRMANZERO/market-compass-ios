@@ -17,7 +17,10 @@ const fieldNames:Record<DocumentFact['field'],string>={
   'original-principal':'Original amount financed',
   'instalment':'Contractual monthly instalment','previous-instalment':'Previous instalment',
   'residual-value':'Residual/balloon value','annual-rate':'Quoted annual interest',
-  'net-pay':'Net pay','amount-due':'Amount due',
+  'net-pay':'Net pay','gross-pay':'Gross pay','basic-pay':'Basic pay',
+  'paye':'PAYE payroll tax','uif':'UIF','total-deductions':'Total payroll deductions',
+  'pension':'Pension','medical-aid':'Medical aid','allowance':'Allowance',
+  'bonus':'Bonus','overtime':'Overtime','amount-due':'Amount due',
   'running-balance':'Last dated running balance (historical)'
 };
 const usable=(f:DocumentFact,key:'balance'|'apr'|'minimumPayment')=>

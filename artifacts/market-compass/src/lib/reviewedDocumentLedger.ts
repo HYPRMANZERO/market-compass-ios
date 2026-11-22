@@ -34,6 +34,8 @@ export function allowedDocumentCategories(kind:ExpenseKind):ExpenseCategory[]{
   return validCategories[kind]??[];
 }
 export function documentRowBlockReason(doc:LocalFinanceDocument,line:LocalFinanceLine):string|null{
+  if(doc.accountProfile?.category==='payslip'||line.payrollField)
+    return 'A payslip records payroll evidence, not a confirmed bank deposit or separate expense. Review matching bank transactions before posting.';
   const legacyBalance=/^(?:transaction details\s+)?(?:available|opening|closing|current|running|statement) balance\b/i;
   if(line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
      line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||legacyBalance.test(line.label))
