@@ -1,7 +1,5 @@
 name: Validate owner PWA bank document parity
 on:
-  push:
-    branches: [fix/owner-pdf-page-completeness]
   pull_request:
     branches: [main, release/owner-bank-document-parity-20261121]
   workflow_dispatch:
