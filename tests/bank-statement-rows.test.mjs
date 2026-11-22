@@ -26,7 +26,25 @@ test('South African abbreviated statement dates are retained precisely',()=>{
  assert.equal(bankStatementDate('31 Feb 26'),null);
  assert.equal(bankStatementDate('26/03/2026')?.date,'2026-03-26');
  assert.equal(bankStatementDate('2026-04-04')?.date,'2026-04-04');
+ assert.equal(bankStatementDate('27-Sept-26')?.date,'2026-09-27');
+ assert.equal(bankStatementDate('27-09-26')?.date,'2026-09-27');
+ assert.equal(bankStatementDate('27-Mar-26')?.date,'2026-03-27');
+ assert.equal(bankStatementDate('29-Feb-25'),null);
 });
+test('hyphenated statement and CSV dates retain explicit bank values',()=>{
+ const row=parseBankStatementRow('27-Sept-26 Monthly service charge -7.50 202.50');
+ assert.ok(row);
+ assert.equal(row.date,'2026-09-27');
+ assert.equal(row.amount,-7.50);
+ assert.equal(row.runningBalance,202.50);
+ const doc=extractLocalFinanceDocument('synthetic.csv',
+   'Date,Description,Amount\n27-Sept-26,Service charge,-7.50\n27-09-26,Payroll,+120.00',
+   'Synthetic bank CSV',{now,id:'badc0ffe-1111-4444-8aaa-000000000001'});
+ assert.deepEqual(doc.lines.map(line=>[line.date,line.amount,line.direction]),[
+   ['2026-09-27',-7.50,'outgoing'],['2026-09-27',120,'incoming']
+ ]);
+});
+
 test('negative fee and running balance are separate, not double-counted',()=>{
  const fee=parseBankStatementRow('27 Mar 26 FEE: PAYSHAP PAYMENT -7.00 2,622.72');
  assert.ok(fee);
