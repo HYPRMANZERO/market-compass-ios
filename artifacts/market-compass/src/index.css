@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap');
-@import 'tailwindcss';
+/* Pin Tailwind v4 source scanning to THIS app, not the pnpm monorepo CWD. */
+@import "tailwindcss" source("../src");
+/* Keep these explicit sources for pnpm/Vite/Windows builds. */
+@source "./App.tsx";
+@source "./components";
+@source "./lib";
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
@@ -398,8 +403,6 @@ select:focus-visible, textarea:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
-/* A sticky header and fixed tab bar both cover the scrolling surface.
-   Keep anchors and focus targets outside those two occupied areas. */
 #mc-backup-controls { scroll-margin-top: calc(94px + env(safe-area-inset-top)); }
 .mc-mobile-tabbar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 @media (display-mode: standalone) and (max-width: 1023px) {
