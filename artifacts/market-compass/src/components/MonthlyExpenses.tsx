@@ -1,9 +1,11 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronLeft, ChevronRight, CircleAlert, Edit2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { localDate } from '@/lib/dailyBackup';
 import SalaryPush from './SalaryPush';
 import {Link} from 'wouter';
 import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
+import {privateTailnetOrigin} from '@/lib/privateTailnetUrl';
+import {buildSpendCoachingRequest} from '@/lib/spendAiGuidance';
 import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import {
   type ExpenseEntry, type ExpenseKind, type ExpenseCategory, type ExpenseSettings,
@@ -53,6 +55,8 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const [message,setMessage]=useState('');
   const [reminderNote,setReminderNote]=useState('');
   const [nowTick,setNowTick]=useState(0);
+  const [automaticTips,setAutomaticTips]=useState<{key:string;reply:string}|null>(null);
+  const [automaticTipStatus,setAutomaticTipStatus]=useState('');
   const activeRange=salaryCycle(today),selected=salaryCycle(cycleStart);
   const active=selected.start===activeRange.start;
   const allEntries=Array.isArray(entries)?entries:[];
@@ -60,6 +64,13 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const historicalTrends=cycleSpendingTrends(allEntries,cycleStart,today,currency);
   const cutIdeas=cycleCashflowCutIdeas(allEntries,cycleStart,currency);
   const suggestedManualCategory=suggestKnownSpendCategory(kind,description);
+  // Recompute only after approved ledger data, selected cycle or budget changes.
+  // No transaction descriptions or banking identifiers enter this summary.
+  const coachingRequest=useMemo(
+    ()=>buildSpendCoachingRequest(entries,cycleStart,currency,settings.cycleBudget),
+    [entries,cycleStart,currency,settings.cycleBudget]
+  );
+  const coachingKey=coachingRequest?JSON.stringify(coachingRequest.financialContext.expenseSummary):'';
   const selectedEntries=cycleEntries(allEntries,cycleStart,currency)
     .slice().sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
   const shownEntries=selectedEntries.filter(e=>{
@@ -161,6 +172,62 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
     document.addEventListener('visibilitychange',refresh);
     return()=>document.removeEventListener('visibilitychange',refresh);
   },[]);
+  useEffect(()=>{
+    if(!coachingRequest){
+      setAutomaticTipStatus('Record or approve a transaction to enable tailored coaching.');
+      setAutomaticTips(null);
+      return;
+    }
+    const origin=privateTailnetOrigin(desktopAi.url);
+    if(!desktopAi.enabled||!desktopAi.shareFinancialContext||!origin||desktopAi.token.length<48){
+      setAutomaticTips(null);
+      setAutomaticTipStatus('Local expense tips update automatically. Enable private AI and financial-context sharing in Assistant for automatic Ollama coaching.');
+      return;
+    }
+    if(!navigator.onLine){
+      setAutomaticTips(null);
+      setAutomaticTipStatus('Offline: recorded-data tips remain available. AI coaching resumes when you reopen this screen online.');
+      return;
+    }
+    let active=true;
+    const controller=new AbortController();
+    setAutomaticTips(null);
+    setAutomaticTipStatus('Preparing private Ollama guidance from your reviewed category totals…');
+    const deadline=window.setTimeout(()=>controller.abort(),62_000);
+    const delay=window.setTimeout(()=>{
+      void (async()=>{
+        try{
+          const response=await fetch(origin+'/api/chat',{
+            method:'POST',mode:'cors',
+            credentials:origin===window.location.origin?'same-origin':'omit',
+            cache:'no-store',signal:controller.signal,
+            headers:{Authorization:'Bearer '+desktopAi.token,'Content-Type':'application/json'},
+            body:JSON.stringify(coachingRequest)
+          });
+          if(!response.ok)throw Error('Private AI unavailable');
+          const result:unknown=await response.json();
+          if(!result||typeof result!=='object'||!('reply' in result)||
+            typeof result.reply!=='string'||!('answerSource' in result)||
+            result.answerSource!=='private-desktop-model')
+            throw Error('Private Ollama response not verified');
+          if(!active)return;
+          setAutomaticTips({key:coachingKey,reply:result.reply.slice(0,1400)});
+          setAutomaticTipStatus('Fresh guidance from HYPRBOX Ollama, based only on approved category totals.');
+        }catch{
+          if(active){
+            setAutomaticTips(null);
+            setAutomaticTipStatus('Private AI coaching is currently unavailable. The local recorded-data tips below still update automatically.');
+          }
+        }
+      })();
+    },1100);
+    return ()=>{
+      active=false;
+      window.clearTimeout(delay);
+      window.clearTimeout(deadline);
+      controller.abort();
+    };
+  },[coachingRequest,coachingKey,desktopAi.enabled,desktopAi.shareFinancialContext,desktopAi.url,desktopAi.token]);
   const incomeNotYetConfirmed=analysis.income===0;
   const guidance=[
     ...analysis.flags,
@@ -330,7 +397,16 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           <p className="mt-1 text-[11px] leading-5">A hypothetical {Math.round(idea.rate*100)}% reduction would free {cash(idea.illustrativeSavings,currency)}. {idea.action}</p>
         </div>)}</div>
       </div>:<p className="mt-3 text-[12px] text-muted-foreground">No eligible categorized discretionary costs recorded for this cycle yet. Label purchases when convenient to unlock evidence-based cut scenarios.</p>}
-      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">For tailored conversational analysis, ask Compass AI: “Based on my recorded category spending, what could I cut to improve cash flow?” AI responses come from HYPRBOX Ollama only while connected; aggregate finance context is shared only if you enable it in Assistant. No raw ledger is uploaded automatically.</p>
+      <div className="mt-3 rounded-xl border border-primary/20 bg-muted/30 p-3" aria-live="polite">
+        <h3 className="text-[12px] font-bold">Automatic private AI coaching</h3>
+        <p className="mt-2 text-[12px] leading-5">
+          {automaticTips?.key===coachingKey?automaticTips.reply:automaticTipStatus}
+        </p>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          AI suggestions are generated by HYPRBOX Ollama only when the private connection and financial-context sharing are enabled. Only aggregate approved Spend figures are sent; never raw transaction descriptions, bank numbers or the vault. Suggestions are educational, not guaranteed savings or verified balances.
+        </p>
+      </div>
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Save an entry, label Unsorted spending or change cycles to refresh the automatic guidance. For follow-up questions, open Compass AI in Assistant.</p>
       <Link href="/assistant" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-primary/40 px-4 text-[12px] font-semibold">
         Open Compass AI · cash-flow review
       </Link>
