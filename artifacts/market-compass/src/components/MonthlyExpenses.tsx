@@ -203,6 +203,8 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           <p className="mt-1 text-[14px] font-bold">{cash(analysis.outflow,currency)}</p></div>
         <div><p className="text-[10px] text-muted-foreground">Unsorted outflow (included)</p>
           <p className="mt-1 text-[14px] font-bold">{cash(analysis.unsortedOutflow,currency)}</p></div>
+        <div><p className="text-[10px] text-muted-foreground">Unsorted income (included)</p>
+          <p className="mt-1 text-[14px] font-bold">{cash(analysis.unsortedIncome,currency)}</p></div>
         <div><p className="text-[10px] text-muted-foreground">Unsorted entries</p>
           <p className="mt-1 text-[14px] font-bold">{analysis.unsortedCount}</p></div>
       </div>
