@@ -127,7 +127,9 @@ test('Spend UI keeps Unsorted and money movements visible and links only to priv
  assert.match(review,/Unreviewed debits/);
  assert.match(review,/Unknown direction/);
  assert.match(review,/no unapproved row affects your budget/);
- assert.doesNotMatch(ui,/fetch\(|sendBeacon\(/);
+ assert.match(ui,/fetch\(origin\+'\/api\/chat'/);
+ assert.match(ui,/desktopAi\.shareFinancialContext/);
+ assert.doesNotMatch(ui,/sendBeacon\(/);
 });
 
 test('legacy Other fallback is displayed as Unsorted without mutating saved entries',()=>{
