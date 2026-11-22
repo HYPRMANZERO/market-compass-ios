@@ -132,7 +132,7 @@ export default function FolderDocumentAccess({disabled,reviewPending,onImport}:P
       Supported browsers include files from subfolders. No persistent folder permission
       or background scanning is requested.
     </span>
-  </label>
+  </label>}
   {connected&&<label className="mt-3 flex items-start gap-2 text-[12px]">
    <input type="checkbox" checked={autoScan} onChange={e=>setAutoScan(e.target.checked)}
       className="mt-1 h-4 w-4"/>
