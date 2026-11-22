@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry,cycleSpendingTrends,suggestKnownSpendCategory,cycleCashflowCutIdeas} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+import {salaryCycle,shiftSalaryCycle,cycleAnalysis,cycleEntries,parseMoneyAmount,validateExpenseEntry,cycleSpendingTrends,suggestKnownSpendCategory,cycleCashflowCutIdeas,expenseCategoryNeedsSorting} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
 const make=(date,kind,amount,category='other',extras={})=>({
   id:date+kind+amount,recordedAt:'2026-11-20T12:00:00Z',date,kind,amount,
   category,description:'Sample payment',paidVia:'Local bank app',currency:'ZAR',...extras,
@@ -128,4 +128,18 @@ test('Spend UI keeps Unsorted and money movements visible and links only to priv
  assert.match(review,/Unknown direction/);
  assert.match(review,/no unapproved row affects your budget/);
  assert.doesNotMatch(ui,/fetch\(|sendBeacon\(/);
+});
+
+test('legacy Other fallback is displayed as Unsorted without mutating saved entries',()=>{
+ const old=make('2026-11-13','expense',88,'other',{description:'Unknown historical purchase'});
+ const before=JSON.stringify(old);
+ const a=cycleAnalysis([old],'2026-10-26','ZAR');
+ assert.equal(a.expenses,88);
+ assert.equal(a.unsortedOutflow,88);
+ assert.equal(a.unsortedCount,1);
+ assert.equal(a.byCategory.find(c=>c.category==='unsorted')?.amount,88);
+ assert.equal(a.byCategory.find(c=>c.category==='other'),undefined);
+ assert.equal(expenseCategoryNeedsSorting(old.category),true);
+ assert.equal(expenseCategoryNeedsSorting('groceries'),false);
+ assert.equal(JSON.stringify(old),before);
 });
