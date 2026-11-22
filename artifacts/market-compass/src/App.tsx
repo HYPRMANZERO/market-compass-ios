@@ -23,7 +23,7 @@ import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
-import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
+import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
 import { CURRENCIES, REGIONS, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
@@ -1051,10 +1051,14 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
     expenseSummary: (() => {
       const current=salaryCycle(localDate());
       const stats=cycleAnalysis(data.expenseEntries??[],current.start,data.currency,(data.expenseSettings??DEFAULT_EXPENSE_SETTINGS).cycleBudget);
+      const cutIdeas=cycleCashflowCutIdeas(data.expenseEntries??[],current.start,data.currency);
       return {cycleStart:current.start,cycleEnd:current.lastDay,income:stats.income,
         expenses:stats.expenses,debtPayments:stats.debtPayments,transfers:stats.transfers,
         recordedDifference:stats.recordedDifference,entryCount:stats.count,
         cycleLimit:stats.budget,flags:stats.flags.slice(0,4),
+        unsortedCount:stats.unsortedCount,unsortedOutflow:stats.unsortedOutflow,
+        illustrativeSavings:cutIdeas.totalIllustrativeSavings,
+        cutIdeas:cutIdeas.ideas.slice(0,4).map(x=>({category:x.category,recorded:x.recorded,illustrativeSavings:x.illustrativeSavings,rate:x.rate})),
         categories:stats.byCategory.slice(0,6).map(v=>({category:v.label,amount:v.amount})),
         paymentMethods:stats.byPaymentMethod.slice(0,5).map(v=>({
           app:v.app.replace(/\d{6,}/g,'[masked]').slice(0,60),
