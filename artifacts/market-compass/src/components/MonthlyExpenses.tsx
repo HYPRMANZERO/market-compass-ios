@@ -9,7 +9,7 @@ import {
   type ExpenseEntry, type ExpenseKind, type ExpenseCategory, type ExpenseSettings,
   EXPENSE_CATEGORIES, EXPENSE_KINDS, cycleAnalysis, cycleEntries, parseMoneyAmount,
   salaryCycle, shiftSalaryCycle, validateExpenseEntry, cycleSpendingTrends,
-  cycleCashflowCutIdeas, suggestKnownSpendCategory,
+  cycleCashflowCutIdeas, suggestKnownSpendCategory, expenseCategoryNeedsSorting,
 } from '@/lib/monthlyExpenses';
 
 type DebtAccount = {id:string;name:string;balance:string};
@@ -64,7 +64,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
     .slice().sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
   const shownEntries=selectedEntries.filter(e=>{
     if(viewFilter==='all')return true;
-    if(viewFilter==='unsorted')return e.category==='unsorted';
+    if(viewFilter==='unsorted')return expenseCategoryNeedsSorting(e.category);
     if(viewFilter==='income')return e.kind==='income';
     if(viewFilter==='outflow')return e.kind==='expense'||e.kind==='debt-payment';
     if(viewFilter==='transfers')return e.kind==='transfer';
@@ -373,7 +373,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           <option value="outflow">Expenses and debt repayments</option>
           <option value="transfers">Internal transfers</option>
           <optgroup label="Known categories">
-            {EXPENSE_CATEGORIES.filter(c=>c.value!=='unsorted').map(c=>
+            {EXPENSE_CATEGORIES.filter(c=>c.value!=='unsorted'&&c.value!=='other').map(c=>
               <option key={c.value} value={'category:'+c.value}>{c.label}</option>)}
           </optgroup>
         </select>
@@ -384,8 +384,8 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           <div className="flex items-start justify-between gap-3"><div className="min-w-0">
             <div className="text-[12px] font-bold">{e.description}</div>
             <div className="mt-1 text-[11px] text-muted-foreground">{readable(e.date)} · {e.paidVia} · {EXPENSE_KINDS.find(x=>x.value===e.kind)?.label}</div>
-            <div className="mt-1 text-[11px] text-muted-foreground">Category: {EXPENSE_CATEGORIES.find(c=>c.value===e.category)?.label??'Unsorted'}</div>
-            {e.category==='unsorted'&&<label className="mt-2 block text-[11px] font-semibold">
+            <div className="mt-1 text-[11px] text-muted-foreground">Category: {expenseCategoryNeedsSorting(e.category)?'Unsorted · optional review':EXPENSE_CATEGORIES.find(c=>c.value===e.category)?.label??'Unsorted'}</div>
+            {expenseCategoryNeedsSorting(e.category)&&<label className="mt-2 block text-[11px] font-semibold">
               Label this entry (optional)
               <select aria-label={'Label category for '+e.description}
                 value="unsorted"
@@ -397,7 +397,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
                 }}
                 className="mt-1 min-h-10 w-full rounded-lg border border-input bg-background px-2 text-[13px]">
                 <option value="unsorted">Unsorted · choose a category</option>
-                {EXPENSE_CATEGORIES.filter(c=>c.value!=='unsorted'&&allowedDocumentCategories(e.kind).includes(c.value))
+                {EXPENSE_CATEGORIES.filter(c=>c.value!=='unsorted'&&c.value!=='other'&&allowedDocumentCategories(e.kind).includes(c.value))
                   .map(c=><option value={c.value} key={c.value}>{c.label}</option>)}
               </select>
             </label>}
