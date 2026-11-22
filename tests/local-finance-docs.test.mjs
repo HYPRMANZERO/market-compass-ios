@@ -99,6 +99,19 @@ test('signed decimal commas preserve cents and reject malformed grouping',()=>{
  assert.deepEqual(doc.lines.map(row=>row.amount),[-7.50,1234.56]);
 });
 
+test('signed CSV amount columns and bank dates are classified conservatively',()=>{
+ const doc=extract('example.csv',
+   'Date,Description,Amount\n27 Mar 26,Synthetic outgoing,-7.50\n12/09/26,Synthetic incoming,+135.00\n2026-09-13,Synthetic unsigned,40.00\n2026-09-14,Synthetic bracketed,(9.90)');
+ assert.deepEqual(doc.lines.map(line=>line.date),
+   ['2026-03-27','2026-09-12','2026-09-13','2026-09-14']);
+ assert.deepEqual(doc.lines.map(line=>line.amount),
+   [-7.50,135,40,-9.90]);
+ assert.deepEqual(doc.lines.map(line=>line.direction),
+   ['outgoing','incoming','unclassified','outgoing']);
+ assert.equal(doc.bankVerified,false);
+ assert.equal(doc.complete,false);
+});
+
 test('document labels and legacy saved line labels mask PII before vault persistence',()=>{
  const doc=extract('synthetic.csv',csv,'Account 123456789012345 statement');
  assert.doesNotMatch(JSON.stringify(doc),/123456789012345/);
