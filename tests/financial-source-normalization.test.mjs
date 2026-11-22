@@ -9,7 +9,7 @@ test('PDF and official read-only feed share identical field model but never appr
   const paper=normalizeStatementCandidates(pdf,'bank-statement-pdf','ABSA','ABSA Cheque');
   const feed=normalizeReadOnlyBankRows([{
     date:'2026-03-27',description:'FEE: PAYSHAP PAYMENT',amount:-7,currency:'ZAR',
-    runningBalance:2622.72,status:'posted'
+    direction:'outgoing',runningBalance:2622.72,status:'posted'
   }],'ABSA','ABSA Cheque');
   assert.equal(paper.candidates.length,1);
   assert.equal(feed.candidates.length,1);
@@ -36,7 +36,7 @@ test('balance-only rows and incomplete rows never appear as bank transactions',(
   assert.equal(result.unresolved,1);
 });
 
-test('unsigned PDF amounts remain direction-unclassified while signed feed amounts retain sign',()=>{
+test('bank feed does not fabricate credit/debit direction from signed or unsigned amounts',()=>{
   const paper=normalizeStatementCandidates(
     '05 Apr 26 TRF UNKNOWN 10.00 200.00',
     'bank-statement-pdf','ABSA','ABSA Bank');
@@ -46,7 +46,31 @@ test('unsigned PDF amounts remain direction-unclassified while signed feed amoun
     date:'2026-04-05',description:'TRF UNKNOWN',amount:10,currency:'ZAR',
     status:'posted'
   }],'ABSA','ABSA Bank');
-  assert.equal(api.candidates[0].direction,'incoming');
+  assert.equal(api.candidates[0].amount,10);
+  assert.equal(api.candidates[0].direction,'unclassified');
+  const explicitlyOutgoing=normalizeReadOnlyBankRows([{
+    date:'2026-04-05',description:'Card payment',amount:10,currency:'ZAR',
+    direction:'outgoing',status:'posted'
+  }],'ABSA','ABSA Bank');
+  assert.equal(explicitlyOutgoing.candidates[0].amount,10);
+  assert.equal(explicitlyOutgoing.candidates[0].direction,'outgoing');
+  const explicitlyIncoming=normalizeReadOnlyBankRows([{
+    date:'2026-04-05',description:'Payroll deposit',amount:50,currency:'ZAR',
+    direction:'incoming',status:'posted'
+  }],'ABSA','ABSA Bank');
+  assert.equal(explicitlyIncoming.candidates[0].direction,'incoming');
+  const signedWithoutDirection=normalizeReadOnlyBankRows([{
+    date:'2026-04-05',description:'Signed debit',amount:-20,currency:'ZAR',
+    status:'posted'
+  }],'ABSA','ABSA Bank');
+  assert.equal(signedWithoutDirection.candidates[0].amount,-20);
+  assert.equal(signedWithoutDirection.candidates[0].direction,'unclassified');
+  const invalidDirection=normalizeReadOnlyBankRows([{
+    date:'2026-04-05',description:'Invalid direction',amount:20,currency:'ZAR',
+    direction:'income',status:'posted'
+  }],'ABSA','ABSA Bank');
+  assert.equal(invalidDirection.candidates.length,0);
+  assert.equal(invalidDirection.rejected,1);
 });
 
 test('normalizer rejects invalid bank dates, currencies, NaN and PII account labels',()=>{
