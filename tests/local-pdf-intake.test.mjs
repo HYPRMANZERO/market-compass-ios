@@ -47,7 +47,10 @@ test('UI uses a transient input, not state or settings, for the PDF password',as
   const parser=await readFile(new URL('../artifacts/market-compass/src/lib/localPdfText.ts',import.meta.url),'utf8');
   assert.match(ui,/passwordInput=useRef/);
   assert.match(ui,/passwordInput\.current\.value=''/);
-  assert.match(ui,/extractLocalPdfText\(file,temporaryPassword,\{/);
+  const batch=await readFile(new URL('../artifacts/market-compass/src/lib/batchFinanceImport.ts',import.meta.url),'utf8');
+  assert.match(ui,/importFinanceBatch\(files,\{/);
+  assert.match(batch,/extractLocalPdfText/);
+  assert.match(batch,/reader\(file,options\.password,\{/);
   assert.doesNotMatch(ui,/setPassword|password:\s*settings|localStorage\.setItem|fetch\(/i);
   assert.match(parser,/task\.destroy\(\)/);
   assert.doesNotMatch(parser,/localStorage|indexedDB|fetch\(/);

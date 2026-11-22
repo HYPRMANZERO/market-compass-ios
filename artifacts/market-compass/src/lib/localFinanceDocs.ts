@@ -1,6 +1,7 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
 import {makeAccountProfile,maskDocumentPII,safeAccountProfile,classifyDocument,type AccountProfile} from './documentIntelligence.ts';
 import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
+import {extractPayslipEvidence,PAYROLL_FIELDS,type PayrollField} from './payslipIntelligence.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -18,6 +19,8 @@ export type LocalFinanceLine={
   direction:'incoming'|'outgoing'|'unclassified';
   semanticRole?:FinanceRole;
   semanticField?:FinanceField;
+  /** Payroll evidence, not a completed transaction or bank deposit. */
+  payrollField?:PayrollField;
   ratePercent?:number;
   /** Historical running balance on a dated bank statement row; NOT a payment. */
   runningBalance?:number;
@@ -215,6 +218,9 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
       !['incoming','outgoing','unclassified'].includes(String(v.direction)))return null;
     if(v.semanticRole!==undefined && !['contract-term','balance-reference','rate-reference','transaction','unclassified'].includes(String(v.semanticRole)))return null;
     if(v.semanticField!==undefined && !['original-principal','previous-instalment','instalment','residual-value','settlement-quotation','statement-balance','annual-rate','completed-payment'].includes(String(v.semanticField)))return null;
+    if(v.payrollField!==undefined&&
+      (!PAYROLL_FIELDS.includes(v.payrollField as PayrollField)||v.semanticRole!=='balance-reference'||
+        v.direction!=='unclassified'))return null;
     if(v.ratePercent!==undefined && (typeof v.ratePercent!=='number'||!Number.isFinite(v.ratePercent)||v.ratePercent<0||v.ratePercent>100))return null;
     if(v.runningBalance!==undefined && (typeof v.runningBalance!=='number'||!Number.isFinite(v.runningBalance)||Math.abs(v.runningBalance)>10_000_000||v.semanticRole!=='transaction'||v.date===null))return null;
     const safeLineLabel=maskText(v.label,130);
@@ -223,10 +229,13 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
       direction:v.direction as LocalFinanceLine['direction']};
     if(v.semanticRole!==undefined)line.semanticRole=v.semanticRole as FinanceRole;
     if(v.semanticField!==undefined)line.semanticField=v.semanticField as FinanceField;
+    if(v.payrollField!==undefined)line.payrollField=v.payrollField as PayrollField;
     if(v.ratePercent!==undefined)line.ratePercent=v.ratePercent as number;
     if(v.runningBalance!==undefined)line.runningBalance=v.runningBalance as number;
     lines.push(line);
   }
+  if(lines.some(line=>line.payrollField!==undefined)&&
+    (!asObject(input.accountProfile)||input.accountProfile.category!=='payslip'))return null;
   if(input.documentKind!==undefined &&
     !['absa-vehicle-finance','vehicle-finance','unclassified'].includes(String(input.documentKind)))return null;
   const validated:LocalFinanceDocument={id:input.id,label:safeDocumentLabel,importedAt:input.importedAt,
@@ -255,18 +264,35 @@ export function extractLocalFinanceDocument(
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
   const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+safeOwnerLabel):'unclassified';
-  const classified=classifyDocument(text,fileName+' '+safeOwnerLabel);
+  const suggested=classifyDocument(text,fileName+' '+safeOwnerLabel);
+  // Labels and filenames alone never make arbitrary text a complete payslip.
+  // Require a source heading, or multiple independent payroll field labels.
+  const sourcePayrollFields=[
+    /\bnet\s+(?:pay|salary)\b/i,/\bgross\s+(?:pay|salary|earnings)\b/i,
+    /\bPAYE\b/i,/\bUIF\b/i,/\btotal\s+deductions?\b/i,
+    /\bbasic\s+(?:salary|pay)\b/i
+  ].filter(pattern=>pattern.test(text)).length;
+  const strongPayslip=/^\s*(?:payslip|pay\s+slip|pay\s+advice)\b/im.test(text.slice(0,6000))||
+    sourcePayrollFields>=2;
+  const classified=suggested.category==='payslip'&&!strongPayslip?
+    {...suggested,category:'unclassified' as const,
+      name:'Unclassified document',confidence:'uncertain' as const}:suggested;
+  const payslip=(extension==='pdf'||extension==='txt')&&
+    classified.category==='payslip'&&strongPayslip?extractPayslipEvidence(text):null;
   const bankStatement=(extension==='pdf'||extension==='txt')&&
     classified.category==='bank-statement'&&documentKind==='unclassified'?
       parseBankStatementText(text,MAX_FINANCE_LINES):null;
   // Bank statements contain running balances: never use the generic R-amount
   // matcher for these rows. Otherwise an account balance can become a fee.
-  const lines:LocalFinanceLine[]=documentKind!=='unclassified'?
+  const lines:LocalFinanceLine[]=payslip?payslip.items:
+    documentKind!=='unclassified'?
     extractVehicleFinanceLines(text).map(line=>({...line,label:maskText(line.label,130)})):
     bankStatement?bankStatement.lines.map(line=>({...line,label:maskText(line.label,130)})):
     extension==='csv'?parseCsv(text):
     extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
-  if(!lines.length)throw Error(bankStatement?
+  if(!lines.length)throw Error(payslip?
+    'Payslip detected, but no unambiguous current-period gross, net or deduction amounts could be read. Inspect the local PDF layout; nothing was saved.':
+    bankStatement?
     'Bank statement found, but no complete dated transaction or labelled balance rows were read. Try a bank CSV export or check the PDF layout; nothing was saved.':
     'No financial rows with recognisable amounts were found. Nothing was saved.');
   const document={
@@ -300,6 +326,18 @@ export function reclassifySavedFinanceDocument(input:LocalFinanceDocument):Local
   return result;
 }
 
+/** Compare only normalized, redacted evidence already in the encrypted vault.
+ * No filenames, unmasked source bytes, or persistent file fingerprints. */
+export function sameDocumentEvidence(a:LocalFinanceDocument,b:LocalFinanceDocument):boolean{
+  if(a.accountProfile?.category!==b.accountProfile?.category||a.lines.length!==b.lines.length||
+     a.lines.length===0||a.format!==b.format)return false;
+  return a.lines.every((line,index)=>{
+    const other=b.lines[index];
+    return line.label===other.label&&line.amount===other.amount&&line.date===other.date&&
+      line.direction===other.direction&&line.payrollField===other.payrollField&&
+      line.semanticRole===other.semanticRole;
+  });
+}
 export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDocument):LocalFinanceDocument[]{
   if(!Array.isArray(current))throw Error('Invalid existing encrypted document list. Export a backup first.');
   const checked=current.map(validateLocalFinanceDocument);
@@ -307,7 +345,8 @@ export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDoc
   const safe=checked as LocalFinanceDocument[];
   const checkedDocument=validateLocalFinanceDocument(document);
   if(!checkedDocument||safe.length>=MAX_FINANCE_FILES||
-     safe.some(x=>x.id===checkedDocument.id))throw Error('Document is invalid, duplicate, or the device document-summary capacity has been reached.');
+     safe.some(x=>x.id===checkedDocument.id||sameDocumentEvidence(x,checkedDocument)))
+    throw Error('Document is invalid, duplicate/repeats a saved summary, or the device document-summary capacity has been reached.');
   // Save the reconstructed allowlist object, NEVER the caller's untrusted
   // input. This prevents injected secrets, source paths or extra fields from
   // entering the encrypted workspace even if a caller uses type assertions.

@@ -62,23 +62,21 @@ test('retry, duplicate selection and unreviewed rows fail closed',()=>{
  assert.throws(()=>applyReviewedDocumentToLedger(doc,[],decisions,'USD',now),/owner-confirmed ZAR/);
 });
 
-test('PDF salary rows require a human date and type; no inferred document balance',()=>{
+test('actual payslip payroll amounts are historical evidence, never a posted bank credit',()=>{
  const pdf=extractLocalFinanceDocument(
-  'synthetic.pdf','Net pay R7,200.00\nInsurance R450.50',
+  'synthetic.pdf',
+  'PAYSLIP\nPay Date 20/11/2026\nGross Pay R8,400.00\nNet Pay R7,200.00\nPAYE R1,000.00',
   'Synthetic payslip',{now,id:'f4b94a34-cc81-4aa2-a5da-b8fb1f0da3f6'}
  );
- assert.equal(pdf.lines[0].date,null);
- assert.equal(pdf.lines[0].direction,'unclassified');
+ assert.equal(pdf.accountProfile.category,'payslip');
+ const idx=pdf.lines.findIndex(x=>x.payrollField==='net-pay');
+ assert.ok(idx>=0);
+ assert.equal(pdf.lines[idx].amount,7200);
+ assert.equal(pdf.lines[idx].date,'2026-11-20');
+ assert.equal(pdf.lines[idx].direction,'unclassified');
  assert.throws(()=>applyReviewedDocumentToLedger(pdf,[],[{
-   lineIndex:0,date:'',kind:'income',category:'salary'
- }],'ZAR',now),/payment date/i);
- const entered=applyReviewedDocumentToLedger(pdf,[],[{
-   lineIndex:0,date:'2026-11-20',kind:'income',category:'salary'
- }],'ZAR',now);
- assert.equal(entered.length,1);
- assert.equal(entered[0].amount,7200);
- assert.equal(entered[0].kind,'income');
- assert.equal(entered[0].note.includes('not a verified bank balance'),true);
+   lineIndex:idx,date:'2026-11-20',kind:'income',category:'salary'
+ }],'ZAR',now),/payslip records payroll evidence/i);
 });
 test('the iPhone interface offers explicit consent, saved excerpt and Spend integration',async()=>{
  const root=new URL('../artifacts/market-compass/src/',import.meta.url);

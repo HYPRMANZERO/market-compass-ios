@@ -8,7 +8,8 @@ export type DocumentCategory='bank-statement'|'vehicle-finance'|'payslip'|
   'investment-statement'|'tax-document'|'unclassified';
 export type DocumentFactField='statement-balance'|'settlement-quotation'|
   'original-principal'|'instalment'|'previous-instalment'|'residual-value'|
-  'annual-rate'|'net-pay'|'amount-due'|'running-balance';
+  'annual-rate'|'net-pay'|'gross-pay'|'basic-pay'|'paye'|'uif'|'total-deductions'|
+  'pension'|'medical-aid'|'allowance'|'bonus'|'overtime'|'amount-due'|'running-balance';
 export type DocumentFact={field:DocumentFactField;amount:number|null;ratePercent?:number;
   asOf:string|null;sourceLabel:string;historical:true};
 export type AccountProfile={name:string;institution:string;category:DocumentCategory;
@@ -91,7 +92,9 @@ export function maskDocumentPII(text:string):string{
 }
 const factFields=new Set<DocumentFactField>([
   'statement-balance','settlement-quotation','original-principal','instalment',
-  'previous-instalment','residual-value','annual-rate','net-pay','amount-due','running-balance'
+  'previous-instalment','residual-value','annual-rate','net-pay','gross-pay','basic-pay',
+  'paye','uif','total-deductions','pension','medical-aid','allowance','bonus',
+  'overtime','amount-due','running-balance'
 ]);
 export function isFactField(x:unknown):x is DocumentFactField{
   return typeof x==='string'&&factFields.has(x as DocumentFactField);
@@ -129,13 +132,14 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
 export function makeAccountProfile(
   text:string,label:string,excerpts:ReadonlyArray<{
     label:string;amount:number|null;date:string|null;semanticField?:string;
-    ratePercent?:number;runningBalance?:number
+    ratePercent?:number;runningBalance?:number;payrollField?:string
   }>
 ):AccountProfile{
   const info=classifyDocument(text,label);
   const facts:DocumentFact[]=[];
   for(const e of excerpts){
-    let field:DocumentFactField|undefined=isFactField(e.semanticField)?e.semanticField:undefined;
+    let field:DocumentFactField|undefined=isFactField(e.payrollField)?e.payrollField:
+      isFactField(e.semanticField)?e.semanticField:undefined;
     if(!field){
       const l=e.label.toLowerCase();
       if(/\b(?:closing balance|outstanding balance|statement balance)\b/.test(l))field='statement-balance';
