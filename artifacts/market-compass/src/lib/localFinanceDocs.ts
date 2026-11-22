@@ -49,7 +49,12 @@ function dateOf(value:unknown):string|null{
   if(match){[year,month,day]=match.slice(1,4);}
   else {
     match=v.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-    if(!match)return null;
+    if(!match){
+      // Bank CSVs often contain `27 Mar 26` or `12/09/26` rather than ISO.
+      // Require the entire cell to be an explicit date; do not guess missing dates.
+      const bank=bankStatementDate(v);
+      return bank&&bank.matched===v?bank.date:null;
+    }
     day=match[1].padStart(2,'0');month=match[2].padStart(2,'0');year=match[3];
   }
   const date=year+'-'+month+'-'+day;
@@ -129,8 +134,16 @@ function parseCsv(text:string):LocalFinanceLine[]{
     const credit=moneyOf(row[creditIdx])||0;
     const debit=moneyOf(row[debitIdx])||0;
     if(credit&&debit)continue;
-    const direction=credit?'incoming':debit?'outgoing':'unclassified';
-    const amount=credit?Math.abs(credit):debit?-Math.abs(debit):moneyOf(row[amountIdx]);
+    // Separate debit/credit columns are authoritative. For a single Amount
+    // column, only an explicit plus/minus or accounting brackets prove flow.
+    // Unsigned positives remain unclassified until the owner reviews them.
+    const rawAmount=amountIdx>=0?row[amountIdx]:null;
+    const signedText=typeof rawAmount==='string'?
+      rawAmount.trim().replace(/^(?:ZAR|R)\s*/i,'').trim():'';
+    const direction=credit?'incoming':debit?'outgoing':
+      signedText.startsWith('-')||(signedText.startsWith('(')&&signedText.endsWith(')'))?'outgoing':
+      signedText.startsWith('+')?'incoming':'unclassified';
+    const amount=credit?Math.abs(credit):debit?-Math.abs(debit):moneyOf(rawAmount);
     if(amount===null)continue;
     out.push({label:description,amount,date:dateIdx>=0?dateOf(row[dateIdx]):null,direction});
   }
