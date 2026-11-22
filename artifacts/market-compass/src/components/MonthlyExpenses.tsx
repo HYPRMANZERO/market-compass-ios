@@ -2,11 +2,13 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Bell, ChevronLeft, ChevronRight, CircleAlert, Edit2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { localDate } from '@/lib/dailyBackup';
 import SalaryPush from './SalaryPush';
+import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
 import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import {
   type ExpenseEntry, type ExpenseKind, type ExpenseCategory, type ExpenseSettings,
   EXPENSE_CATEGORIES, EXPENSE_KINDS, cycleAnalysis, cycleEntries, parseMoneyAmount,
   salaryCycle, shiftSalaryCycle, validateExpenseEntry, cycleSpendingTrends,
+  cycleCashflowCutIdeas, suggestKnownSpendCategory,
 } from '@/lib/monthlyExpenses';
 
 type DebtAccount = {id:string;name:string;balance:string};
@@ -26,7 +28,7 @@ const cash=(value:number,code:string)=>{
   catch{return code+' '+value.toFixed(2);}
 };
 const readable=(date:string)=>new Date(date+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'});
-const suggestCategory=(kind:ExpenseKind):ExpenseCategory=>kind==='income'?'salary':kind==='debt-payment'?'credit-card':kind==='transfer'?'savings':'groceries';
+const suggestCategory=(_kind:ExpenseKind):ExpenseCategory=>'unsorted';
 export default function MonthlyExpenses({entries,settings,currency,debtAccounts,desktopAi,onSave,onDelete,onSettingsChange}:Props){
   const today=localDate();
   const calendarUrl = new URL(import.meta.env.BASE_URL + 'salary-reminder.ics',window.location.origin).toString();
@@ -34,7 +36,8 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const [editingId,setEditingId]=useState('');
   const [date,setDate]=useState(today);
   const [kind,setKind]=useState<ExpenseKind>('expense');
-  const [category,setCategory]=useState<ExpenseCategory>('groceries');
+  const [category,setCategory]=useState<ExpenseCategory>('unsorted');
+  const [viewFilter,setViewFilter]=useState('all');
   const [description,setDescription]=useState('');
   const [paidVia,setPaidVia]=useState('');
   const [amount,setAmount]=useState('');
@@ -54,14 +57,24 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const allEntries=Array.isArray(entries)?entries:[];
   const analysis=cycleAnalysis(allEntries,cycleStart,currency,settings.cycleBudget);
   const historicalTrends=cycleSpendingTrends(allEntries,cycleStart,today,currency);
+  const cutIdeas=cycleCashflowCutIdeas(allEntries,cycleStart,currency);
+  const suggestedManualCategory=suggestKnownSpendCategory(kind,description);
   const selectedEntries=cycleEntries(allEntries,cycleStart,currency)
     .slice().sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
+  const shownEntries=selectedEntries.filter(e=>{
+    if(viewFilter==='all')return true;
+    if(viewFilter==='unsorted')return e.category==='unsorted';
+    if(viewFilter==='income')return e.kind==='income';
+    if(viewFilter==='outflow')return e.kind==='expense'||e.kind==='debt-payment';
+    if(viewFilter==='transfers')return e.kind==='transfer';
+    return viewFilter.startsWith('category:')&&e.category===viewFilter.slice(9);
+  });
   const currentSalaryEntered=cycleEntries(allEntries,activeRange.start,currency)
     .some(e=>e.kind==='income'&&e.category==='salary');
   const salaryDay=today.endsWith('-26');
   const salaryReminderDue=salaryDay&&!currentSalaryEntered;
   function reset(){
-    setEditingId('');setDate(today);setKind('expense');setCategory('groceries');setDescription('');
+    setEditingId('');setDate(today);setKind('expense');setCategory('unsorted');setDescription('');
     setPaidVia('');setAmount('');setLinkedDebtId('');setAccountLabel('');setRemaining('');setSyncDebt(false);setNote('');
   }
   function save(event:FormEvent<HTMLFormElement>){
@@ -150,6 +163,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const incomeNotYetConfirmed=analysis.income===0;
   const guidance=[
     ...analysis.flags,
+    ...(analysis.unsortedCount>0?['Review '+analysis.unsortedCount+' Unsorted record(s) at your convenience. Categorization is optional and does not change the recorded money movement.']:[]),
     ...(analysis.debtPayments>0?['Keep the latest lender-confirmed outstanding balance distinct from the installment amount. Do not infer remaining debt by simple subtraction when interest or fees apply.']:[]),
     'Pay essential bills and contractual debt minimums first; preserve a cash buffer before considering extra repayments.',
     'Review high-APR revolving credit before adding speculative investments. Cash flow and income-producing assets matter more than an unverified return forecast.',
@@ -182,6 +196,14 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           <p className="text-[10px] text-muted-foreground">{label}</p>
           <p className="mt-1 break-words text-[17px] font-bold">{cash(Number(value),currency)}</p>
         </div>)}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-border p-3 sm:grid-cols-3" aria-label="Cash flow and unsorted totals">
+        <div><p className="text-[10px] text-muted-foreground">Recorded outflow</p>
+          <p className="mt-1 text-[14px] font-bold">{cash(analysis.outflow,currency)}</p></div>
+        <div><p className="text-[10px] text-muted-foreground">Unsorted outflow (included)</p>
+          <p className="mt-1 text-[14px] font-bold">{cash(analysis.unsortedOutflow,currency)}</p></div>
+        <div><p className="text-[10px] text-muted-foreground">Unsorted entries</p>
+          <p className="mt-1 text-[14px] font-bold">{analysis.unsortedCount}</p></div>
       </div>
       <p className="mt-3 text-[12px] text-muted-foreground">Recorded income less expenses and debt payments: <strong className="text-foreground">{cash(analysis.recordedDifference,currency)}</strong>. This is not a verified bank balance. Internal transfers are excluded to avoid double counting.</p>
       {analysis.budget!==null&&<div className="mt-3">
@@ -244,6 +266,11 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
               {EXPENSE_CATEGORIES.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
             </select>
           </label>
+          {category==='unsorted'&&suggestedManualCategory!=='unsorted'&&
+            <button type="button" className="min-h-11 self-end rounded-xl border border-primary/30 px-3 text-[12px] font-semibold"
+              onClick={()=>setCategory(suggestedManualCategory)}>
+              Use suggested category: {EXPENSE_CATEGORIES.find(x=>x.value===suggestedManualCategory)?.label}
+            </button>}
           <label className="text-[12px] font-semibold">Amount ({currency})
             <input required type="number" min=".01" step=".01" value={amount} onChange={e=>setAmount(e.target.value)} className={field} placeholder="0.00"/>
           </label>
@@ -286,7 +313,22 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
       </form>
     </section>
     <section className="rounded-2xl border border-border bg-card p-4">
-      <h2 className="text-[14px] font-bold">Spending patterns and recommendations</h2>
+      <h2 className="text-[14px] font-bold">Cash-flow guidance · expense cuts</h2>
+      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+        Cash-flow-first principles inspired by Rich Dad Poor Dad: track money coming in, separate
+        necessary outflows from optional spending, protect debt minimums and a cash buffer,
+        then consider how surplus could support productive assets. Category patterns are owner-reviewed observations, not live bank data.
+      </p>
+      {cutIdeas.ideas.length>0?<div className="mt-3 rounded-xl border border-border bg-muted/30 p-3">
+        <p className="text-[11px] font-semibold">Illustrative room to improve cash flow</p>
+        <p className="mt-1 text-[18px] font-bold">{cash(cutIdeas.totalIllustrativeSavings,currency)} <span className="text-[11px] font-normal text-muted-foreground">potential scenario per recorded cycle; not guaranteed savings</span></p>
+        <div className="mt-2 space-y-3">{cutIdeas.ideas.map(idea=><div key={idea.category} className="border-t border-border pt-2">
+          <p className="text-[12px] font-semibold">{EXPENSE_CATEGORIES.find(c=>c.value===idea.category)?.label}: {cash(idea.recorded,currency)} recorded</p>
+          <p className="mt-1 text-[11px] leading-5">A hypothetical {Math.round(idea.rate*100)}% reduction would free {cash(idea.illustrativeSavings,currency)}. {idea.action}</p>
+        </div>)}</div>
+      </div>:<p className="mt-3 text-[12px] text-muted-foreground">No eligible categorized discretionary costs recorded for this cycle yet. Label purchases when convenient to unlock evidence-based cut scenarios.</p>}
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">For tailored conversational analysis, ask Compass AI in Assistant: “Based on my recorded category spending, what could I cut to improve cash flow?” It uses HYPRBOX Ollama only when connected and when financial-context sharing is enabled. No private ledger is uploaded automatically.</p>
+      <h3 className="mt-4 text-[14px] font-bold">Spending patterns and recommendations</h3>
       <div className="mt-3 space-y-2">
         {guidance.map((item,i)=><p key={i} className="flex items-start gap-2 text-[12px] leading-5"><CircleAlert size={16} className="mt-0.5 shrink-0 text-muted-foreground"/>{item}</p>)}
       </div>
@@ -317,11 +359,42 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
     </section>
     <section className="rounded-2xl border border-border bg-card p-4">
       <h2 className="text-[14px] font-bold">Entries · {analysis.count}</h2>
+      <label className="mt-3 block text-[12px] font-semibold">Filter money movements
+        <select value={viewFilter} onChange={e=>setViewFilter(e.target.value)} className={field}>
+          <option value="all">All ({analysis.count})</option>
+          <option value="unsorted">Unsorted ({analysis.unsortedCount})</option>
+          <option value="income">Incoming</option>
+          <option value="outflow">Expenses and debt repayments</option>
+          <option value="transfers">Internal transfers</option>
+          <optgroup label="Known categories">
+            {EXPENSE_CATEGORIES.filter(c=>c.value!=='unsorted').map(c=>
+              <option key={c.value} value={'category:'+c.value}>{c.label}</option>)}
+          </optgroup>
+        </select>
+      </label>
+      <p className="mt-2 text-[11px] text-muted-foreground">Showing {shownEntries.length} of {analysis.count} reviewed entries. Filters never remove or modify saved money movements.</p>
       {selectedEntries.length===0?<p className="mt-3 text-[12px] text-muted-foreground">No entries recorded for this salary cycle. Start with your next payment or salary deposit.</p>:
-        <div className="mt-3 space-y-2">{selectedEntries.map(e=><div key={e.id} className="rounded-xl border border-border p-3">
+        <div className="mt-3 space-y-2">{shownEntries.map(e=><div key={e.id} className="rounded-xl border border-border p-3">
           <div className="flex items-start justify-between gap-3"><div className="min-w-0">
             <div className="text-[12px] font-bold">{e.description}</div>
             <div className="mt-1 text-[11px] text-muted-foreground">{readable(e.date)} · {e.paidVia} · {EXPENSE_KINDS.find(x=>x.value===e.kind)?.label}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">Category: {EXPENSE_CATEGORIES.find(c=>c.value===e.category)?.label??'Unsorted'}</div>
+            {e.category==='unsorted'&&<label className="mt-2 block text-[11px] font-semibold">
+              Label this entry (optional)
+              <select aria-label={'Label category for '+e.description}
+                value="unsorted"
+                onChange={event=>{
+                  const next=event.target.value as ExpenseCategory;
+                  if(next==='unsorted'||!allowedDocumentCategories(e.kind).includes(next))return;
+                  try{onSave(validateExpenseEntry({...e,category:next}),false);setMessage('Category updated without changing movement totals.');setError('');}
+                  catch(err){setError(err instanceof Error?err.message:'Unable to label entry.');}
+                }}
+                className="mt-1 min-h-10 w-full rounded-lg border border-input bg-background px-2 text-[13px]">
+                <option value="unsorted">Unsorted · choose a category</option>
+                {EXPENSE_CATEGORIES.filter(c=>c.value!=='unsorted'&&allowedDocumentCategories(e.kind).includes(c.value))
+                  .map(c=><option value={c.value} key={c.value}>{c.label}</option>)}
+              </select>
+            </label>}
             {e.accountLabel&&<p className="mt-1 text-[11px] text-muted-foreground">{e.accountLabel}</p>}
             {e.remainingBalance!==undefined&&e.remainingBalance!==null&&<p className="mt-1 text-[11px] text-muted-foreground">Remaining debt (entered): {cash(e.remainingBalance,e.currency)}</p>}
             {e.note&&<p className="mt-1 text-[11px] text-muted-foreground">{e.note}</p>}
@@ -331,6 +404,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
             <button type="button" onClick={()=>{if(window.confirm('Delete this locally saved entry? Any manually updated Debt Plan balance will remain unchanged.'))onDelete(e.id);}} className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-destructive"><Trash2 size={13}/> Delete</button>
           </div>
         </div>)}</div>}
+      {selectedEntries.length>0&&shownEntries.length===0&&<p className="mt-3 text-[12px] text-muted-foreground">No recorded movements match this filter.</p>}
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Entries are encrypted in this device's vault. Export your vault backup to move records to another device; they are not automatically synchronized with the desktop's AI memory.</p>
     </section>
   </div>;
