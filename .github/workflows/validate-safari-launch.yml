@@ -25,7 +25,7 @@ jobs:
       - run: node --experimental-strip-types --test tests/home-financial-evidence.test.mjs tests/historical-recurring-insights.test.mjs
       - run: node --test tests/home-document-upload.test.mjs
       - run: node --experimental-strip-types --test tests/document-intelligence.test.mjs
-      - run: node --experimental-strip-types --test tests/consented-document-intake.test.mjs tests/launch-batch-safety.test.mjs
+      - run: node --experimental-strip-types --test tests/consented-document-intake.test.mjs tests/launch-batch-safety.test.mjs tests/import-hardening.test.mjs
       - run: node --experimental-strip-types --test tests/bank-statement-rows.test.mjs
       - run: node --experimental-strip-types --test tests/standard-bank-layout.test.mjs
       - run: node --experimental-strip-types --test tests/financial-source-normalization.test.mjs

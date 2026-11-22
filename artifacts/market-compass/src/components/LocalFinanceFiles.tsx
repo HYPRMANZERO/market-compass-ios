@@ -60,7 +60,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   // mounted. No path or FileSystemHandle enters the encrypted vault.
   const watchedFolder=useRef<ReadableFolder|null>(null);
   const scannedFingerprints=useRef(new Set<string>());
-  const scanInProgress=useRef(false);
+  const scanController=useRef<AbortController|null>(null);
   const scanGeneration=useRef(0);
   const [discovered,setDiscovered]=useState<DiscoveredFinanceFile[]>([]);
   const [scanning,setScanning]=useState(false);
@@ -76,9 +76,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const canPickFolder=typeof window!=='undefined'&&'showDirectoryPicker' in window;
   async function scanFolder(){
     const folder=watchedFolder.current;
-    if(!folder||scanInProgress.current)return;
+    if(!folder||scanController.current)return;
     const generation=scanGeneration.current;
-    scanInProgress.current=true;
+    const controller=new AbortController();
+    scanController.current=controller;
     setScanning(true);
     try{
       // Never silently re-prompt for a renewed permission grant.
@@ -87,18 +88,21 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         setScanStatus('Folder read permission is no longer granted. Choose the folder again to resume.');
         return;
       }
-      const found=await listConsentedFinanceFiles(folder);
-      if(generation!==scanGeneration.current)return;
+      const found=await listConsentedFinanceFiles(folder,{signal:controller.signal});
+      if(controller.signal.aborted||generation!==scanGeneration.current)return;
       const fresh=found.items.filter(item=>!scannedFingerprints.current.has(item.fingerprint));
       for(const item of fresh)scannedFingerprints.current.add(item.fingerprint);
       if(fresh.length)setDiscovered(old=>[...old,...fresh]);
       setScanStatus(fresh.length+' new or changed financial files found for optional review'+
         (found.truncated?'; folder inventory safety limit reached. Select a smaller folder.':'.'));
     }catch{
-      if(generation===scanGeneration.current)setScanStatus('Folder scan failed or access expired. Regrant access to retry.');
+      if(!controller.signal.aborted&&generation===scanGeneration.current)
+        setScanStatus('Folder scan failed or access expired. Regrant access to retry.');
     }finally{
-      scanInProgress.current=false;
-      if(generation===scanGeneration.current)setScanning(false);
+      if(scanController.current===controller){
+        scanController.current=null;
+        setScanning(false);
+      }
     }
   }
   async function chooseFolder(){
@@ -109,6 +113,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     try{
       const folder=await picker.call(window,{mode:'read'});
       scanGeneration.current++;
+      scanController.current?.abort();
+      scanController.current=null;
+      setScanning(false);
       watchedFolder.current=folder;
       scannedFingerprints.current.clear();
       setDiscovered([]);
@@ -121,6 +128,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   }
   function stopFolder(){
     scanGeneration.current++;
+    scanController.current?.abort();
+    scanController.current=null;
+    setScanning(false);
     watchedFolder.current=null;
     scannedFingerprints.current.clear();
     setDiscovered([]);
@@ -135,6 +145,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange',tick);
       scanGeneration.current++;
+      scanController.current?.abort();
+      scanController.current=null;
       watchedFolder.current=null;
       scannedFingerprints.current.clear();
       readController.current?.abort();
@@ -147,7 +159,11 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   function startSelection(files:File[],oneTimePassword=''){
     // Do not silently throw away the previous preview, an encrypted retry,
     // or the remaining selected File objects when another picker is opened.
-    if(reading||preview||needsPassword||waitingFiles.current.length>0||!files.length)return;
+    if(!files.length)return;
+    if(reading||readController.current||preview||needsPassword||pendingSaveId||waitingFiles.current.length>0){
+      setError('Finish or skip the current document batch before selecting more files.');
+      return;
+    }
     const capacity=Math.max(0,MAX_FINANCE_FILES-safe.length);
     if(!capacity){setError('Encrypted document-summary capacity reached. Back up and review saved documents first.');return;}
     const accepted=files.slice(0,capacity);
@@ -291,7 +307,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     <label className="mt-3 block text-[12px] font-semibold">
       Optional file label · e.g. October bank export
       <input type="text" autoComplete="off" maxLength={70} value={label}
-        disabled={reading||!!preview||needsPassword||remaining>0}
+        disabled={reading||!!preview||needsPassword||!!pendingSaveId||remaining>0}
         onChange={e=>{setLabel(e.target.value);setError('');setFeedback('');}}
         placeholder="Optional · defaults to recognised document category"
         className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
@@ -315,7 +331,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       Choose documents from Files (read access to selected files only)
       <input type="file" multiple accept=".csv,.txt,.json,.pdf,text/plain,text/csv,application/json,application/pdf"
         aria-label="Choose one or more private CSV TXT JSON or PDF documents from iPhone Files"
-        disabled={safe.length>=MAX_FINANCE_FILES||reading||!!preview||needsPassword||remaining>0}
+        disabled={safe.length>=MAX_FINANCE_FILES||reading||!!preview||needsPassword||!!pendingSaveId||remaining>0}
         onChange={event=>{
           const chosen=Array.from(event.currentTarget.files??[]);
           event.currentTarget.value='';
@@ -356,7 +372,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       </p>}
       {scanStatus&&<p role="status" className="mt-2 text-[11px] leading-5 text-muted-foreground">{scanStatus}</p>}
       {discovered.length>0&&<button type="button"
-        disabled={reading||!!preview||needsPassword||remaining>0||safe.length>=MAX_FINANCE_FILES}
+        disabled={reading||!!preview||needsPassword||!!pendingSaveId||remaining>0||safe.length>=MAX_FINANCE_FILES}
         onClick={()=>{
           const capacity=Math.max(0,MAX_FINANCE_FILES-safe.length);
           startSelection(discovered.slice(0,capacity).map(item=>item.file));
@@ -376,7 +392,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         selection without saving unreviewed files.
       </p>
       {batchWarning&&<p role="alert" className="mt-2 text-[11px] font-semibold">{batchWarning}</p>}
-      {!reading&&<button type="button" disabled={!!pendingSaveId} onClick={cancelBatch}
+      {!reading&&!pendingSaveId&&<button type="button" onClick={cancelBatch}
         className="mt-2 min-h-10 rounded-lg border border-border px-3 text-[11px] font-semibold">
         Cancel selected batch
       </button>}

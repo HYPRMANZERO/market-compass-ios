@@ -23,6 +23,11 @@ export default function DocumentHistorySummary({documents,currency}:Props){
       figures are shown as ZAR for review only. Overlapping source documents may
       repeat amounts, so do not add these columns together.
     </p>
+    {history.duplicateSources>0&&<p role="status" className="mt-2 text-[11px] font-semibold text-muted-foreground">
+      {history.duplicateSources} identical previously saved source
+      {history.duplicateSources===1?' was':'s were'} excluded from the historical totals.
+      Older overlapping or truncated statements may still require manual reconciliation.
+    </p>}
     {currency!=='ZAR'?<p className="mt-3 text-[11px] font-semibold text-destructive">
       Imported document amounts have not been currency converted. Switch to ZAR
       to view their source-currency estimates safely.

@@ -19,23 +19,35 @@ export type FolderScanResult={items:DiscoveredFinanceFile[];truncated:boolean};
 const FINANCIAL_FORMAT=/\.(?:pdf|csv|txt|json)$/i;
 export const FOLDER_SCAN_MAX_ENTRIES=3000;
 export const FOLDER_SCAN_MAX_DEPTH=8;
+export const FOLDER_SCAN_MAX_CANDIDATES=120;
+export type FolderScanOptions={signal?:AbortSignal;maxCandidates?:number};
 
 /**
  * Bounded metadata enumeration keeps the PWA responsive and never opens raw
  * document bytes. "truncated" signals more files may need owner selection.
  */
-export async function listConsentedFinanceFiles(root:ReadableFolder):Promise<FolderScanResult>{
+export async function listConsentedFinanceFiles(
+  root:ReadableFolder,options:FolderScanOptions={}
+):Promise<FolderScanResult>{
   const items:DiscoveredFinanceFile[]=[];
+  const maxCandidates=Math.max(1,Math.min(FOLDER_SCAN_MAX_CANDIDATES,
+    Math.floor(options.maxCandidates??FOLDER_SCAN_MAX_CANDIDATES)));
   let examined=0,truncated=false;
+  function requireActive(){
+    if(options.signal?.aborted)throw Error('Consented folder scan was cancelled.');
+  }
   async function visit(dir:ReadableFolder,prefix:string,depth:number):Promise<void>{
+    requireActive();
     if(depth>FOLDER_SCAN_MAX_DEPTH){truncated=true;return;}
     for await(const entry of dir.values()){
-      if(++examined>FOLDER_SCAN_MAX_ENTRIES){truncated=true;return;}
+      requireActive();
+      if(++examined>FOLDER_SCAN_MAX_ENTRIES||items.length>=maxCandidates){truncated=true;return;}
       if(entry.kind==='directory'){
         await visit(entry,prefix+entry.name+'/',depth+1);
       }else if(FINANCIAL_FORMAT.test(entry.name)){
         try{
           const file=await entry.getFile();
+          requireActive();
           if(file.size>0){
             // Relative filename is a transient in-memory dedupe key only.
             const fingerprint=prefix+entry.name+'|'+file.size+'|'+file.lastModified;
@@ -47,5 +59,6 @@ export async function listConsentedFinanceFiles(root:ReadableFolder):Promise<Fol
     }
   }
   await visit(root,'',0);
+  requireActive();
   return {items,truncated};
 }

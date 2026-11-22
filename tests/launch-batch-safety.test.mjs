@@ -9,8 +9,8 @@ const component=(name)=>readFile(
   new URL('../artifacts/market-compass/src/components/'+name,import.meta.url),'utf8');
 test('batch import keeps a current preview and encrypted retry from being replaced',async()=>{
   const src=await component('LocalFinanceFiles.tsx');
-  assert.match(src,/if\(reading\|\|preview\|\|needsPassword\|\|waitingFiles\.current\.length>0\|\|!files\.length\)return/);
-  assert.match(src,/disabled=\{safe\.length>=MAX_FINANCE_FILES\|\|reading\|\|!!preview\|\|needsPassword\|\|remaining>0\}/);
+  assert.match(src,/if\(reading\|\|readController\.current\|\|preview\|\|needsPassword\|\|pendingSaveId\|\|waitingFiles\.current\.length>0\)/);
+  assert.match(src,/disabled=\{safe\.length>=MAX_FINANCE_FILES\|\|reading\|\|!!preview\|\|needsPassword\|\|!!pendingSaveId\|\|remaining>0\}/);
   assert.match(src,/batchTotal>0&&<section aria-label="Batch document review status"/);
   assert.match(src,/Cancel selected batch/);
   assert.match(src,/setBatchWarning\(files\.length>capacity/);
