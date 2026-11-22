@@ -32,7 +32,7 @@ test('semicolon CSV parses decimal commas and separates synthetic debits/credits
  const d=extract('example.csv',
    'Date;Description;Debit;Credit\n12/09/2026;Synthetic charge;345,60;\n12/09/2026;Synthetic income;;7125,10');
  assert.equal(d.lines.length,2);
- assert.equal(d.lines[0].amount,345.6);
+ assert.equal(d.lines[0].amount,-345.6);
  assert.equal(d.lines[0].direction,'outgoing');
  assert.equal(d.lines[1].amount,7125.10);
  assert.equal(d.lines[1].direction,'incoming');
@@ -92,4 +92,9 @@ test('offline assistant cites approved synthetic excerpts but never invents live
  assert.equal(answerFromOfflineFinanceDocs('Buy Bitcoin',[d]),null);
  assert.equal(answerFromOfflineFinanceDocs('What is my balance?',[]),null);
  assert.match(interpretCompassCommand('Transfer money now',ctx).reply,/cannot transfer money/i);
+});
+
+test('signed decimal commas preserve cents and reject malformed grouping',()=>{
+ const doc=extract('example.csv','Date;Description;Amount\n12/09/2026;Fee;-7,50\n13/09/2026;Deposit;+1.234,56\n14/09/2026;Invalid;1,2,34');
+ assert.deepEqual(doc.lines.map(row=>row.amount),[-7.50,1234.56]);
 });
