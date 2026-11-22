@@ -80,7 +80,7 @@ export default function ReviewedDocumentLedger({
       </span>
     </summary>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      Review the suggested classifications and select the transactions to add.
+      Check the direction shown in the source document and select the transactions to add.
       Transfers, refunds and unclear directions may need your input. Check against existing Spend entries before posting.
     </p>
     {currency!=='ZAR'||currencyReviewRequired?
