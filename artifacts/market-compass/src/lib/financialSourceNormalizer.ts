@@ -40,7 +40,10 @@ const clean=(value:string,max:number)=>{
     .replace(/[\x00-\x1f<>]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
 };
 const validAmount=(value:unknown):value is number=>typeof value==='number'&&
-  Number.isFinite(value)&&value!==0&&Math.abs(value)<=10_000_000;
+  Number.isFinite(value)&&Math.abs(value)>=0.01&&Math.abs(value)<=10_000_000&&
+  // Financial feeds must already specify a whole number of ZAR cents.
+  // Never round 0.004 into 0.00 or 10.005 into a different amount.
+  Math.abs(value*100-Math.round(value*100))<1e-6;
 const validBalance=(value:unknown):value is number=>typeof value==='number'&&
   Number.isFinite(value)&&Math.abs(value)<=10_000_000;
 const amountRound=(value:number)=>Math.round(value*100)/100;
