@@ -1,5 +1,4 @@
 import {useState} from 'react';
-import {isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {
@@ -8,7 +7,7 @@ import {
 } from '@/lib/monthlyExpenses';
 import {
   applyReviewedDocumentToLedger,allowedDocumentCategories,
-  documentAppliedIndices,type ReviewedLedgerDecision
+  documentAppliedIndices,documentRowBlockReason,suggestDocumentClassification,type ReviewedLedgerDecision
 } from '@/lib/reviewedDocumentLedger';
 
 type ReviewRow={checked:boolean;date:string;kind:ExpenseKind|'';category:ExpenseCategory|''};
@@ -22,8 +21,7 @@ type Props={
 const showMoney=(value:number|null)=>value===null?'Unknown amount':
   new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:2}).format(value);
 
-/** No import posts to the Spend ledger until every selected row is classified
- * by the owner and a second confirmation is given. No remote requests. */
+/** Suggest classifications locally and require confirmation before posting. */
 export default function ReviewedDocumentLedger({
   document,entries,currency,currencyReviewRequired,onApply
 }:Props){
@@ -31,15 +29,32 @@ export default function ReviewedDocumentLedger({
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
   const applied=documentAppliedIndices(document,entries);
-  const available=document.lines.length-applied.size;
+  function initialRow(index:number):ReviewRow{
+    const line=document.lines[index];
+    const suggestion=suggestDocumentClassification(line);
+    return {checked:false,date:line.date??'',kind:suggestion?.kind??'',category:suggestion?.category??''};
+  }
+  const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
+    !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0);
+  // Unreviewed movements are visible, but never included in approved Spend totals.
+  const pendingCredits=ready.filter(({line})=>line.direction==='incoming')
+    .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
+  const pendingDebits=ready.filter(({line})=>line.direction==='outgoing')
+    .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
+  const pendingUnclear=ready.filter(({line})=>line.direction==='unclassified').length;
+  const pendingUnsorted=ready.filter(({line})=>{
+    const proposed=suggestDocumentClassification(line);
+    return proposed===null||proposed.category==='unsorted';
+  }).length;
+  const suggested=ready.filter(({index})=>{
+    const row=draft[index]??initialRow(index);
+    return row.date&&row.kind&&row.category;
+  });
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
   const change=(index:number,fields:Partial<ReviewRow>)=>{
-    const line=document.lines[index];
     setDraft(old=>{
-      const previous:ReviewRow=old[index]??{
-        checked:false,date:line.date??'',kind:'',category:''
-      };
+      const previous=old[index]??initialRow(index);
       return {...old,[index]:{...previous,...fields}};
     });
     setError('');setFeedback('');
@@ -58,8 +73,8 @@ export default function ReviewedDocumentLedger({
     try{
       const revised=applyReviewedDocumentToLedger(document,entries,decisions,currency);
       if(!window.confirm(
-        'Add '+decisions.length+' individually reviewed line(s) to your encrypted Spend ledger? '+
-        'These are owner-classified partial excerpts, not bank-reconciled transactions. '+
+        'Add '+decisions.length+' reviewed line(s) to your encrypted Spend ledger? '+
+        'These are reviewed statement excerpts, not bank-reconciled transactions. '+
         'This will change recorded cycle totals and local Assistant summaries; it will NOT change Debt Plan balances, send data to HYPRBOX, or execute payments.'
       ))return;
       onApply(revised);
@@ -71,38 +86,48 @@ export default function ReviewedDocumentLedger({
     <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-2 text-[12px] font-semibold">
       <span>Review and add to Spend</span>
       <span className="rounded-full bg-background px-2.5 py-1 text-[10px] font-medium">
-        {applied.size}/{document.lines.length} posted
+        {applied.size} posted
       </span>
     </summary>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      Saving a document stores excerpts, but does not create transaction entries.
-      To update your Spend ledger, select each relevant line, verify its date and
-      amount against the original file, then choose its type and category.
-      PDF columns may be merged or incomplete. Do not select uncertain rows.
-      Loan contract terms, scheduled instalments, rates and settlement quotations
-      are reference evidence only and cannot be posted as payments. Previous
-      entries are never silently deleted or changed; inspect any already posted
-      finance reference in the Activity ledger to correct it manually.
-      Existing manually entered transactions must be checked to avoid double counting.
+      Check the direction shown in the source document and select the transactions to add.
+      Recognized merchants receive a suggested category. Unknown categories stay Unsorted, and you may label them later in Spend. Transfers, refunds and unclear directions need human review; no unapproved row affects your budget.
+    </p>
+    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Unreviewed historical money movements">
+      {[
+        ['Unreviewed credits',showMoney(pendingCredits)],
+        ['Unreviewed debits',showMoney(pendingDebits)],
+        ['Unknown direction',String(pendingUnclear)+' row(s)'],
+        ['Unsorted to review',String(pendingUnsorted)+' row(s)']
+      ].map(([label,value])=><div key={label} className="rounded-lg border border-border bg-background p-2.5">
+        <p className="text-[10px] text-muted-foreground">{label}</p>
+        <p className="mt-1 break-words text-[12px] font-bold">{value}</p>
+      </div>)}
+    </div>
+    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+      These are historical, unapproved document movements. They are not bank-verified balances or Spend totals.
     </p>
     {currency!=='ZAR'||currencyReviewRequired?
       <p role="alert" className="mt-2 text-[11px] font-semibold text-destructive">
         Your currency needs review. This importer does not know whether the source
         document uses a currency other than ZAR. Verify currency before adding.
       </p>:null}
+    {suggested.length>0&&<button type="button" disabled={!canApply}
+      className="mt-2 min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
+      onClick={()=>{
+        setDraft(old=>({...old,...Object.fromEntries(suggested.map(({index})=>[
+          index,{...(old[index]??initialRow(index)),checked:true}
+        ]))}));
+        setError('');setFeedback('');
+      }}>
+      Select {suggested.length} suggested transactions
+    </button>}
     <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
-        const referenceOnly=line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
-          line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||
-          (document.documentKind&&document.documentKind!=='unclassified'&&line.semanticRole!=='transaction');
-        const oldBankRow=document.format==='pdf'&&
-          document.accountProfile?.category==='bank-statement'&&
-          (line.semanticRole!=='transaction'||line.date===null);
-        const unusable=line.amount===null||line.amount===0||Boolean(referenceOnly)||oldBankRow;
-        const row=draft[index]??{
-          checked:false,date:line.date??'',kind:'' as const,category:'' as const
-        };
+        const blocked=documentRowBlockReason(document,line);
+        const unusable=line.amount===null||line.amount===0||Boolean(blocked);
+        const row=draft[index]??initialRow(index);
         const options=row.kind?allowedDocumentCategories(row.kind):[];
         return <div key={index} className={`rounded-xl border bg-background p-3 ${row.checked ? 'border-primary/40 shadow-sm' : 'border-border'}`}>
           <label className="flex items-start gap-2 text-[12px] font-semibold">
@@ -112,8 +137,10 @@ export default function ReviewedDocumentLedger({
             <span className="min-w-0 break-words">
               Line {index+1}: {maskDocumentPII(line.label)} · {showMoney(line.amount)}
               <span className="block text-[11px] font-normal text-muted-foreground">
-                {already?(referenceOnly?'Previously posted — review: may be a loan reference, not a payment':'Already added to Spend'):referenceOnly?'Reference figure only — not a completed payment':unusable?'Amount unknown or zero':
-                  'Source direction: '+(line.direction==='unclassified'?'unconfirmed':line.direction)}
+                {already?(blocked?'Previously posted · review in Spend':'Already added to Spend'):blocked??(unusable?'Amount unknown or zero':
+                  (line.direction==='incoming'?'Credit':line.direction==='outgoing'?'Debit':'Direction unclear')+
+                  (row.kind&&row.category?' · '+EXPENSE_KINDS.find(k=>k.value===row.kind)?.label+
+                    ' · '+EXPENSE_CATEGORIES.find(c=>c.value===row.category)?.label:''))}
               </span>
             </span>
           </label>
@@ -126,17 +153,17 @@ export default function ReviewedDocumentLedger({
                 className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[16px]"/>
             </label>
             <label className="text-[11px] font-semibold">
-              Confirm transaction type
+              Transaction type
               <select aria-label={'Type for imported line '+(index+1)}
                 value={row.kind}
-                onChange={e=>change(index,{kind:e.target.value as ExpenseKind,category:''})}
+                onChange={e=>change(index,{kind:e.target.value as ExpenseKind,category:e.target.value?'unsorted':''})}
                 className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[13px]">
                 <option value="">Choose type</option>
                 {EXPENSE_KINDS.map(k=><option key={k.value} value={k.value}>{k.label}</option>)}
               </select>
             </label>
             <label className="text-[11px] font-semibold">
-              Confirm category
+              Category
               <select aria-label={'Category for imported line '+(index+1)}
                 disabled={!row.kind} value={row.category}
                 onChange={e=>change(index,{category:e.target.value as ExpenseCategory})}
@@ -151,7 +178,7 @@ export default function ReviewedDocumentLedger({
       })}
     </div>
     <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-      {selected.length} selected; {available} not yet added. This shows only
+      {selected.length} selected; {ready.length} available to review, {pendingUnsorted} uncategorized. This shows only
       extracted lines, not the full file. Imported entries do not update lender
       balances, current cash or the private desktop's document inventory.
     </p>

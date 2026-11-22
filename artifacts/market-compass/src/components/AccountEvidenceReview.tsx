@@ -2,7 +2,7 @@ import {useState} from 'react';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {makeAccountProfile,maskDocumentPII,type DocumentFact} from '@/lib/documentIntelligence';
 
-type Account={name:string;balance:string;apr:string;minimumPayment:string};
+type Account={id?:string;name:string;balance:string;apr:string;minimumPayment:string};
 type Props={
   documents:LocalFinanceDocument[];
   existingAccounts:Account[];
@@ -17,7 +17,10 @@ const fieldNames:Record<DocumentFact['field'],string>={
   'original-principal':'Original amount financed',
   'instalment':'Contractual monthly instalment','previous-instalment':'Previous instalment',
   'residual-value':'Residual/balloon value','annual-rate':'Quoted annual interest',
-  'net-pay':'Net pay','amount-due':'Amount due',
+  'net-pay':'Net pay','gross-pay':'Gross pay','basic-pay':'Basic pay',
+  'paye':'PAYE payroll tax','uif':'UIF','total-deductions':'Total payroll deductions',
+  'pension':'Pension','medical-aid':'Medical aid','allowance':'Allowance',
+  'bonus':'Bonus','overtime':'Overtime','amount-due':'Amount due',
   'running-balance':'Last dated running balance (historical)'
 };
 const usable=(f:DocumentFact,key:'balance'|'apr'|'minimumPayment')=>
@@ -58,21 +61,17 @@ function AccountCard({document,currency,existingAccounts,onCreate}:{
     onCreate({name:clean,balance,apr,minimumPayment});
     setEdit(false);setConfirmed(false);
   }
-  return <article className="rounded-xl border border-border bg-background p-3">
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <div className="min-w-0">
-        <h3 className="text-[13px] font-bold">{profile.name}</h3>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {profile.category.replaceAll('-',' ')} · {profile.confidence==='uncertain'?'Category needs checking':'Matched document terms'}
-        </p>
-        <p className="mt-1 text-[10px] text-muted-foreground">
-          Source: {maskDocumentPII(document.label).slice(0,70)} · imported {document.importedAt.slice(0,10)}
-        </p>
-      </div>
-      <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold">
-        {profile.facts.length} reference facts
+  return <details className="rounded-2xl border border-border bg-background px-4">
+    <summary className="min-h-14 cursor-pointer py-3 text-[14px] font-semibold marker:text-primary">
+      {maskDocumentPII(document.label)}
+      <span className="mt-1 block break-words text-xs font-normal text-muted-foreground">
+        {profile.name} · Imported {document.importedAt.slice(0,10)}
       </span>
-    </div>
+    </summary>
+    <div className="border-t border-border pb-4">
+    <p className="mt-3 text-xs text-muted-foreground">
+      {profile.category.replaceAll('-',' ')} · {profile.confidence==='uncertain'?'Category needs checking':'Matched document terms'}
+    </p>
     {profile.facts.length>0?
       <dl className="mt-3 space-y-2">
         {profile.facts.slice(0,12).map((f,index)=>
@@ -136,20 +135,36 @@ function AccountCard({document,currency,existingAccounts,onCreate}:{
         </button>
       </div>}
     </div>}
-  </article>;
+    </div>
+  </details>;
 }
 /** Evidence display is live from the unlocked encrypted vault; no new storage. */
 export default function AccountEvidenceReview({documents,existingAccounts,currency,onCreate}:Props){
   const safe=Array.isArray(documents)?documents.filter(d=>d&&Array.isArray(d.lines)):[];
   return <section className="mb-5 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"
-    aria-label="Accounts detected from documents">
-    <h2 className="text-[15px] font-bold">Accounts recognised from documents</h2>
-    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-      Masked, source-dated figures for your review. Saving evidence does not create a verified balance,
-      an account transaction, or a bank connection.
-    </p>
+    aria-label="Accounts and imported documents">
+    <h2 className="serif text-2xl font-semibold">Your accounts</h2>
+    {existingAccounts.length>0&&<div className="mt-3 space-y-2">
+      {existingAccounts.map((account,index)=>{
+        const entered=(value:string)=>Boolean(value?.trim())&&Number.isFinite(Number(value));
+        return <details key={account.id??index} className="rounded-2xl border border-border bg-background px-4">
+          <summary className="min-h-14 cursor-pointer py-4 text-sm font-semibold marker:text-primary">
+            <span className="break-words">{maskDocumentPII(account.name)||'Unnamed debt account'}</span>
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Debt Plan · Owner-entered balance</span>
+            <span className="mt-1 block text-lg tabular-nums">{entered(account.balance)?money(Number(account.balance),currency):'Balance not entered'}</span>
+          </summary>
+          <dl className="space-y-2 border-t border-border py-3 text-xs">
+            <div className="flex justify-between gap-3"><dt>Annual interest rate</dt><dd>{entered(account.apr)?account.apr+'%':'Not entered'}</dd></div>
+            <div className="flex justify-between gap-3"><dt>Minimum repayment</dt><dd>{entered(account.minimumPayment)?money(Number(account.minimumPayment),currency):'Not entered'}</dd></div>
+          </dl>
+        </details>;
+      })}
+    </div>}
+    {!existingAccounts.length&&<p className="mt-2 text-xs text-muted-foreground">No accounts saved in Debt Plan yet.</p>}
+    <h3 className="mt-5 text-sm font-semibold">Imported documents</h3>
+    <p className="mt-1 text-xs text-muted-foreground">Each statement shows the figures recorded in that file.</p>
     {safe.length===0?<p className="mt-3 text-[11px] text-muted-foreground">Upload a statement or finance document to begin.</p>:
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="mt-3 space-y-2">
         {safe.map(d=><AccountCard key={d.id} document={d}
           existingAccounts={existingAccounts} currency={currency} onCreate={onCreate}/>)}
       </div>}

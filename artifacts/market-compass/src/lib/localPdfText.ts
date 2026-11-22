@@ -1,3 +1,4 @@
+import {bankStatementDate} from './bankStatementParser.ts';
 import {layoutStandardBankPdfLines} from './standardBankPdfLayout.ts';
 /**
  * Bounded, device-only extraction of selectable text from a PDF.
@@ -72,7 +73,8 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
   const bytes = new Uint8Array(await file.arrayBuffer());
   let task: ReturnType<typeof pdfjs.getDocument> | undefined;
   try {
-    if (bytes.byteLength > MAX_LOCAL_PDF_BYTES) throw Error('PDF exceeds the 2 MB limit.');
+    options.signal?.throwIfAborted();
+    if (bytes.byteLength > MAX_LOCAL_PDF_BYTES) throw Error('PDF exceeds the 64 MB on-device memory safety limit.');
     task = pdfjs.getDocument({
       data: bytes,
       password: temporaryPassword || undefined,
@@ -91,15 +93,20 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
       // from transform x/y so "R 3 543,36" stays beside its source label.
       // Keep explicit EOL fallback for PDFs without usable coordinates.
       const genericLines=layoutSelectablePdfLines(content.items);
+      if (genericLines.length === 0) {
+        throw Error(`The PDF contains no selectable text on page ${pageNumber} of ${pdf.numPages}. Use offline OCR for scanned pages or export CSV/TXT. Nothing was saved.`);
+      }
       // Where a native five-column statement table is present, preserve the
       // actual Payments/Deposits positions using PDF geometry. Keep only
       // institution/header context and available-balance notes from the generic
       // text to avoid treating the same row as two transactions.
       const tableLines=layoutStandardBankPdfLines(content.items);
       const pageLines=tableLines?[
-        ...genericLines.filter(line=>
-          /\b(?:standard bank|three.month statement|3.month statement|available balance)\b/i.test(line) &&
-          !/^\d{1,2}\s+[a-z]{3,9}\s+\d{2,4}\b/i.test(line)).slice(0,12),
+        ...genericLines.filter(line=>{
+          const date=bankStatementDate(line);
+          return /\b(?:standard bank|three.month statement|3.month statement|available balance)\b/i.test(line) &&
+          !(date && line.trimStart().startsWith(date.matched));
+        }).slice(0,12),
         ...tableLines
       ]:genericLines;
       for(const line of pageLines){
@@ -115,12 +122,10 @@ export async function extractLocalPdfText(file: File, temporaryPassword = '',opt
         throw Error('PDF contains too much extractable text. Select fewer pages.');
       }
     }
-    const text = lines.join('\n').trim();
-    if (!text) {
-      throw Error('This PDF has no selectable text. Scanned images need an offline OCR tool; nothing was saved.');
-    }
-    return text;
+    options.signal?.throwIfAborted();
+    return lines.join('\n').trim();
   } catch (error) {
+    if (options.signal?.aborted) throw Error('PDF processing cancelled; nothing was saved.');
     if (error instanceof Error && error.name === 'PasswordException') {
       throw Error('This PDF requires a password or the temporary password was incorrect. Enter the PDF password and choose the file again. Nothing was saved.');
     }

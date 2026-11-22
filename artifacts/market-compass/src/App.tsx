@@ -9,6 +9,7 @@ import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
 import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
+import SolanaTrackingBar from '@/components/SolanaTrackingBar';
 import {
   addLocalFinanceDocument,removeLocalFinanceDocument,
   type LocalFinanceDocument
@@ -23,7 +24,7 @@ import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
-import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
+import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
 import { CURRENCIES, REGIONS, regionDefaultCurrency, selectedRegion } from '@/lib/regions';
@@ -49,11 +50,11 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; localFinanceDocuments: LocalFinanceDocument[]; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; localFinanceDocuments: LocalFinanceDocument[]; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; solanaSeries: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 // The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
 // All new installations start in ZAR; the user can change country and currency explicitly.
 const initialRegion = 'ZA';
-const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, localFinanceDocuments: [], offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, localFinanceDocuments: [], offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, solanaSeries: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
@@ -655,6 +656,17 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   };
   return <>
     <PageIntro eyebrow="Observe before interpreting" title="Markets" description="View provider-sourced cryptocurrency quotes and analyse completed spot candles. JSE shares and other markets require authorized data feeds." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Read-only market research</div>} />
+    <SolanaTrackingBar cachedSeries={data.solanaSeries}
+      privateEnabled={data.desktopAi.enabled} privateUrl={data.desktopAi.url}
+      privateToken={data.desktopAi.token} preferZar={data.currency!=='USD'}
+      onCache={solanaSeries=>setData(old=>({...old,solanaSeries}))}
+      onSaveDraft={info=>{
+        const draft:Draft={id:crypto.randomUUID(),symbol:'SOLUSD',side:'buy',
+          quantity:info.quantity,limitPrice:info.limitPrice,rationale:info.rationale,
+          status:'pending',createdAt:new Date().toISOString()};
+        setData(old=>({...old,drafts:[draft,...old.drafts]}));
+      }}
+    />
     <LiveCryptoQuotes currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
@@ -1051,10 +1063,14 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
     expenseSummary: (() => {
       const current=salaryCycle(localDate());
       const stats=cycleAnalysis(data.expenseEntries??[],current.start,data.currency,(data.expenseSettings??DEFAULT_EXPENSE_SETTINGS).cycleBudget);
+      const cutIdeas=cycleCashflowCutIdeas(data.expenseEntries??[],current.start,data.currency);
       return {cycleStart:current.start,cycleEnd:current.lastDay,income:stats.income,
         expenses:stats.expenses,debtPayments:stats.debtPayments,transfers:stats.transfers,
         recordedDifference:stats.recordedDifference,entryCount:stats.count,
         cycleLimit:stats.budget,flags:stats.flags.slice(0,4),
+        unsortedCount:stats.unsortedCount,unsortedOutflow:stats.unsortedOutflow,
+        illustrativeSavings:cutIdeas.totalIllustrativeSavings,
+        cutIdeas:cutIdeas.ideas.slice(0,4).map(x=>({category:x.category,recorded:x.recorded,illustrativeSavings:x.illustrativeSavings,rate:x.rate})),
         categories:stats.byCategory.slice(0,6).map(v=>({category:v.label,amount:v.amount})),
         paymentMethods:stats.byPaymentMethod.slice(0,5).map(v=>({
           app:v.app.replace(/\d{6,}/g,'[masked]').slice(0,60),

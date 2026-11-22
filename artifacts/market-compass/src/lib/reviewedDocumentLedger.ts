@@ -6,11 +6,11 @@
  * execution, or HYPRBOX transmission. Document lines are incomplete evidence.
  * Entry IDs are stable for retries and edits, preventing accidental reimport.
  */
-import {validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
+import {validateLocalFinanceDocument,type LocalFinanceDocument,type LocalFinanceLine} from './localFinanceDocs.ts';
 import {isFinanceReferenceLabel} from './vehicleFinance.ts';
 import {maskDocumentPII} from './documentIntelligence.ts';
 import {
-  validateExpenseEntry,EXPENSE_CATEGORIES,
+  validateExpenseEntry,EXPENSE_CATEGORIES,suggestKnownSpendCategory,
   type ExpenseEntry,type ExpenseKind,type ExpenseCategory
 } from './monthlyExpenses.ts';
 
@@ -25,13 +25,46 @@ export const documentLedgerEntryId=(documentId:string,lineIndex:number)=>
 const allowedKinds=new Set<ExpenseKind>(['income','expense','debt-payment','transfer']);
 const categoryValues=new Set<ExpenseCategory>(EXPENSE_CATEGORIES.map(c=>c.value));
 const validCategories:Record<ExpenseKind,ExpenseCategory[]>={
-  income:['salary','side-income'],
-  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','car','credit-card','other'],
-  'debt-payment':['car','credit-card','other'],
-  transfer:['savings','other']
+  income:['salary','side-income','unsorted'],
+  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','car','credit-card','other','unsorted'],
+  'debt-payment':['car','credit-card','housing','other','unsorted'],
+  transfer:['savings','other','unsorted']
 };
 export function allowedDocumentCategories(kind:ExpenseKind):ExpenseCategory[]{
   return validCategories[kind]??[];
+}
+export function documentRowBlockReason(doc:LocalFinanceDocument,line:LocalFinanceLine):string|null{
+  if(doc.accountProfile?.category==='payslip'||line.payrollField)
+    return 'A payslip records payroll evidence, not a confirmed bank deposit or separate expense. Review matching bank transactions before posting.';
+  const legacyBalance=/^(?:transaction details\s+)?(?:available|opening|closing|current|running|statement) balance\b/i;
+  if(line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
+     line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||legacyBalance.test(line.label))
+    return 'Reference figure only. It is not proof of a transaction.';
+  if(doc.documentKind&&doc.documentKind!=='unclassified'&&line.semanticRole!=='transaction')
+    return 'This document line does not confirm a completed transaction.';
+  if(doc.format==='pdf'&&doc.accountProfile?.category==='bank-statement'&&
+     (line.semanticRole!=='transaction'||line.date===null))
+    return 'Re-import the original PDF to recover the transaction date and columns.';
+  return null;
+}
+
+/** Source direction and ledger treatment are separate. Transfers and reversals
+ * need their own evidence before they can affect income or expense totals. */
+export function suggestDocumentClassification(line:LocalFinanceLine):
+  Pick<ReviewedLedgerDecision,'kind'|'category'>|null{
+  if(line.direction==='unclassified')return null;
+  const description=line.label.toLowerCase();
+  if(/\b(?:own account|between my accounts|internal transfer|transfer to savings)\b/.test(description))
+    return {kind:'transfer',category:suggestKnownSpendCategory('transfer',description)};
+  if(/\b(?:refund|reversal|reversed|chargeback|transfer|payment from|payshap|eft)\b/.test(description)&&
+     !/\b(?:fee|fees|salary|payroll|wages)\b/.test(description))return null;
+  if(line.direction==='incoming')return {kind:'income',
+    category:suggestKnownSpendCategory('income',description)};
+  // A source debit can be contractual debt repayment, not living expenses.
+  // Confirm the suggested type before posting; no lender balance is changed.
+  if(/\b(?:car (?:loan|instalment|installment|repayment)|vehicle finance|credit card (?:repayment|payment)|card repayment)\b/.test(description))
+    return {kind:'debt-payment',category:suggestKnownSpendCategory('debt-payment',description)};
+  return {kind:'expense',category:suggestKnownSpendCategory('expense',description)};
 }
 export function documentAppliedIndices(doc:LocalFinanceDocument,existing:ExpenseEntry[]):Set<number>{
   const ids=new Set(existing.map(e=>e.id));
@@ -62,14 +95,8 @@ export function applyReviewedDocumentToLedger(
       throw Error('Invalid or repeated document row. No entries were added.');
     chosen.add(choice.lineIndex);
     const line=doc.lines[choice.lineIndex];
-    if(line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
-       line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label))
-      throw Error('A finance quote, instalment schedule, interest rate or reference balance is not proof of a payment. Record only an actual dated transaction.');
-    if(doc.documentKind&&doc.documentKind!=='unclassified'&&line.semanticRole!=='transaction')
-      throw Error('This finance contract row is not an explicit completed payment. Do not post it to Spend.');
-    if(doc.format==='pdf'&&doc.accountProfile?.category==='bank-statement'&&
-       (line.semanticRole!=='transaction'||line.date===null))
-      throw Error('This older bank-statement excerpt lacks a verified parsed transaction date or amount. Re-import the original PDF with the updated statement parser before posting.');
+    const blocked=documentRowBlockReason(doc,line);
+    if(blocked)throw Error(blocked);
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
     if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||

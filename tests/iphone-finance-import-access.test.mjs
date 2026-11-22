@@ -30,10 +30,11 @@ test('owner JSON chooser is visible, does not filter away iPhone Files, and offe
 test('financial statement picker needs no label before choosing, with explicit review and save',()=>{
   assert.match(statements,/disabled=\{safe\.length>=MAX_FINANCE_FILES\|\|reading\}/);
   assert.doesNotMatch(statements,/disabled=\{[^}]*label\.trim\(\)\.length/);
-  assert.match(statements,/const privateLabel=label\.trim\(\) \|\| 'iPhone financial export'/);
-  assert.match(statements,/extractLocalFinanceDocument\(file\.name,data,privateLabel\)/);
+  assert.match(statements,/const selectedFiles=Array\.from\(event\.currentTarget\.files/);
+  assert.match(statements,/importFinanceBatch\(files,\{/);
+  assert.match(statements,/void selected\(selectedFiles,oneTimePassword\)/);
   assert.match(statements,/onAdd\(preview\)/);
-  assert.match(statements,/not uploaded to GitHub/);
+  assert.match(statements,/not uploaded to HYPRBOX, GitHub or an AI provider/);
   assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
 });
 
