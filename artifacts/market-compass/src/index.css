@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap');
-@import 'tailwindcss';
+/* Pin Tailwind v4 source scanning to THIS app, not the pnpm monorepo CWD. */
+@import "tailwindcss" source("../src");
+/* Keep these explicit sources for pnpm/Vite/Windows builds. */
+@source "./App.tsx";
+@source "./components";
+@source "./lib";
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
@@ -398,8 +403,6 @@ select:focus-visible, textarea:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
-/* A sticky header and fixed tab bar both cover the scrolling surface.
-   Keep anchors and focus targets outside those two occupied areas. */
 #mc-backup-controls { scroll-margin-top: calc(94px + env(safe-area-inset-top)); }
 .mc-mobile-tabbar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 @media (display-mode: standalone) and (max-width: 1023px) {
@@ -456,4 +459,51 @@ select:focus-visible, textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .rise-in { animation: none !important; }
   html { scroll-behavior: auto !important; }
+}
+
+/* Keep the selected destination visible even when motion is reduced. */
+.mc-mobile-tabbar {
+  border-radius: 1.5rem 1.5rem 0 0;
+}
+.mc-mobile-tabbar a {
+  border-radius: 1rem;
+}
+.mc-mobile-tabbar a[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  width: 1rem;
+  height: 3px;
+  border-radius: 1rem;
+  background: currentColor;
+}
+nav[aria-label="Spend sections"] {
+  gap: .25rem;
+  padding: .3rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 1.4rem;
+  background: hsl(var(--muted));
+}
+nav[aria-label="Spend sections"] button {
+  min-height: 4.75rem;
+  padding: .5rem;
+  border-radius: 1.05rem;
+  border-color: transparent;
+  background: transparent;
+}
+nav[aria-label="Spend sections"] button[aria-pressed="true"] {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow: inset 0 -3px hsl(var(--primary)), 0 1px 3px rgb(0 0 0 / .08);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mc-mobile-tabbar a, nav[aria-label="Spend sections"] button {
+    transition: background-color 150ms ease-out, box-shadow 150ms ease-out, transform 120ms ease-out;
+  }
+  .mc-mobile-tabbar a:active, nav[aria-label="Spend sections"] button:active {
+    transform: scale(.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mc-mobile-tabbar a, nav[aria-label="Spend sections"] button { transition: none; }
 }

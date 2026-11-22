@@ -16,7 +16,7 @@ export type BankStatementLine={
 };
 const MONTHS:Record<string,number>={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
   jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-const DATE=/\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{2}|\d{4})\b|\b(\d{1,2})[/.](\d{1,2})[/.](\d{2}|\d{4})\b|\b(\d{4})-(\d{2})-(\d{2})\b/i;
+const DATE=/\b(\d{1,2})(?:\s+|-)(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+|-)(\d{2}|\d{4})\b|\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})\b|\b(\d{4})-(\d{2})-(\d{2})\b/i;
 function yearOf(v:string):number{
   const n=Number(v);
   return v.length===4?n:n<=79?2000+n:1900+n;
@@ -93,10 +93,10 @@ export function parseBankStatementRow(raw:string):BankStatementLine|null{
       semanticRole:'transaction',runningBalance:balance};
   }
   const line=raw.replace(/[\t\u00a0]+/g,' ').replace(/\s+/g,' ').trim();
-  if(line.length<7||line.length>1800||HEADING.test(line))return null;
+  if(line.length<7||line.length>1800||(HEADING.test(line)&&!BALANCE_ONLY.test(line)))return null;
   const date=bankStatementDate(line);
   const body=date?line.replace(date.matched,' ').replace(/\s+/g,' ').trim():line;
-  const nums=tokens(body);
+  const nums=tokens(BALANCE_ONLY.test(body)?body.replace(/:\s*/g,' '):body);
   if(BALANCE_ONLY.test(body)&&nums.length===1){
     const amount=statementMoney(nums[0].raw);
     if(amount===null)return null;

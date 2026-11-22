@@ -1,13 +1,16 @@
 import {useRef,useState} from 'react';
+import HistoricalEarnings from './HistoricalEarnings';
+import FolderDocumentAccess from './FolderDocumentAccess';
 import ReviewedDocumentLedger from './ReviewedDocumentLedger';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
-import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
+import {importFinanceBatch} from '@/lib/batchFinanceImport';
+import {buildPayrollHistory} from '@/lib/earningsHistory';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
-  MAX_FINANCE_FILE_BYTES,MAX_FINANCE_FILES,type LocalFinanceDocument
+  MAX_FINANCE_FILES,type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
 
 const money=(n:number|null)=>n===null?'Amount unavailable':
@@ -45,42 +48,59 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const [progress,setProgress]=useState<{page:number;total:number;stage:string}>({page:0,total:0,stage:'reading'});
   const readController=useRef<AbortController|null>(null);
   const [preview,setPreview]=useState<LocalFinanceDocument|null>(null);
+  const [remaining,setRemaining]=useState<LocalFinanceDocument[]>([]);
+  const [batchCount,setBatchCount]=useState(0);
+  const [reviewIndex,setReviewIndex]=useState(0);
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
   const safe=documents.map(validateLocalFinanceDocument)
     .filter((x):x is LocalFinanceDocument=>x!==null);
-  async function selected(file:File|undefined,oneTimePassword:string){
-    setPreview(null);setFeedback('');setError('');
-    if(!file||reading)return;
-    const pdf=/\.pdf$/i.test(file.name);
-    const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
-    if(!file.size||file.size>limit){
-      setError(pdf?'PDF exceeds on-device memory safety capacity. Nothing was saved.':
-        'The file exceeds on-device text processing capacity. Nothing was saved.');
-      return;
+  const [batchProgress,setBatchProgress]=useState({file:0,total:0});
+  function nextReview(){
+    setPreview(remaining[0]??null);
+    setRemaining(old=>old.slice(1));
+    setReviewIndex(old=>old+1);
+  }
+  async function selected(files:File[],oneTimePassword:string){
+    if(!files.length||reading)return undefined;
+    if(preview||remaining.length){
+      setError('Finish or discard the existing review queue before opening another batch.');
+      return undefined;
     }
+    setPreview(null);setRemaining([]);setReviewIndex(0);setBatchCount(0);
+    setFeedback('');setError('');
     setReading(true);
     setProgress({page:0,total:0,stage:'reading'});
+    setBatchProgress({file:0,total:files.length});
     const controller=new AbortController();
     readController.current=controller;
-    // The password is passed only to the local PDF reader. It never enters
-    // React state, IndexedDB, settings, requests, logs or saved document data.
+    // The single temporary password stays in this local call only, never in
+    // React state, IndexedDB, persistent settings or a network request.
     let temporaryPassword=oneTimePassword;
     try{
-      const data=pdf?await extractLocalPdfText(file,temporaryPassword,{
-        signal:controller.signal,
-        onProgress:next=>setProgress(next)
-      }):await file.text();
-      if(controller.signal.aborted)throw Error('Document processing cancelled; nothing was saved.');
-      setProgress(old=>({...old,stage:'classifying'}));
-      const privateLabel=label.trim() || 'iPhone financial export';
-      const draft=extractLocalFinanceDocument(file.name,data,privateLabel);
-      setPreview(draft);
-      setFeedback(draft.documentKind&&draft.documentKind!=='unclassified'?
-        'Vehicle-finance document recognised locally. Review the labelled terms and reference values below; they are NOT posted as payments. The original document and PDF password are not stored or uploaded.':
-        'Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
+      const result=await importFinanceBatch(files,{
+        existing:safe,label,password:temporaryPassword,signal:controller.signal,
+        progress:status=>{
+          setBatchProgress({file:status.file,total:status.total});
+          setProgress({page:status.page,total:status.pages,
+            stage:status.stage==='classifying'?'classifying':'reading'});
+        }
+      });
+      setPreview(result.drafts[0]??null);
+      setRemaining(result.drafts.slice(1));
+      setBatchCount(result.drafts.length);
+      const notes=[result.drafts.length+' ready for individual owner review'];
+      if(result.duplicateCount)notes.push(result.duplicateCount+' duplicate(s) skipped');
+      if(result.failedCount)notes.push(result.failedCount+' file(s) could not be read');
+      if(result.passwordRequiredCount)notes.push(result.passwordRequiredCount+' password-protected PDF(s) need a retry');
+      if(result.oversizeCount)notes.push(result.oversizeCount+' unsupported/oversize file(s)');
+      setFeedback(notes.join(' · ')+'. No extracted information has been saved or posted to Spend.');
+      if(!result.drafts.length&&result.failedCount)setError(
+        'No documents are ready. Check whether PDFs require the shared local password and select those files again.');
+      return result;
     }catch(e){
-      setError(e instanceof Error?e.message:'Could not read this financial file privately.');
+      setError(e instanceof Error?e.message:'Batch processing failed locally; nothing was saved.');
+      return undefined;
     }finally{
       temporaryPassword='';
       readController.current=null;
@@ -91,8 +111,12 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     if(!preview)return;
     try{
       onAdd(preview);
-      setPreview(null);setLabel('');setError('');
-      setFeedback('Reviewed document excerpts added to the unlocked workspace. Wait for Last saved in Vault & Settings, then export a new encrypted backup into iPhone Files.');
+      nextReview();
+      if(!remaining.length)setLabel('');
+      setError('');
+      setFeedback('One reviewed document saved to the encrypted workspace. '+
+        (remaining.length?remaining.length+' more awaiting review.':
+          'Export an encrypted backup after the vault save completes.'));
     }catch(e){setError(e instanceof Error?e.message:'Document could not be saved.');}
   }
   return <section id="mc-financial-files" className="mb-5 scroll-mt-28 rounded-[24px] border border-border bg-card p-4 shadow-sm sm:p-6" aria-label="Import selected financial files privately">
@@ -104,18 +128,18 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold">{safe.length} of {MAX_FINANCE_FILES} saved</span>
     </div>
     <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-      Add a statement or payslip from iPhone Files. Review the extracted figures
-      before saving. The original file is not uploaded to GitHub, HYPRBOX or a provider.
+      Select multiple bank statements or payslips from this device. Files are parsed
+      sequentially and reviewed one by one. The originals are not uploaded to HYPRBOX, GitHub or an AI provider.
     </p>
     <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
       <summary className="min-h-9 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-        CSV, TXT, transaction JSON and selectable-text PDF. Multi-page PDFs
+        Batch selection supports CSV, TXT, transaction JSON and selectable-text PDF. Multi-page PDFs
         are processed across all pages with visible progress; a 64 MB on-device
         memory ceiling remains to prevent Safari crashes. Source evidence is
         bounded for encrypted storage and any truncation is disclosed.
         Scanned PDFs, photographs, Word and Excel need a separate local extractor.
-        The original file stays on your phone. Do not use online converters for
+        Originals remain on the device. Do not use online converters for
         private financial documents.
       </p>
     </details>
@@ -142,25 +166,29 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       </p>
     </details>
     <label className="mt-4 block text-[12px] font-semibold">
-      Choose a document from iPhone Files
-      <input type="file"
-        aria-label="Choose private CSV TXT JSON or PDF document from iPhone Files"
+      Choose one or more local financial documents
+      <input type="file" multiple accept=".pdf,.csv,.txt,.json,application/pdf"
+        aria-label="Choose multiple private CSV TXT JSON or PDF documents from this device"
         disabled={safe.length>=MAX_FINANCE_FILES||reading}
         onChange={event=>{
-          const selectedFile=event.currentTarget.files?.[0];
+          const selectedFiles=Array.from(event.currentTarget.files??[]);
           event.currentTarget.value='';
           const oneTimePassword=passwordInput.current?.value??'';
           if(passwordInput.current)passwordInput.current.value='';
-          void selected(selectedFile,oneTimePassword);
+          void selected(selectedFiles,oneTimePassword);
         }}
         className="mt-1 block w-full rounded-xl border border-input bg-background p-3 text-[13px] disabled:opacity-40"/>
-      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading and classifying locally…</span>}
+      {reading&&<span role="status" className="mt-2 block text-[11px] font-normal">Reading document {batchProgress.file} of {batchProgress.total} privately…</span>}
     </label>
+    <FolderDocumentAccess disabled={safe.length>=MAX_FINANCE_FILES||reading}
+      reviewPending={Boolean(preview)||remaining.length>0||reading}
+      onImport={selected}/>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      Next: inspect dates and amounts, then tap Save reviewed excerpts. To
+      Next: review each document in the queue, then save its masked excerpts. To
       update Spend, also approve the individual rows in the saved document.
     </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
+      <p className="text-[11px] font-semibold">Review {reviewIndex+1} of {batchCount} · {remaining.length} remaining</p>
       <p className="text-[12px] font-semibold">
         Review {preview.lines.length} extracted lines · {maskDocumentPII(preview.label)}
       </p>
@@ -190,7 +218,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
             <span className="break-words font-medium">{maskDocumentPII(line.label)}</span>
             <strong>{money(line.amount)}</strong>
           </div>
-          <p className="text-muted-foreground">{lineDateLabel(line)} · {roleLabel(line.semanticRole)}</p>
+          <p className="text-muted-foreground">{line.payrollField?'Payroll period '+(line.date??'needs confirmation'):lineDateLabel(line)} · {line.payrollField?'Payroll reference only — NOT a bank deposit':roleLabel(line.semanticRole)}</p>
           {line.ratePercent!==undefined&&<p className="font-semibold">Quoted rate {line.ratePercent}%</p>}
           {line.runningBalance!==undefined&&<p className="text-muted-foreground">
             Running balance after transaction: {money(line.runningBalance)} · historical, not another payment
@@ -204,13 +232,16 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
         Save these reviewed excerpts to encrypted workspace
       </button>
-      <button type="button" onClick={()=>{setPreview(null);setFeedback('');}}
+      <button type="button" onClick={()=>{nextReview();setFeedback('Document skipped without saving.');}}
         className="min-h-11 w-full rounded-xl border border-border px-4 text-[12px] font-medium">
-        Cancel without saving
+        Skip this document without saving
       </button>
+      {remaining.length>0&&<button type="button" onClick={()=>{setPreview(null);setRemaining([]);setFeedback('Remaining batch discarded; no additional documents saved.');}}
+        className="min-h-11 w-full rounded-xl border border-border px-4 text-[12px] font-medium">Discard remaining previews</button>}
     </section>}
     {error&&<p role="alert" className="mt-2 text-[12px] text-destructive">{error}</p>}
     {feedback&&<p role="status" className="mt-2 text-[12px] text-muted-foreground">{feedback}</p>}
+    <HistoricalEarnings documents={safe} entries={ledgerEntries}/>
     {safe.length>0&&<section className="mt-5 space-y-3 border-t border-border pt-5">
       <div>
         <h3 className="text-[14px] font-bold">Saved documents</h3>
@@ -276,7 +307,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" aria-hidden="true"/>
         <h2 id="mc-processing-title" className="text-center text-[17px] font-bold">Processing your document</h2>
         <p className="mt-2 text-center text-[12px] leading-5 text-muted-foreground" role="status" aria-live="polite">
-          {progress.stage==='reading'?'Opening the document privately…':
+          {progress.stage==='reading'?'Opening document '+batchProgress.file+' of '+batchProgress.total+' privately…':
             progress.stage==='classifying'?'Identifying account and financial fields…':
             'Reading page '+progress.page+' of '+progress.total}
         </p>
@@ -285,7 +316,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
             style={{width:Math.max(1,Math.round(progress.page/progress.total*100))+'%'}}/>
         </div>}
         <p className="mt-3 text-center text-[11px] text-muted-foreground">
-          Text is processed on this iPhone. Raw PDFs and passwords are not sent to HYPRBOX.
+          Text is processed on this device. Raw PDFs and passwords are not sent to HYPRBOX.
         </p>
         <button type="button" onClick={()=>readController.current?.abort()}
           className="mt-4 min-h-11 w-full rounded-xl border border-border text-[12px] font-semibold">

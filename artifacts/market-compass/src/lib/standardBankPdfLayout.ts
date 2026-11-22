@@ -1,3 +1,5 @@
+import {bankStatementDate} from './bankStatementParser.ts';
+
 /**
  * Reconstruct Standard Bank's Date / Description / Payments / Deposits /
  * Balance table from local PDF.js selectable-text geometry.
@@ -125,7 +127,8 @@ export function layoutStandardBankPdfLines(items:ReadonlyArray<unknown>):string[
     }
     previous=null;
     if(ambiguous)continue;
-    const validTransaction=/^\d{1,2}\s+[a-z]{3,9}\s+\d{2,4}$/i.test(date)&&
+    const parsedDate=bankStatementDate(date);
+    const validTransaction=parsedDate?.matched===date&&
       Boolean(description)&&Boolean(values.payments)!==Boolean(values.deposits)&&
       Boolean(values.balance);
     const balanceOnly=!date&&

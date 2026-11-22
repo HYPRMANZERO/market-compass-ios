@@ -32,7 +32,7 @@ test('semicolon CSV parses decimal commas and separates synthetic debits/credits
  const d=extract('example.csv',
    'Date;Description;Debit;Credit\n12/09/2026;Synthetic charge;345,60;\n12/09/2026;Synthetic income;;7125,10');
  assert.equal(d.lines.length,2);
- assert.equal(d.lines[0].amount,345.6);
+ assert.equal(d.lines[0].amount,-345.6);
  assert.equal(d.lines[0].direction,'outgoing');
  assert.equal(d.lines[1].amount,7125.10);
  assert.equal(d.lines[1].direction,'incoming');
@@ -92,4 +92,39 @@ test('offline assistant cites approved synthetic excerpts but never invents live
  assert.equal(answerFromOfflineFinanceDocs('Buy Bitcoin',[d]),null);
  assert.equal(answerFromOfflineFinanceDocs('What is my balance?',[]),null);
  assert.match(interpretCompassCommand('Transfer money now',ctx).reply,/cannot transfer money/i);
+});
+
+test('signed decimal commas preserve cents and reject malformed grouping',()=>{
+ const doc=extract('example.csv','Date;Description;Amount\n12/09/2026;Fee;-7,50\n13/09/2026;Deposit;+1.234,56\n14/09/2026;Invalid;1,2,34');
+ assert.deepEqual(doc.lines.map(row=>row.amount),[-7.50,1234.56]);
+});
+
+test('signed CSV amount columns and bank dates are classified conservatively',()=>{
+ const doc=extract('example.csv',
+   'Date,Description,Amount\n27 Mar 26,Synthetic outgoing,-7.50\n12/09/26,Synthetic incoming,+135.00\n2026-09-13,Synthetic unsigned,40.00\n2026-09-14,Synthetic bracketed,(9.90)');
+ assert.deepEqual(doc.lines.map(line=>line.date),
+   ['2026-03-27','2026-09-12','2026-09-13','2026-09-14']);
+ assert.deepEqual(doc.lines.map(line=>line.amount),
+   [-7.50,135,40,-9.90]);
+ assert.deepEqual(doc.lines.map(line=>line.direction),
+   ['outgoing','incoming','unclassified','outgoing']);
+ assert.equal(doc.bankVerified,false);
+ assert.equal(doc.complete,false);
+});
+
+test('document labels and legacy saved line labels mask PII before vault persistence',()=>{
+ const doc=extract('synthetic.csv',csv,'Account 123456789012345 statement');
+ assert.doesNotMatch(JSON.stringify(doc),/123456789012345/);
+ assert.match(doc.label,/redacted identifier/i);
+ const injected={...doc,label:'Account 987654321012345 statement',
+   lines:doc.lines.map((line,i)=>i===0?
+     {...line,label:'Payment account 123456789012345 to demo@example.com'}:line)};
+ const checked=validateLocalFinanceDocument(injected);
+ assert.ok(checked);
+ const stored=addLocalFinanceDocument([],injected)[0];
+ assert.deepEqual(stored,checked);
+ assert.doesNotMatch(JSON.stringify(stored),
+   /987654321012345|123456789012345|demo@example\.com/i);
+ assert.equal(stored.lines[0].amount,doc.lines[0].amount);
+ assert.equal(stored.lines[0].date,doc.lines[0].date);
 });

@@ -4,7 +4,8 @@ import {bankStatementDate,statementMoney,parseBankStatementRow,parseBankStatemen
   from '../artifacts/market-compass/src/lib/bankStatementParser.ts';
 import {extractLocalFinanceDocument,validateLocalFinanceDocument}
   from '../artifacts/market-compass/src/lib/localFinanceDocs.ts';
-import {applyReviewedDocumentToLedger}
+import {cycleAnalysis} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+import {applyReviewedDocumentToLedger,suggestDocumentClassification}
   from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
 
 const now=new Date('2026-11-21T12:00:00Z');
@@ -25,7 +26,25 @@ test('South African abbreviated statement dates are retained precisely',()=>{
  assert.equal(bankStatementDate('31 Feb 26'),null);
  assert.equal(bankStatementDate('26/03/2026')?.date,'2026-03-26');
  assert.equal(bankStatementDate('2026-04-04')?.date,'2026-04-04');
+ assert.equal(bankStatementDate('27-Sept-26')?.date,'2026-09-27');
+ assert.equal(bankStatementDate('27-09-26')?.date,'2026-09-27');
+ assert.equal(bankStatementDate('27-Mar-26')?.date,'2026-03-27');
+ assert.equal(bankStatementDate('29-Feb-25'),null);
 });
+test('hyphenated statement and CSV dates retain explicit bank values',()=>{
+ const row=parseBankStatementRow('27-Sept-26 Monthly service charge -7.50 202.50');
+ assert.ok(row);
+ assert.equal(row.date,'2026-09-27');
+ assert.equal(row.amount,-7.50);
+ assert.equal(row.runningBalance,202.50);
+ const doc=extractLocalFinanceDocument('synthetic.csv',
+   'Date,Description,Amount\n27-Sept-26,Service charge,-7.50\n27-09-26,Payroll,+120.00',
+   'Synthetic bank CSV',{now,id:'badc0ffe-1111-4444-8aaa-000000000001'});
+ assert.deepEqual(doc.lines.map(line=>[line.date,line.amount,line.direction]),[
+   ['2026-09-27',-7.50,'outgoing'],['2026-09-27',120,'incoming']
+ ]);
+});
+
 test('negative fee and running balance are separate, not double-counted',()=>{
  const fee=parseBankStatementRow('27 Mar 26 FEE: PAYSHAP PAYMENT -7.00 2,622.72');
  assert.ok(fee);
@@ -95,4 +114,34 @@ test('invoice review keeps signed amounts, locale grouping and source dates',()=
     'Tax invoice\nPayment due 05 Nov 26\n05 Nov 26 Invoice total R1.234,56\nAdjustment -R 125.00\nSubtotal R10.00 VAT R1.50',
     'Synthetic invoice',{id:'12345678-1234-4234-8234-123456789012',now});
   assert.deepEqual(doc.lines.map(row=>[row.date,row.amount]),[['2026-11-05',1234.56],[null,-125]]);
+});
+
+test('approved statement credits and debits update the right salary cycle exactly once',()=>{
+  const text=[
+    'Standard Bank statement',
+    'STDBANK||Opening balance|||100.00',
+    'STDBANK|25 Mar 26|Salary||50.00|150.00',
+    'STDBANK|26 Mar 26|Salary||500.00|650.00',
+    'STDBANK|27 Mar 26|Monthly bank fee|7.00||643.00',
+    'STDBANK|28 Mar 26|Internal transfer to own account|100.00||543.00',
+    'STDBANK|29 Mar 26|PAYSHAP PAYMENT FROM||10.00|553.00',
+  ].join('\n');
+  const doc=extractLocalFinanceDocument('synthetic.pdf',text,'Synthetic Standard Bank',{
+    now,id:'33333333-4444-4555-8666-777777777777'
+  });
+  assert.equal(doc.lines.length,6);
+  assert.equal(suggestDocumentClassification(doc.lines[5]),null);
+  const choices=[1,2,3,4].map(lineIndex=>{
+    const line=doc.lines[lineIndex];
+    const suggestion=suggestDocumentClassification(line);
+    assert.ok(suggestion);
+    return {lineIndex,date:line.date,...suggestion};
+  });
+  const ledger=applyReviewedDocumentToLedger(doc,[],choices,'ZAR',now);
+  const march=cycleAnalysis(ledger,'2026-03-26','ZAR');
+  assert.deepEqual([march.count,march.income,march.expenses,march.transfers,march.recordedDifference],
+    [3,500,7,100,493]);
+  assert.equal(cycleAnalysis(ledger,'2026-02-26','ZAR').income,50);
+  assert.throws(()=>applyReviewedDocumentToLedger(doc,ledger,choices,'ZAR',now),/already added/i);
+  assert.equal(ledger.length,4);
 });

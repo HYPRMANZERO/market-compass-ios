@@ -1,7 +1,7 @@
 name: Validate owner PWA bank document parity
 on:
   pull_request:
-    branches: [main]
+    branches: [main, release/owner-bank-document-parity-20261121]
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,7 +20,13 @@ jobs:
       - name: Require identical financial source core in owner and staging editions
         shell: bash
         run: |
-          git fetch --no-tags origin feature/ios-safari-launch-2026-11-26
+          # Draft-owner CI compares against the matching protected test PR.
+          # Main release PRs compare against the staging feature branch.
+          staging_ref=fix/test-pdf-page-completeness
+          if [ "${GITHUB_BASE_REF:-}" = main ]; then
+            staging_ref=feature/ios-safari-launch-2026-11-26
+          fi
+          git fetch --no-tags origin "$staging_ref"
           for name in vehicleFinance documentIntelligence bankStatementParser financialSourceNormalizer standardBankPdfLayout localFinanceDocs localPdfText reviewedDocumentLedger; do
             file="artifacts/market-compass/src/lib/${name}.ts"
             owner=$(git rev-parse "HEAD:${file}")
