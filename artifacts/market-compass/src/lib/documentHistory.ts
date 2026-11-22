@@ -1,4 +1,4 @@
-import {validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
+import {sameReviewedFinanceEvidence,validateLocalFinanceDocument,type LocalFinanceDocument} from './localFinanceDocs.ts';
 import {makeAccountProfile} from './documentIntelligence.ts';
 
 /** Document-derived historical evidence, NEVER a verified income/spend ledger.
@@ -14,6 +14,7 @@ export type DocumentHistory={
   months:DocumentMonthEvidence[];
   undatedEvidence:number;
   documentsReviewed:number;
+  duplicateSources:number;
 };
 
 const monthOf=(value:string|null)=>{
@@ -23,7 +24,8 @@ const monthOf=(value:string|null)=>{
 };
 export function summarizeDocumentHistory(source:readonly LocalFinanceDocument[]):DocumentHistory{
   const months=new Map<string,DocumentMonthEvidence>();
-  let undatedEvidence=0,documentsReviewed=0;
+  let undatedEvidence=0,documentsReviewed=0,duplicateSources=0;
+  const counted:LocalFinanceDocument[]=[];
   function row(month:string){
     let existing=months.get(month);
     if(!existing){
@@ -37,6 +39,11 @@ export function summarizeDocumentHistory(source:readonly LocalFinanceDocument[])
     const document=validateLocalFinanceDocument(sourceDocument);
     if(!document)continue;
     documentsReviewed++;
+    if(counted.some(previous=>sameReviewedFinanceEvidence(previous,document))){
+      duplicateSources++;
+      continue;
+    }
+    counted.push(document);
     const profile=document.accountProfile??makeAccountProfile(
       document.lines.map(line=>line.label).join('\n'),document.label,document.lines);
     // A normal payslip/receipt has a single summary net amount or paid total.
@@ -69,5 +76,5 @@ export function summarizeDocumentHistory(source:readonly LocalFinanceDocument[])
     }
   }
   return {months:[...months.values()].sort((a,b)=>b.month.localeCompare(a.month)),
-    undatedEvidence,documentsReviewed};
+    undatedEvidence,documentsReviewed,duplicateSources};
 }

@@ -303,6 +303,27 @@ export function reclassifySavedFinanceDocument(input:LocalFinanceDocument):Local
   return result;
 }
 
+/**
+ * Conservative local duplicate detector. Only COMPLETE, identically extracted
+ * summaries with the same recognised account category/provider are equivalent.
+ * Re-importing a truncated source can reveal previously omitted rows and must
+ * never be blocked just because the first saved excerpt happens to match.
+ * Compare validated, already-redacted fields; never retain filenames, paths
+ * or raw source document bytes as a persistent identifier.
+ */
+export function sameReviewedFinanceEvidence(a:LocalFinanceDocument,b:LocalFinanceDocument):boolean{
+  if(a.truncated||b.truncated||a.lines.length===0||a.lines.length!==b.lines.length||
+    a.format!==b.format||a.documentKind!==b.documentKind||
+    (a.accountProfile?.category??'')!==(b.accountProfile?.category??'')||
+    (a.accountProfile?.institution??'')!==(b.accountProfile?.institution??''))return false;
+  const fields=(left:LocalFinanceLine,right:LocalFinanceLine)=>
+    left.label===right.label&&left.amount===right.amount&&
+    left.date===right.date&&left.direction===right.direction&&
+    left.semanticRole===right.semanticRole&&left.semanticField===right.semanticField&&
+    left.ratePercent===right.ratePercent&&left.runningBalance===right.runningBalance;
+  return a.lines.every((line,index)=>fields(line,b.lines[index]));
+}
+
 export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDocument):LocalFinanceDocument[]{
   if(!Array.isArray(current))throw Error('Invalid existing encrypted document list. Export a backup first.');
   const checked=current.map(validateLocalFinanceDocument);
@@ -311,6 +332,8 @@ export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDoc
   const checkedDocument=validateLocalFinanceDocument(document);
   if(!checkedDocument||safe.length>=MAX_FINANCE_FILES||
      safe.some(x=>x.id===checkedDocument.id))throw Error('Document is invalid, duplicate, or the device document-summary capacity has been reached.');
+  if(safe.some(previous=>sameReviewedFinanceEvidence(previous,checkedDocument)))
+    throw Error('This financial document appears to be already saved. Review the existing copy; no duplicate amounts were imported.');
   // Save the reconstructed allowlist object, NEVER the caller's untrusted
   // input. This prevents injected secrets, source paths or extra fields from
   // entering the encrypted workspace even if a caller uses type assertions.
