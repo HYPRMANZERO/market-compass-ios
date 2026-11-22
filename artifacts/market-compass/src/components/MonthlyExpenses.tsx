@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Bell, ChevronLeft, ChevronRight, CircleAlert, Edit2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { localDate } from '@/lib/dailyBackup';
 import SalaryPush from './SalaryPush';
+import {Link} from 'wouter';
 import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
 import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import {
@@ -327,7 +328,10 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
           <p className="mt-1 text-[11px] leading-5">A hypothetical {Math.round(idea.rate*100)}% reduction would free {cash(idea.illustrativeSavings,currency)}. {idea.action}</p>
         </div>)}</div>
       </div>:<p className="mt-3 text-[12px] text-muted-foreground">No eligible categorized discretionary costs recorded for this cycle yet. Label purchases when convenient to unlock evidence-based cut scenarios.</p>}
-      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">For tailored conversational analysis, ask Compass AI in Assistant: “Based on my recorded category spending, what could I cut to improve cash flow?” It uses HYPRBOX Ollama only when connected and when financial-context sharing is enabled. No private ledger is uploaded automatically.</p>
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">For tailored conversational analysis, ask Compass AI: “Based on my recorded category spending, what could I cut to improve cash flow?” AI responses come from HYPRBOX Ollama only while connected; aggregate finance context is shared only if you enable it in Assistant. No raw ledger is uploaded automatically.</p>
+      <Link href="/assistant" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-primary/40 px-4 text-[12px] font-semibold">
+        Open Compass AI · cash-flow review
+      </Link>
       <h3 className="mt-4 text-[14px] font-bold">Spending patterns and recommendations</h3>
       <div className="mt-3 space-y-2">
         {guidance.map((item,i)=><p key={i} className="flex items-start gap-2 text-[12px] leading-5"><CircleAlert size={16} className="mt-0.5 shrink-0 text-muted-foreground"/>{item}</p>)}
