@@ -4,7 +4,8 @@ import {bankStatementDate,statementMoney,parseBankStatementRow,parseBankStatemen
   from '../artifacts/market-compass/src/lib/bankStatementParser.ts';
 import {extractLocalFinanceDocument,validateLocalFinanceDocument}
   from '../artifacts/market-compass/src/lib/localFinanceDocs.ts';
-import {applyReviewedDocumentToLedger}
+import {cycleAnalysis} from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+import {applyReviewedDocumentToLedger,suggestDocumentClassification}
   from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
 
 const now=new Date('2026-11-21T12:00:00Z');
@@ -95,4 +96,34 @@ test('invoice review keeps signed amounts, locale grouping and source dates',()=
     'Tax invoice\nPayment due 05 Nov 26\n05 Nov 26 Invoice total R1.234,56\nAdjustment -R 125.00\nSubtotal R10.00 VAT R1.50',
     'Synthetic invoice',{id:'12345678-1234-4234-8234-123456789012',now});
   assert.deepEqual(doc.lines.map(row=>[row.date,row.amount]),[['2026-11-05',1234.56],[null,-125]]);
+});
+
+test('approved statement credits and debits update the right salary cycle exactly once',()=>{
+  const text=[
+    'Standard Bank statement',
+    'STDBANK||Opening balance|||100.00',
+    'STDBANK|25 Mar 26|Salary||50.00|150.00',
+    'STDBANK|26 Mar 26|Salary||500.00|650.00',
+    'STDBANK|27 Mar 26|Monthly bank fee|7.00||643.00',
+    'STDBANK|28 Mar 26|Internal transfer to own account|100.00||543.00',
+    'STDBANK|29 Mar 26|PAYSHAP PAYMENT FROM||10.00|553.00',
+  ].join('\n');
+  const doc=extractLocalFinanceDocument('synthetic.pdf',text,'Synthetic Standard Bank',{
+    now,id:'33333333-4444-4555-8666-777777777777'
+  });
+  assert.equal(doc.lines.length,6);
+  assert.equal(suggestDocumentClassification(doc.lines[5]),null);
+  const choices=[1,2,3,4].map(lineIndex=>{
+    const line=doc.lines[lineIndex];
+    const suggestion=suggestDocumentClassification(line);
+    assert.ok(suggestion);
+    return {lineIndex,date:line.date,...suggestion};
+  });
+  const ledger=applyReviewedDocumentToLedger(doc,[],choices,'ZAR',now);
+  const march=cycleAnalysis(ledger,'2026-03-26','ZAR');
+  assert.deepEqual([march.count,march.income,march.expenses,march.transfers,march.recordedDifference],
+    [3,500,7,100,493]);
+  assert.equal(cycleAnalysis(ledger,'2026-02-26','ZAR').income,50);
+  assert.throws(()=>applyReviewedDocumentToLedger(doc,ledger,choices,'ZAR',now),/already added/i);
+  assert.equal(ledger.length,4);
 });
