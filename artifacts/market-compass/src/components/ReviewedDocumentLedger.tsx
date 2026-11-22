@@ -36,6 +36,16 @@ export default function ReviewedDocumentLedger({
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
     !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0);
+  // Unreviewed movements are visible, but never included in approved Spend totals.
+  const pendingCredits=ready.filter(({line})=>line.direction==='incoming')
+    .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
+  const pendingDebits=ready.filter(({line})=>line.direction==='outgoing')
+    .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
+  const pendingUnclear=ready.filter(({line})=>line.direction==='unclassified').length;
+  const pendingUnsorted=ready.filter(({line})=>{
+    const proposed=suggestDocumentClassification(line);
+    return proposed===null||proposed.category==='unsorted';
+  }).length;
   const suggested=ready.filter(({index})=>{
     const row=draft[index]??initialRow(index);
     return row.date&&row.kind&&row.category;
@@ -81,7 +91,21 @@ export default function ReviewedDocumentLedger({
     </summary>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
       Check the direction shown in the source document and select the transactions to add.
-      Transfers, refunds and unclear directions may need your input. Check against existing Spend entries before posting.
+      Recognized merchants receive a suggested category. Unknown categories stay Unsorted, and you may label them later in Spend. Transfers, refunds and unclear directions need human review; no unapproved row affects your budget.
+    </p>
+    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Unreviewed historical money movements">
+      {[
+        ['Unreviewed credits',showMoney(pendingCredits)],
+        ['Unreviewed debits',showMoney(pendingDebits)],
+        ['Unknown direction',String(pendingUnclear)+' row(s)'],
+        ['Unsorted to review',String(pendingUnsorted)+' row(s)']
+      ].map(([label,value])=><div key={label} className="rounded-lg border border-border bg-background p-2.5">
+        <p className="text-[10px] text-muted-foreground">{label}</p>
+        <p className="mt-1 break-words text-[12px] font-bold">{value}</p>
+      </div>)}
+    </div>
+    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+      These are historical, unapproved document movements. They are not bank-verified balances or Spend totals.
     </p>
     {currency!=='ZAR'||currencyReviewRequired?
       <p role="alert" className="mt-2 text-[11px] font-semibold text-destructive">
@@ -132,7 +156,7 @@ export default function ReviewedDocumentLedger({
               Transaction type
               <select aria-label={'Type for imported line '+(index+1)}
                 value={row.kind}
-                onChange={e=>change(index,{kind:e.target.value as ExpenseKind,category:''})}
+                onChange={e=>change(index,{kind:e.target.value as ExpenseKind,category:e.target.value?'unsorted':''})}
                 className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[13px]">
                 <option value="">Choose type</option>
                 {EXPENSE_KINDS.map(k=><option key={k.value} value={k.value}>{k.label}</option>)}
@@ -154,7 +178,7 @@ export default function ReviewedDocumentLedger({
       })}
     </div>
     <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-      {selected.length} selected; {ready.length} available to review. This shows only
+      {selected.length} selected; {ready.length} available to review, {pendingUnsorted} uncategorized. This shows only
       extracted lines, not the full file. Imported entries do not update lender
       balances, current cash or the private desktop's document inventory.
     </p>
