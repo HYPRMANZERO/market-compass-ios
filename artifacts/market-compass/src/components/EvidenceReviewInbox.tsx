@@ -2,6 +2,7 @@ import {ArrowRight,CheckCircle2,ClipboardCheck,FileClock,FileText,ShieldAlert} f
 import {Link} from 'wouter';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {reviewInbox} from '@/lib/reviewInbox';
+import {groupedDocumentReview} from '@/lib/reviewGroups';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 
@@ -48,6 +49,19 @@ export default function EvidenceReviewInbox({documents,entries,currency,currency
      <ShieldAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true"/>
      Check your workspace currency before adding ZAR statement excerpts to Spend. No conversion is assumed.
    </p>}
+   {summary.documents>0&&<details className="mt-3 rounded-xl border border-border px-3 py-3" aria-label="Grouped document review by import month">
+     <summary className="cursor-pointer text-[12px] font-semibold">Review groups · imported by month</summary>
+     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These dates are when you added documents, not when bank payments occurred. Each source must still be reviewed in Spend before posting anything.</p>
+     <div className="mt-3 space-y-2">{groupedDocumentReview(summary.items).map(group=><details key={group.month} className="rounded-xl bg-muted/40 p-3">
+       <summary className="cursor-pointer text-[12px] font-semibold">{group.month} · {group.documents.length} files · {group.needsReview} excerpts to check</summary>
+       <ul className="mt-2 space-y-2">{group.documents.map(doc=><li key={doc.id} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border bg-card p-2 text-[11px]">
+         <div className="min-w-0 flex-1"><strong className="block break-words">{maskDocumentPII(doc.label)}</strong>
+           <p className="mt-1 text-[10px] text-muted-foreground">{doc.needsReview} to check · {doc.approved} approved · {doc.undated} undated · {doc.format.toUpperCase()}</p>
+         </div>
+         <Link href="/expenses" className="shrink-0 rounded-lg border border-border px-2 py-2 text-[11px] font-semibold">Review in Spend</Link>
+       </li>)}</ul>
+     </details>)}</div>
+   </details>}
    {summary.documents===0?
      <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-muted/35 px-3 py-3">
        <FileText size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true"/>
