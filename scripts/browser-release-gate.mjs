@@ -315,7 +315,7 @@ async function main(){
     await tab.invoke(function(){document.querySelector('button[aria-label="Close account actions"]')?.click();});
     await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
     await expectText(tab,'Your finances','Spend landing page');
-    await tab.invoke(function(){[...document.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent?.includes('Activity'))?.click();});
+    await tab.invoke(function(){ const item=document.querySelector('nav[aria-label="Spend sections"] ion-segment-button[value="activity"]'); if(!item)throw Error('Ionic Spend Activity tab missing'); item.click(); });
     await expectText(tab,'Where your income goes','salary-cycle allocation panel');
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Spend and income allocation"]');}),true,'salary allocation is visible in Spend activity');
     await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();});

@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {IonCard,IonAccordionGroup,IonAccordion,IonItem,IonLabel} from '@ionic/react';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {EXPENSE_CATEGORIES,salaryCycle,type ExpenseEntry,type ExpenseCategory} from '@/lib/monthlyExpenses';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
@@ -44,7 +45,7 @@ export default function SpendingPortfolio({entries,documents,currency}:Props){
     const items=spending.filter(item=>item.category===category).sort((a,b)=>b.date.localeCompare(a.date));
     return {category,items,total:items.reduce((sum,item)=>sum+item.amount,0)};
   }).sort((a,b)=>b.total-a.total);
-  return <section aria-label="Spending portfolio" className="rounded-[24px] border border-border bg-card p-4 shadow-sm sm:p-5">
+  return <IonCard role="region" aria-label="Spending portfolio" className="mc-ionic-surface rounded-[24px] border border-border bg-card p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Spend insights</p>
         <h2 className="mt-1 text-[19px] font-bold">Your spending portfolio</h2>
@@ -103,28 +104,32 @@ export default function SpendingPortfolio({entries,documents,currency}:Props){
       Open a saved document to approve eligible dated rows once, or import a new document and approve it.
     </p>:<div className="mt-4 space-y-2">
       <h3 className="text-[13px] font-bold">Purchases by category</h3>
-      {categories.map(group=><details key={group.category} className="rounded-2xl border border-border bg-background px-3 py-3">
-        <summary className="cursor-pointer list-none">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] font-bold">{labelOf(group.category)} <span className="ml-1 text-[10px] font-normal text-muted-foreground">({group.items.length})</span></span>
-            <strong className="text-[13px]">{zar(group.total)} <span aria-hidden="true" className="text-muted-foreground">⌄</span></strong>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary/70" style={{width:total?Math.max(2,group.total/total*100)+'%':'0%'}}/>
-          </div>
-        </summary>
-        <div className="mt-3 space-y-2 border-t border-border pt-3">
+      <IonAccordionGroup multiple={true} className="mc-spend-category-list">
+      {categories.map(group=><IonAccordion key={group.category} value={group.category} className="mc-spend-category">
+        <IonItem slot="header" lines="none" className="mc-spend-category-header">
+          <IonLabel>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[13px] font-bold">{labelOf(group.category)} <small className="ml-1 text-[10px] font-normal text-muted-foreground">({group.items.length})</small></span>
+              <strong className="text-[13px]">{zar(group.total)}</strong>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary/70" style={{width:total?Math.max(2,group.total/total*100)+'%':'0%'}}/>
+            </div>
+          </IonLabel>
+        </IonItem>
+        <div slot="content" className="space-y-2 border-t border-border bg-card px-3 py-3">
           {group.items.map(item=><div key={item.id} className="flex items-start justify-between gap-3 text-[11px]">
             <div className="min-w-0"><span className="block break-words font-semibold">{maskDocumentPII(item.description)}</span>
               <span className="block text-muted-foreground">{item.date} · {item.kind==='debt-payment'?'Debt repayment':'Expense'} · {maskDocumentPII(documents.find(doc=>doc.id===sourceId(item,documents))?.label??item.paidVia).slice(0,50)}</span>
             </div><strong className="shrink-0">{zar(item.amount)}</strong>
           </div>)}
         </div>
-      </details>)}
+      </IonAccordion>)}
+      </IonAccordionGroup>
     </div>}
     <p className="mt-3 text-[10px] leading-5 text-muted-foreground">
       Internal transfers are excluded. This is a locally recorded, unverified spending history, not a bank statement or live balance.
       Cross-source duplicates may require review.
     </p>
-  </section>;
+  </IonCard>;
 }

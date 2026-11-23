@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {IonCard,IonList,IonRippleEffect,IonModal} from '@ionic/react';
 import {
   Activity, ArrowRight, ArrowUpRight, ChevronDown, FileClock,
   FileText, Landmark, LockKeyhole, Plus, ReceiptText, ShieldCheck,
@@ -76,7 +77,7 @@ export default function MobileOverview({
   const localClose = typeof nativeClose === 'number' && market
     ? approximateLocalValue(nativeClose, market.currency, currency, fxQuote) : null;
   return <div className="mc-app-overview space-y-4 pb-3" data-testid="mobile-home">
-    <section className="mc-wallet-hero" aria-label="Private financial overview">
+    <IonCard className="mc-wallet-hero" role="region" aria-label="Private financial overview">
       <div className="mc-wallet-orbit mc-wallet-orbit-first" aria-hidden="true"/>
       <div className="mc-wallet-orbit mc-wallet-orbit-second" aria-hidden="true"/>
       <div className="mc-wallet-content">
@@ -97,12 +98,12 @@ export default function MobileOverview({
         </p>
         <div className="mt-6 flex items-center justify-between gap-3">
           <span className="mc-wallet-footnote"><ShieldCheck size={14} aria-hidden="true"/> Encrypted on your device</span>
-          <button type="button" onClick={()=>setAccountActionsOpen(true)} className="mc-wallet-cta">
+          <button type="button" onClick={()=>setAccountActionsOpen(true)} className="mc-wallet-cta ion-activatable"><IonRippleEffect/>
             {accountsCount ? 'View accounts' : 'Add account'} <ArrowUpRight size={15} aria-hidden="true"/>
           </button>
         </div>
       </div>
-    </section>
+    </IonCard>
 
     {emptyFinancialWorkspace&&<section aria-label="Empty workspace and backup recovery" className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <p className="text-[13px] font-semibold">No financial records saved in this workspace</p>
@@ -132,7 +133,7 @@ export default function MobileOverview({
           </button>
         </div>
         <div className="col-4">
-          <Link href="/assistant" className="mc-quick-action">
+          <Link href="/assistant" className="mc-quick-action ion-activatable">
             <span className="mc-quick-icon"><Sparkles size={20} aria-hidden="true"/></span>
             <span>Ask Compass</span>
           </Link>
@@ -176,7 +177,7 @@ export default function MobileOverview({
 
     <FinancialPulse entries={entries} documents={documents} currency={currency} settings={expenseSettings}/>
 
-    <section className="mc-app-section rounded-[22px] border border-border bg-card p-4 shadow-sm" aria-label="Recurring expense identification">
+    <IonCard className="mc-app-section mc-ionic-surface rounded-[22px] border border-border bg-card p-4 shadow-sm" role="region" aria-label="Recurring expense identification">
       <div className="mc-app-section-heading"><h2>Recurring outflows</h2><span>Approved history only</span></div>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Suggestions require matching payments across two or more separate salary cycles. They are not future bills or scheduled debits.</p>
       {recurringOutflows.length===0?<p className="mt-3 text-[12px] text-muted-foreground">No repeated outgoing pattern confirmed yet. Approve dated transactions across multiple salary cycles to identify candidates.</p>:
@@ -185,14 +186,14 @@ export default function MobileOverview({
           <strong className="tabular-nums">{money(p.typicalAmount,currency)} typical</strong>
         </li>)}</ul>}
       <Link href="/expenses" className="mt-3 inline-flex min-h-10 items-center text-[11px] font-semibold text-primary">Review source transactions <ArrowRight size={14} className="ml-1"/></Link>
-    </section>
+    </IonCard>
 
     <section className="mc-app-section" aria-label="Your saved accounts">
       <div className="mc-app-section-heading">
         <h2>Your accounts</h2>
         <Link href="/debt" className="mc-app-heading-link">Manage <ArrowRight size={14} aria-hidden="true"/></Link>
       </div>
-      {accounts.length ? <div className="mc-account-list">
+      {accounts.length ? <IonList className="mc-account-list">
         {accounts.slice(0,4).map((account,index)=>{
           const balance=entered(account.balance);
           const apr=entered(account.apr);
@@ -237,7 +238,7 @@ export default function MobileOverview({
         {accounts.length>4&&<Link href="/debt" className="mc-account-more">
           View all {accountsCount} accounts <ArrowRight size={15} aria-hidden="true"/>
         </Link>}
-      </div> : <div className="mc-account-empty">
+      </IonList> : <div className="mc-account-empty">
         <span className="mc-account-empty-icon"><Landmark size={22} aria-hidden="true"/></span>
         <div className="min-w-0 flex-1">
           <strong>No accounts added yet</strong>
@@ -269,7 +270,7 @@ export default function MobileOverview({
       <Link href="/markets" className="mc-app-market-link">Open markets <ArrowRight size={16} aria-hidden="true"/></Link>
     </section>
 
-    {accountActionsOpen&&<div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/55 px-3 pb-[calc(14px+env(safe-area-inset-bottom))] sm:items-center" role="presentation" onClick={()=>setAccountActionsOpen(false)}>
+    <IonModal isOpen={accountActionsOpen} onDidDismiss={()=>setAccountActionsOpen(false)} initialBreakpoint={0.43} breakpoints={[0,0.43,0.8]} className="mc-ionic-menu mc-ionic-account-sheet" aria-label="Account actions">
       <section role="dialog" aria-modal="true" aria-label="Account actions" className="w-full max-w-sm rounded-[24px] border border-border bg-card p-4 shadow-2xl" onClick={event=>event.stopPropagation()}>
         <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Your accounts</h2><button type="button" aria-label="Close account actions" onClick={()=>setAccountActionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={18}/></button></div>
         <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Choose what to do. Account figures are saved locally, not bank-connected.</p>
@@ -278,7 +279,7 @@ export default function MobileOverview({
           <button type="button" onClick={()=>{setAccountActionsOpen(false);onAddAccount?.();}} className="flex min-h-12 items-center justify-between rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground">Add a new account <Plus size={17}/></button>
         </div>
       </section>
-    </div>}
+    </IonModal>
 
     <div className="mc-app-privacy"><ShieldCheck size={17} aria-hidden="true"/>
       <p>Only reviewed, manually entered financial information is shown. No bank connection, automatic payments or trade execution.</p>

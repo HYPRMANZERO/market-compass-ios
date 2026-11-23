@@ -1,0 +1,347 @@
+/* Market Compass Ionic-first app shell.
+ * Shared by private Safari/ngrok and original public Pages PWA.
+ * Visual only: never touches vault data, financial processing or network permissions. */
+ion-app.mc-ionic-app {
+  position: relative !important;
+  inset: auto !important;
+  display: block !important;
+  width: 100%;
+  min-height: 100dvh;
+  height: auto !important;
+  overflow: visible !important;
+  color: #22352f;
+  background: hsl(42 30% 96%);
+  --ion-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "DM Sans", sans-serif;
+  --ion-background-color: #f8f7f3;
+  --ion-text-color: #22352f;
+  --ion-color-primary: #284f43;
+  --ion-color-primary-rgb: 40,79,67;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255,255,255;
+  --ion-color-primary-shade: #214539;
+  --ion-color-primary-tint: #41695b;
+  --ion-color-medium: #61756f;
+  --ion-border-color: #e0ded7;
+  --ion-item-background: #ffffff;
+  --ion-card-background: #ffffff;
+  --ion-safe-area-top: 0px;
+  --ion-safe-area-bottom: 0px;
+}
+.mc-mobile-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 35;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #253c36 !important;
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.1);
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.mc-mobile-header::before,
+.mc-mobile-header::after { display: none !important; }
+.mc-mobile-header .mc-ionic-toolbar {
+  --background: #253c36;
+  --color: #ffffff;
+  --min-height: 68px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --padding-top: 0px;
+  --padding-bottom: 0px;
+  --border-width: 0;
+  --ion-safe-area-top: 0px;
+  color: #fff;
+  background: #253c36;
+}
+.mc-ionic-toolbar > div {
+  min-height: 68px !important;
+  padding-block: 8px;
+}
+.mc-mobile-tabbar {
+  --background: #fffefa;
+  --color: #6c7973;
+  --color-selected: #204b40;
+  --border: 0;
+  width: 100%;
+  min-height: 74px;
+  display: block !important;
+  padding: 8px 8px max(10px,env(safe-area-inset-bottom,0px)) !important;
+  background: #fffefa !important;
+  box-shadow: 0 -7px 25px rgba(20,48,39,.08);
+  border-top: 1px solid #e4e1d9;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.mc-mobile-tabbar > div { width: 100%; }
+.mc-mobile-tabbar .mc-tab-link {
+  min-height: 58px;
+  border-radius: 18px;
+  outline-offset: -2px;
+}
+.mc-mobile-tabbar .mc-tab-link[aria-current="page"] {
+  background: #e4efe9;
+  color: #21463c;
+}
+.mc-mobile-content { scroll-margin-top: 80px; }
+.mc-ionic-app ion-card.mc-ionic-surface,
+.mc-ionic-app ion-card.mc-ui-panel {
+  width: 100%;
+  margin: 0 !important;
+  border-radius: 22px;
+  --background: #fffefa;
+  --color: #22352f;
+  background: #fffefa;
+  box-shadow: 0 8px 25px rgba(25,54,44,.045);
+}
+.mc-ionic-panel-head {
+  padding: 14px 16px !important;
+  min-height: 52px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e9e7e0;
+}
+.mc-ionic-panel-head ion-card-title {
+  margin: 0 !important;
+  color: #22352f;
+  font-size: 14px;
+}
+.mc-ionic-panel-content { padding: 0 !important; color: inherit; }
+.mc-ionic-app ion-card.mc-wallet-hero {
+  width: 100%;
+  margin: 0 !important;
+  --background: transparent;
+  --color: #fff;
+  border-radius: 28px;
+}
+.mc-ionic-app ion-list.mc-account-list {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+.mc-ionic-menu {
+  --background: #fffefa;
+  --border-radius: 26px 26px 0 0;
+  --box-shadow: 0 -14px 44px rgba(10,28,24,.2);
+}
+.mc-ionic-menu::part(content) { overflow: auto; }
+.mc-ionic-menu section[role="dialog"] {
+  padding: 18px 18px max(22px,env(safe-area-inset-bottom,0px));
+  overflow: auto;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.mc-ionic-preview { color: #22352f; }
+.mc-ionic-preview ion-card {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 14px !important;
+  border-radius: 22px !important;
+  --background: #fff;
+  --color: #22352f;
+  box-shadow: 0 10px 25px rgba(25,54,44,.07);
+}
+.mc-ionic-preview ion-card-header,
+.mc-ionic-preview ion-card-content { padding: 16px 18px !important; }
+.mc-ionic-preview ion-card-header { padding-bottom: 6px !important; }
+.mc-ionic-preview ion-card-title {
+  color: #22352f;
+  font-size: 23px;
+  font-weight: 800;
+  margin-top: 3px;
+}
+.mc-ionic-preview ion-card-subtitle { font-size: 11px; letter-spacing: .03em; }
+.mc-ionic-preview ion-segment { --background: #eaf0eb; width: 100%; max-width: 100%; border-radius: 12px; }
+.mc-ionic-preview ion-segment-button { min-width: 0; font-size: 11px; --padding-start: 3px; --padding-end: 3px; }
+.mc-ionic-preview ion-chip { font-size: 11px; padding-inline: 10px; margin: 4px 5px 4px 0; }
+.mc-ionic-preview ion-item { --background: transparent; --padding-start: 0; --inner-padding-end: 0; }
+.mc-ionic-preview ion-button { min-height: 48px; --border-radius: 14px; }
+.mc-ionic-app .mc-ionic-segment {
+  --background: #eaf0eb;
+  display: block;
+  border-radius: 15px;
+  padding: 5px;
+  width: 100%;
+}
+.mc-ionic-app .mc-ionic-segment button {
+  border: none;
+  background: transparent;
+  border-radius: 11px;
+}
+.mc-ionic-app .mc-ionic-segment button[aria-pressed="true"] {
+  background: #ffffff;
+  color: #214d41;
+  box-shadow: 0 2px 7px rgba(24,52,43,.12);
+}
+@media (display-mode: standalone) and (max-width: 1023px) {
+  html, body { background: #253c36; }
+  .mc-mobile-header {
+    /* iOS black-translucent overlays its status bar. One safe-area offset
+       belongs to this header; Ionic Toolbar must not add a second one. */
+    padding-top: env(safe-area-inset-top,0px) !important;
+  }
+  .mc-mobile-header .mc-ionic-toolbar { --ion-safe-area-top: 0px; }
+}
+@media (max-width: 1023px) {
+  .mc-mobile-header { isolation: isolate; }
+  .mc-mobile-content { padding-bottom: calc(88px + env(safe-area-inset-bottom,0px)) !important; }
+  html { scroll-padding-top: calc(76px + env(safe-area-inset-top,0px)); }
+  .mc-app-overview { padding-top: 1px; }
+}
+@media (min-width: 1024px) {
+  .mc-mobile-header, .mc-mobile-tabbar { display: none !important; }
+}
+
+/* Ionic segmented financial workspace tabs, replacing oversized legacy tiles. */
+.mc-spend-tabs {
+  display: flex;
+  width: 100%;
+  border-radius: 17px;
+  padding: 5px;
+  --background: #e8eeea;
+}
+.mc-spend-tabs ion-segment-button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 74px;
+  margin: 0;
+  --border-radius: 13px;
+  --background-checked: #fffefa;
+  --color: #64736e;
+  --color-checked: #214b3e;
+  --indicator-color: #fffefa;
+  --indicator-box-shadow: 0 2px 8px rgba(24,49,41,.11);
+}
+.mc-spend-tabs ion-segment-button::part(native) {
+  display: flex;
+  flex-flow: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 3px;
+  gap: 4px;
+}
+.mc-spend-tab-icon { display: block; }
+.mc-spend-tab-label { font-size: 12px; font-weight: 760; margin: 0; }
+.mc-spend-tab-meta {
+  font-size: 10px;
+  line-height: 1.2;
+  opacity: .78;
+  text-align: center;
+}
+@media (max-width:370px) {
+  .mc-spend-tab-label { font-size: 11px; }
+  .mc-spend-tab-meta { font-size: 9px; }
+}
+
+/* Keep Wouter route links in the Ionic footer; IonTabBar requires IonTabs routing. */
+.mc-ionic-footer { display: block; height: 0; padding: 0; position: static !important; background: transparent; box-shadow: none; }
+.mc-ionic-footer::before,.mc-ionic-footer::after { display: none !important; }
+
+/* Full app Ionic visual system — the finance cards are no longer a demo.
+   Keep legacy Wouter routing + encrypted vault intact. */
+.mc-ionic-app .mc-ionic-finance { min-width: 0; }
+.mc-ionic-app .mc-ionic-finance-card {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  border-radius: 22px;
+  overflow: hidden;
+  --background: #fffefa;
+  --color: #22352f;
+  box-shadow: 0 6px 24px rgba(23,54,44,.06);
+}
+.mc-ionic-app .mc-ionic-finance-card ion-card-content {
+  display: block;
+  padding: 18px !important;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #22352f;
+}
+.mc-finance-eyebrow {
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #5f756d !important;
+}
+.mc-finance-total {
+  display: block;
+  margin: 6px 0;
+  font-size: clamp(26px, 8vw, 38px) !important;
+  font-weight: 820;
+  line-height: 1.12 !important;
+  overflow-wrap: anywhere;
+  color: #203c33 !important;
+}
+.mc-finance-helper {font-size: 12px !important; line-height: 1.55 !important; color: #61746d !important;}
+.mc-finance-metrics {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  gap: 9px;
+  margin-top: 16px;
+}
+.mc-finance-metrics > div {min-width: 0; border-radius: 14px; background: #eef3ef; padding: 11px;}
+.mc-finance-metrics span {display: block; font-size: 10px; color: #64766e;}
+.mc-finance-metrics strong {display: block; margin-top: 4px; font-size: 14px; overflow-wrap: anywhere;}
+.mc-ionic-finance ion-segment {width: 100%; min-width: 0; --background: #edf1ec; border-radius: 12px;}
+.mc-ionic-finance ion-segment-button {
+  min-width: 0;
+  font-size: 11px;
+  --padding-start: 4px;
+  --padding-end: 4px;
+  --border-radius: 9px;
+  --indicator-color: #fff;
+  --color-checked: #284d42;
+}
+.mc-ionic-finance ion-segment-button::part(native) {min-height: 42px; padding: 6px 3px;}
+.mc-ionic-finance-empty {
+  margin-top: 14px;
+  min-height: 120px;
+  padding: 18px 12px;
+  border-radius: 13px;
+  color: #61766e;
+  background: #f4f6f3;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.mc-ionic-finance-list {margin-top: 12px; background: transparent;}
+.mc-ionic-finance-list ion-item {--background: transparent;--padding-start:0;--inner-padding-end:0;}
+.mc-finance-row-amount {max-width: 43%; overflow-wrap: anywhere; text-align: right; font-size: 12px;}
+.mc-finance-documents-button {min-height: 48px;--border-radius: 13px;--background: #284f43;--color:#fff;}
+/* Avoid having the toolbar's shadow obscuring the status-bar inset on iPhone. */
+@media(max-width:1023px){
+  .mc-mobile-header .mc-ionic-toolbar { --min-height: 68px; --padding-top:0px; --padding-bottom:0px;}
+  .mc-mobile-header .mc-ionic-toolbar::part(container) {min-height:68px;}
+  .mc-mobile-header {top:0 !important; overflow: visible !important;}
+  .mc-mobile-content {position:relative; z-index:1;}
+}
+@media(display-mode:standalone) and (max-width:1023px){
+  .mc-mobile-header {padding-top: max(env(safe-area-inset-top,0px),20px) !important;}
+  .mc-mobile-header .mc-ionic-toolbar {--ion-safe-area-top:0px;}
+}
+
+/* Native Ionic category accordions, retaining verified spending calculations. */
+.mc-spend-category-list { display:block; width:100%; background:transparent; }
+.mc-spend-category { display:block; overflow:hidden; margin:0 0 8px; border:1px solid #e2e2d9; border-radius:16px; --background:#fffefa; background:#fffefa; }
+.mc-spend-category ion-item {
+  --background:#fffefa;
+  --color:#22352f;
+  --padding-start:12px;
+  --inner-padding-end:12px;
+  --min-height:68px;
+}
+.mc-spend-category ion-label { display:block; margin:12px 0 !important; white-space:normal; }
+.mc-spend-category ion-item::part(native) { min-height:68px; }
+.mc-spend-category [slot="content"] { color:#22352f; }
+.mc-ionic-app .mc-ionic-surface select { min-height:44px; border-radius:12px; }
+.mc-ionic-app .mc-quick-action.ion-activatable { position:relative; overflow:hidden; }
+.mc-ionic-app .mc-wallet-cta.ion-activatable { position:relative; overflow:hidden; }
