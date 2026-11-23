@@ -17,7 +17,7 @@ The former static files were recovered from a separate local worktree by **exact
 - Vite's `configResolved` hook rejects every build output that **equals, contains or is contained by** the active `pwaDist`, including final CLI `--outDir` overrides, before Vite clears the destination.
 - `scripts/prepare-offline-shell.mjs` applies the same guard before writing the service worker.
 - Ordinary CI and developer machines **without** local gateway settings are unaffected, including the public GitHub Pages workflow.
-- `MC_PWA_OUT_DIR` selects an explicit separate static output directory; `scripts/verify-private-ui-css.mjs` can inspect that directory using the same setting.
+- `MC_PWA_OUT_DIR` selects an explicit separate static output directory. The private feature branch has an additional CSS verification script; the original public GitHub Pages branch uses its existing CSS checks in `pages.yml` and `validate-public-bootstrap.yml` instead.
 
 ### Example local staging (PowerShell)
 
@@ -29,7 +29,7 @@ Set-Location C:\Users\liamd\market-compass-ios\artifacts\market-compass
 .\node_modules\.bin\vite.cmd build --config vite.config.ts
 Set-Location C:\Users\liamd\market-compass-ios
 node scripts/prepare-offline-shell.mjs
-node scripts/verify-private-ui-css.mjs
+if (Test-Path scripts/verify-private-ui-css.mjs) { node scripts/verify-private-ui-css.mjs }
 Remove-Item Env:MC_PWA_OUT_DIR
 ```
 
