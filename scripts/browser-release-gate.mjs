@@ -20,7 +20,9 @@ import {setTimeout as sleep} from 'node:timers/promises';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const app=path.join(root,'artifacts','market-compass');
-const dist=path.join(app,'dist','public','index.html');
+// Release candidates must be validated without touching the active gateway dist.
+// Vite preview resolves the same MC_PWA_OUT_DIR from its config.
+const dist=path.join(path.resolve(process.env.MC_PWA_OUT_DIR||path.join(app,'dist','public')),'index.html');
 const fixture=path.join(root,'tests','fixtures','synthetic-password-payslip.pdf.b64');
 const rawBase=process.env.BASE_PATH||'/';
 const base=rawBase.startsWith('/')?(rawBase.endsWith('/')?rawBase:rawBase+'/'):null;
@@ -302,6 +304,23 @@ async function main(){
     assert.equal(ui.nav,true,'mobile tab navigation must remain');
     assert.equal(ui.navTabs,6,'all six existing PWA routes must remain accessible');
     assert.equal(ui.privacyText,true,'clear offline, manual-entry boundary must remain');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Open Market Compass menu"]')?.click();});
+    const menu=await tab.invoke(function(){const root=document.querySelector('[aria-label="Market Compass quick menu"]');return {visible:!!root,labels:root?.innerText||''};});
+    assert.equal(menu.visible,true,'iPhone menu must open an in-app action sheet');
+    for(const text of ['View accounts','Add account','Import document','Ask Compass','Markets','Orders & drafts','Spend history','Vault & backup'])
+      assert.ok(menu.labels.includes(text),'quick menu missing '+text);
+    await tab.invoke(function(){document.querySelector('button[aria-label="Close Market Compass menu"]')?.click();});
+    await tab.invoke(function(){document.querySelector('.mc-bs-quick-actions button.mc-quick-action')?.click();});
+    assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Account actions"]');}),true,'account options must open directly from Home');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Close account actions"]')?.click();});
+    await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
+    await expectText(tab,'Your finances','Spend landing page');
+    await tab.invoke(function(){[...document.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent?.includes('Activity'))?.click();});
+    await expectText(tab,'Where your income goes','salary-cycle allocation panel');
+    assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Spend and income allocation"]');}),true,'salary allocation is visible in Spend activity');
+    await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();});
+    await expectText(tab,'Quick actions','Home after allocation review');
+    console.log('PASS: banking-style quick menu, account action sheet and income allocation route');
     const pulseUi=await tab.invoke(function(){
       const review=document.querySelector('.mc-financial-pulse');
       const buttons=[...review?.querySelectorAll('button[aria-pressed]')||[]];

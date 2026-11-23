@@ -45,6 +45,9 @@ jobs:
       - name: Test salary-cycle boundaries and secure local expense accounting
         run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs
 
+      - name: Run full Market Compass financial, document, UI and security regression suite
+        run: node --experimental-strip-types --test tests/*.test.mjs
+
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
 

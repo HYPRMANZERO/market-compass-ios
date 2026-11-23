@@ -6,7 +6,8 @@ const read=path=>readFile(new URL('../artifacts/market-compass/src/'+path,import
 test('Home keeps earlier mobile overview and displays a first-class document upload entry',async()=>{
   const app=await read('App.tsx');
   const home=app.slice(app.indexOf('function Overview('),app.indexOf('function Metric('));
-  assert.match(home,/function Overview\(\{ data, setData \}/);
+  assert.match(home,/function Overview\(\{ data, setData, onImportDocuments, onRecoverVault, onAddAccount \}/);
+  assert.match(home,/onImportDocuments=\{onImportDocuments\} onRecoverVault=\{onRecoverVault\}/);
   assert.ok(home.indexOf('<MobileOverview')<home.indexOf('id="mc-home-upload"'),
     'The main mobile banking overview should appear before the optional uploader');
   assert.match(home,/Upload financial documents/);

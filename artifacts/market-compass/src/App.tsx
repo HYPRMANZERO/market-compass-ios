@@ -22,6 +22,8 @@ import MobileOverview from '@/components/MobileOverview';
 import FinancialPulse from '@/components/FinancialPulse';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
+import AccountTransactionHistory from '@/components/AccountTransactionHistory';
+import IncomeAllocation from '@/components/IncomeAllocation';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
@@ -370,8 +372,11 @@ function InstallHelp() {
   </section>;
 }
 
-function AppShell({ children, pending, currency }: { children: ReactNode; pending: number; currency: string }) {
-  const [path] = useLocation();
+function AppShell({ children, pending, currency, onImportDocuments, onAddAccount }: {
+  children: ReactNode;pending:number;currency:string;onImportDocuments:()=>void;onAddAccount:()=>void;
+}) {
+  const [menuOpen,setMenuOpen]=useState(false);
+  const [path,navigate] = useLocation();
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const active = navItems.find((item) => item.href === path) ?? navItems[0];
   useEffect(() => {
@@ -428,7 +433,7 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
               <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
             </div>
           </div>
-          <button type="button" onClick={openSettings} aria-label="Open vault, backups and settings" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><ShieldCheck size={21}/></button>
+          <button type="button" onClick={()=>setMenuOpen(true)} aria-label="Open Market Compass menu" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><Menu size={21}/></button>
         </div>
       </header>
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
@@ -436,6 +441,18 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
       </header>
       <InstallHelp/>
+      {menuOpen&&<div role="presentation" className="fixed inset-0 z-[85] flex items-end justify-center bg-black/60 px-3 pb-[calc(14px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>setMenuOpen(false)}>
+        <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="w-full max-w-md rounded-[24px] bg-card p-4 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
+          <div className="flex items-center justify-between gap-3"><h2 className="text-[18px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
+          <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([{label:'View accounts',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
+            <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
+            <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
+            <button type="button" onClick={()=>{setMenuOpen(false);openSettings();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
+          </div>
+        </section>
+      </div>}
       <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
     <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)] px-1.5 pt-2 shadow-[0_-5px_16px_rgba(17,39,33,.05)] lg:hidden">
@@ -498,7 +515,10 @@ function money(value: number, currency = 'USD') {
 }
 function num(value: string) { return value.trim() === '' ? NaN : Number(value); }
 
-function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
+function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccount }: {
+  data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>>;
+  onImportDocuments:()=>void; onRecoverVault:()=>void; onAddAccount:()=>void;
+}) {
   const openDrafts = data.drafts.filter((draft) => draft.status === 'pending').length;
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
@@ -512,6 +532,7 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
         entries={entries} documents={docs} expenseSettings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
         currencyReviewRequired={data.currencyReviewRequired}
         pendingDrafts={openDrafts} market={feed}
+        onImportDocuments={onImportDocuments} onRecoverVault={onRecoverVault} onAddAccount={onAddAccount}
         fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
     </div>
     <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
@@ -551,6 +572,10 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
+    <AccountTransactionHistory accounts={data.accounts} entries={entries} currency={data.currency}
+      onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
+        ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
+      }:old)}/>
     <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
       currency={data.currency}
       onCreate={account=>setData(old=>({...old,accounts:[
@@ -968,6 +993,9 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
 
 function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
   const [notice, setNotice] = useState('');
+  const [lastReviewAt,setLastReviewAt]=useState('');
+  const savedClose=data.marketCache?.candles?.at(-1);
+  const marketEvidence=Boolean(savedClose&&Number.isFinite(savedClose.close)&&savedClose.close>0);
   const setStatus = (draft: Draft, status: DraftStatus) => {
     if (status === 'approved' && !window.confirm('Approve this local draft for your records? No order will be sent, and no trade will occur.')) return;
     setData((old) => ({ ...old, drafts: old.drafts.map((item) => item.id === draft.id ? { ...item, status } : item) }));
@@ -981,6 +1009,17 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
     <PageIntro eyebrow="Nothing leaves this workspace" title="Order drafts" description="These are personal notes for review only. Approving a draft changes its local status and never sends an order." trailing={<StatusTag>{data.drafts.filter((d) => d.status === 'pending').length} pending</StatusTag>} />
     {notice && <div role="status" className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/60 px-4 py-3 text-[11px]"><span>{notice}</span><button aria-label="Dismiss notice" onClick={() => setNotice('')}><X size={14} /></button></div>}
     <div className="mb-5 flex items-start gap-3 rounded-xl border border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)] p-4"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-[hsl(34,52%,39%)]" /><p className="text-[11px] leading-5 text-[hsl(166,19%,25%)]"><strong>Local review only.</strong> “Approve” records your review in this browser. There is no brokerage connection, order submission, or automatic trading.</p></div>
+    <section aria-label="Order review progress" className="mb-5 rounded-[22px] border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[14px] font-bold">Order review readiness</h2><button type="button" onClick={()=>setLastReviewAt(new Date().toISOString())} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Check progress now</button></div>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">This is an instant, local readiness check. It does not ask an AI to recommend a trade, obtain an executable broker quote, or submit an order.</p>
+      <dl className="mt-3 grid gap-2 text-[12px]">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/35 p-3"><dt>Historical market evidence</dt><dd className="font-semibold">{marketEvidence?`${data.marketCache?.symbol} · ${savedClose?.date}`:'Not saved'}</dd></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/35 p-3"><dt>Local draft proposals</dt><dd className="font-semibold">{data.drafts.length} record(s)</dd></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/35 p-3"><dt>Executable brokerage access</dt><dd className="font-semibold">Not configured · no orders</dd></div>
+      </dl>
+      {lastReviewAt&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">Checked {formatTime(lastReviewAt)}. {marketEvidence?'Market history is available for manual research; it is not a buy/sell signal.':'Get dated market evidence first.'} Broker onboarding remains unavailable.</p>}
+      <div className="mt-3 flex flex-wrap gap-3"><Link href="/markets" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-[12px] font-semibold">Review markets <ArrowRight size={14} className="ml-1"/></Link><Link href="/assistant" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-[12px] font-semibold">Ask Compass to explain research <ArrowRight size={14} className="ml-1"/></Link></div>
+    </section>
     {data.drafts.length ? <div className="space-y-3">{data.drafts.map((draft) => <Panel key={draft.id} className="overflow-hidden"><div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center"><div className="flex min-w-[180px] items-center gap-3"><span className={`grid h-10 w-10 place-items-center rounded-xl ${draft.side === 'buy' ? 'bg-[hsl(155,30%,90%)] text-[hsl(158,36%,29%)]' : 'bg-[hsl(5,48%,92%)] text-[hsl(4,52%,41%)]'}`}>{draft.side === 'buy' ? <ArrowUpRight size={19} /> : <ArrowDownRight size={19} />}</span><div><div className="mono text-[15px] font-medium">{draft.symbol}</div><div className="text-[10px] capitalize text-muted-foreground">{draft.side} · {draft.quantity} units</div></div></div><div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-3"><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Limit price</div><div className="mono mt-1 text-[12px]">{money(draft.limitPrice)}</div></div><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Created</div><div className="mt-1 text-[11px]">{formatTime(draft.createdAt)}</div></div><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Status</div><div className="mt-1"><StatusTag tone={draft.status === 'approved' ? 'good' : draft.status === 'rejected' ? 'bad' : 'warn'}>{draft.status}</StatusTag></div></div></div><div className="flex flex-wrap items-center gap-2 lg:justify-end">{draft.status === 'pending' && <><ActionButton onClick={() => setStatus(draft, 'approved')}><Check size={14} /> Approve locally</ActionButton><ActionButton variant="quiet" onClick={() => setStatus(draft, 'rejected')}><X size={14} /> Reject</ActionButton></>}{draft.status !== 'pending' && <ActionButton variant="quiet" onClick={() => setStatus(draft, 'pending')}>Reopen</ActionButton>}<button className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-destructive" onClick={() => remove(draft)} aria-label={`Delete ${draft.symbol} draft`}><Trash2 size={15} /></button></div></div>{draft.rationale && <div className="border-t border-border bg-muted/30 px-5 py-3 text-[10px] leading-5 text-muted-foreground"><span className="mr-2 font-semibold text-foreground">Rationale</span>{draft.rationale}</div>}</Panel>)}</div> : <Panel><EmptyState icon={FileClock} title="No drafts saved" description="Create an explicitly local draft from a market view, or wait until you have a real provider price to reference." action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Go to markets <ArrowRight size={13} className="ml-1 inline" /></Link>} /></Panel>}
   </>;
 }
@@ -1058,6 +1097,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
+        <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
@@ -1065,6 +1105,10 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
             dated but not reconciled with a live bank; confirm the selected cycle.
           </p>
         </div>
+        <AccountTransactionHistory accounts={data.accounts} entries={ledger} currency={data.currency}
+          onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
+            ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
+          }:old)}/>
         <MonthlyExpenses
           entries={ledger}
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
@@ -1096,7 +1140,10 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   </>;
 }
 
-function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
+function Assistant({ data, setData, onImportDocuments }: {
+  data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>>;
+  onImportDocuments:()=>void;
+}) {
   const [, navigate] = useLocation();
   const context: CompassCommandContext = {
     currency: data.currency,
@@ -1125,7 +1172,7 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
     })(),
   };
   return <>
-    <VoiceAssistant context={context} onNavigate={navigate} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
+    <VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
       onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))}
       queuedReadOnlyQuestions={Array.isArray(data.offlineAgentQuestions)?data.offlineAgentQuestions:[]}
       onQueueReadOnlyQuestion={question=>{
@@ -1254,16 +1301,60 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
 
 function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const { data, setData } = vault;
+  const [,navigate]=useLocation();
+  const addAccount=()=>{
+    if(data.accounts.length>=50)return;
+    setData(old=>({...old,accounts:[...old.accounts,{id:crypto.randomUUID(),name:'',balance:'',apr:'',minimumPayment:''}]}));
+    navigate('/debt');
+  };
+  const [importOpen,setImportOpen]=useState(false);
+  const [recoveryOpen,setRecoveryOpen]=useState(false);
   const pending = data.drafts.filter((draft) => draft.status === 'pending').length;
-  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><Switch>
-    <Route path="/"><Overview data={data} setData={setData} /></Route>
+  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency} onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}><OfflineOnlyBanner /><Switch>
+    <Route path="/"><Overview data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)} onRecoverVault={()=>setRecoveryOpen(true)} onAddAccount={addAccount}/></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
-    <Route path="/assistant"><Assistant data={data} setData={setData} /></Route>
+    <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
+    {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-2 pt-4 pb-[calc(10px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
+      <section role="dialog" aria-modal="true" aria-label="Import and review financial documents" className="flex max-h-[90dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-[24px] border border-border bg-card shadow-2xl" onClick={event=>event.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div><h2 className="text-[16px] font-bold">Import financial documents</h2><p className="text-[11px] text-muted-foreground">Select files · review locally · approve explicitly</p></div>
+          <button type="button" aria-label="Close document importer" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border"><X size={19}/></button>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
+          <LocalFinanceFiles
+            documents={data.localFinanceDocuments??[]}
+            onAdd={document=>setData(old=>({...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)}))}
+            onRemove={id=>setData(old=>({...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)}))}
+            ledgerEntries={data.expenseEntries??[]}
+            currency={data.currency}
+            currencyReviewRequired={data.currencyReviewRequired}
+            onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          />
+        </div>
+      </section>
+    </div>}
+    {recoveryOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>setRecoveryOpen(false)}>
+      <section role="dialog" aria-modal="true" aria-label="Encrypted vault recovery instructions" className="w-full max-w-md rounded-[24px] border border-border bg-card p-5 shadow-2xl" onClick={event=>event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Restore your financial records</h2><button type="button" aria-label="Close vault recovery" onClick={()=>setRecoveryOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={18}/></button></div>
+        <p className="mt-2 text-[12px] leading-6 text-muted-foreground">This unlocked workspace has no saved accounts, approved Spend records or documents. Data in another PWA is not automatically copied here.</p>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-[12px] leading-5">
+          <li>Keep the working PWA and its encrypted backup in Files unchanged.</li>
+          <li>Export a backup of this workspace before replacing it, even if its dashboard is empty.</li>
+          <li>Lock this workspace, then select “Restore from encrypted backup” on the login screen and enter that backup's password.</li>
+          <li>Confirm the restored counts after unlocking. Never clear website data to force a reload.</li>
+        </ol>
+        <button type="button" className="mt-4 min-h-12 w-full rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground" onClick={()=>{
+          setRecoveryOpen(false);
+          const el=document.getElementById('mc-backup-controls') as HTMLDetailsElement|null;
+          if(el){el.open=true;window.requestAnimationFrame(()=>el.scrollIntoView({behavior:'smooth',block:'start'}));}
+        }}>Open backup &amp; lock controls</button>
+      </section>
+    </div>}
     {vault.locking&&<div role="alertdialog" aria-modal="true" aria-label="Securing encrypted workspace"
       className="fixed inset-0 z-[100] grid place-items-center bg-black/70 px-5">
       <div className="w-full max-w-sm rounded-2xl bg-card p-5 text-center text-foreground shadow-xl">

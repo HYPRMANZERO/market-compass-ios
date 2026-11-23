@@ -1,6 +1,7 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
 import {classifyDocument,makeAccountProfile,maskDocumentPII,safeAccountProfile,type AccountProfile} from './documentIntelligence.ts';
 import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
+import {documentTimeContext,type DocumentTimeContext} from './documentTimeContext.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -34,6 +35,8 @@ export type LocalFinanceDocument={
   truncated:boolean;
   documentKind?:FinanceDocumentKind;
   accountProfile?:AccountProfile;
+  /** Historical source reporting period, not a per-transaction date. */
+  timeContext?:DocumentTimeContext;
 };
 export const MAX_FINANCE_FILES=100;
 export const MAX_FINANCE_FILE_BYTES=16_000_000;
@@ -44,6 +47,10 @@ const asObject=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='ob
 function dateOf(value:unknown):string|null{
   if(typeof value!=='string')return null;
   const v=value.trim();
+  // Accept exact bank-export dates such as '27 Mar 26' or '26/03/26'.
+  // Never mine a reporting-period date out of a larger narration.
+  const sourceDate=bankStatementDate(v);
+  if(sourceDate&&sourceDate.matched.toLowerCase()===v.toLowerCase())return sourceDate.date;
   let match=v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})(?:T.*)?$/);
   let year:string,month:string,day:string;
   if(match){[year,month,day]=match.slice(1,4);}
@@ -142,12 +149,27 @@ function parseCsv(text:string):LocalFinanceLine[]{
     const description=maskText(row[labelIdx],130);
     if(!description)continue;
     let direction:LocalFinanceLine['direction']='unclassified';
-    let amount=amountIdx>=0?moneyOf(row[amountIdx]):null;
-    if(amount===null&&creditIdx>=0){const credit=moneyOf(row[creditIdx]);if(credit!==null&&credit!==0){amount=Math.abs(credit);direction='incoming';}}
-    if(amount===null&&debitIdx>=0){const debit=moneyOf(row[debitIdx]);if(debit!==null&&debit!==0){amount=Math.abs(debit);direction='outgoing';}}
-    if(amount===null)continue;
-    // Signed values are not always direction-labelled by banks. Do not guess
-    // when a generic Amount field has an unknown sign convention.
+    // Explicit Debit/Credit columns override an unsigned Amount column ONLY
+    // when exactly one column has a valid nonzero value. If both are filled
+    // or a filled column is malformed, fail closed rather than reversing cashflow.
+    const debitRaw=debitIdx>=0?String(row[debitIdx]??'').trim():'';
+    const creditRaw=creditIdx>=0?String(row[creditIdx]??'').trim():'';
+    const debit=debitRaw?moneyOf(debitRaw):null;
+    const credit=creditRaw?moneyOf(creditRaw):null;
+    if((debitRaw&&debit===null)||(creditRaw&&credit===null))continue;
+    const hasDebit=debit!==null&&debit!==0;
+    const hasCredit=credit!==null&&credit!==0;
+    if(hasDebit&&hasCredit)continue;
+    let amount:number|null=amountIdx>=0?moneyOf(row[amountIdx]):null;
+    if(hasDebit){amount=Math.abs(debit!);direction='outgoing';}
+    else if(hasCredit){amount=Math.abs(credit!);direction='incoming';}
+    else if((debitRaw||creditRaw)&&amount!==null) {
+      // Explicit zero columns do not establish a transaction direction.
+      direction='unclassified';
+    }
+    if(amount===null||amount===0)continue;
+    // Signed generic Amount fields can be either bank or customer-perspective;
+    // never guess their direction without an explicit source debit/credit field.
     out.push({label:description,amount,date:dateIdx>=0?dateOf(row[dateIdx]):null,direction});
   }
   return out;
@@ -236,6 +258,18 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     if(!profile)return null;
     validated.accountProfile=profile;
   }
+  if(input.timeContext!==undefined){
+    if(!asObject(input.timeContext)||
+      !['explicit-period','dated-rows','explicit-as-of'].includes(String(input.timeContext.basis))||
+      (input.timeContext.from!==null&&dateOf(input.timeContext.from)!==input.timeContext.from)||
+      (input.timeContext.to!==null&&dateOf(input.timeContext.to)!==input.timeContext.to)||
+      (input.timeContext.asOf!==null&&dateOf(input.timeContext.asOf)!==input.timeContext.asOf)||
+      Boolean(input.timeContext.from)!==Boolean(input.timeContext.to)||
+      (typeof input.timeContext.from==='string'&&typeof input.timeContext.to==='string'&&input.timeContext.from>input.timeContext.to))return null;
+    validated.timeContext={from:input.timeContext.from as string|null,
+      to:input.timeContext.to as string|null,asOf:input.timeContext.asOf as string|null,
+      basis:input.timeContext.basis as DocumentTimeContext['basis']};
+  }
   return validated;
 }
 export function extractLocalFinanceDocument(
@@ -278,7 +312,9 @@ export function extractLocalFinanceDocument(
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
-    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
+    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified},
+    ...(documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))?{
+      timeContext:documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))!}:{})
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');

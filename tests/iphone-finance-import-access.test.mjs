@@ -9,7 +9,9 @@ const assistant=await readFile(new URL('components/VoiceAssistant.tsx',root),'ut
 
 test('original PWA Home and Spend expose straightforward iPhone file access',async()=>{
   const overview=await readFile(new URL('components/MobileOverview.tsx',root),'utf8');
-  assert.match(overview,/href="\/expenses" className="mc-quick-action"/);
+  assert.match(overview,/onClick=\{onImportDocuments\} className="mc-quick-action w-full"/);
+  assert.match(overview,/onClick=\{\(\)=>setAccountActionsOpen\(true\)\}/);
+  assert.match(app,/aria-label="Import and review financial documents"/);
   assert.match(app,/id="mc-home-upload"/);
   assert.match(app,/<Route path="\/expenses"><ExpenseLedger data=\{data\} setData=\{setData\}/);
   assert.match(app,/<OwnerBudgetDraftEditor/);
