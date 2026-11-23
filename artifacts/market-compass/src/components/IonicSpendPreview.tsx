@@ -3,12 +3,12 @@ import {IonButton,IonCard,IonCardContent,IonChip,IonItem,IonLabel,IonList,IonSeg
 import type {ExpenseEntry,ExpenseKind} from '@/lib/monthlyExpenses';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 
-type Props={entries:ExpenseEntry[];currency:string;onOpenDocuments:()=>void};
+type Props={entries:ExpenseEntry[];currency:string;debtAccounts?:{id:string;name:string;balance:string}[];onOpenDocuments:()=>void};
 const zar=(amount:number)=>new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(amount);
 
 /** Main Ionic Spend activity. Reads existing approved encrypted-vault props; does not
  * approve, migrate, upload or duplicate financial entries. */
-export default function IonicSpendPreview({entries,currency,onOpenDocuments}:Props){
+export default function IonicSpendPreview({entries,currency,debtAccounts=[],onOpenDocuments}:Props){
   const [filter,setFilter]=useState<'all'|ExpenseKind>('all');
   const valid=entries.filter(entry=>entry.currency==='ZAR'&&Number.isFinite(entry.amount)&&entry.amount>0);
   const spending=valid.filter(entry=>entry.kind==='expense'||entry.kind==='debt-payment');
@@ -17,6 +17,8 @@ export default function IonicSpendPreview({entries,currency,onOpenDocuments}:Pro
   const visible=valid.filter(entry=>filter==='all'||entry.kind===filter)
     .sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
   const total=spending.reduce((sum,item)=>sum+item.amount,0);
+  const savedDebtTotal=debtAccounts.reduce((sum,account)=>sum+(Number(account.balance)||0),0);
+  const formatted=(value:number)=>new Intl.NumberFormat('en-ZA',{style:'currency',currency}).format(value);
   return <section className="mc-ionic-finance mb-4" aria-label="Ionic spending dashboard">
     <div className="mb-3 px-1">
       <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Your transactions</p>
@@ -48,6 +50,14 @@ export default function IonicSpendPreview({entries,currency,onOpenDocuments}:Pro
           <IonSegmentButton value="income"><IonLabel>Income</IonLabel></IonSegmentButton>
           <IonSegmentButton value="debt-payment"><IonLabel>Debt</IonLabel></IonSegmentButton>
         </IonSegment>
+        {filter==='debt-payment'&&<div className="mb-3 rounded-xl border border-primary/20 bg-primary/[.055] p-3" aria-label="Saved debt balance summary">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Saved debt balances · same as Home</p>
+          <strong className="mt-1 block text-[22px] font-extrabold">{debtAccounts.length?formatted(savedDebtTotal):"Not entered"}</strong>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Outstanding debt in your local plan, not a recorded repayment or live bank balance. Actual repayments appear separately below.</p>
+          {debtAccounts.length>0&&<div className="mt-2 space-y-1 border-t border-border/60 pt-2">
+            {debtAccounts.map(account=><div key={account.id} className="flex justify-between gap-3 text-[12px]"><span className="min-w-0 truncate">{account.name||"Unnamed debt account"}</span><strong className="shrink-0">{formatted(Number(account.balance)||0)}</strong></div>)}
+          </div>}
+        </div>}
         {visible.length===0?<div className="mc-ionic-finance-empty">
           <p className="font-semibold">No approved transactions in this view</p>
           <p className="mt-1">Review a saved financial document to add its verified source-dated transactions, or record a purchase manually.</p>

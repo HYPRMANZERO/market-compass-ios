@@ -691,55 +691,35 @@ export default function VoiceAssistant({
   }
 
   return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
-    <section className="overflow-hidden rounded-[22px] bg-[hsl(165,24%,20%)] px-4 py-4 text-white sm:px-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[hsl(43,65%,74%)]"><BrainCircuit size={15}/> Compass AI</div>
-          <h1 className="serif mt-2 text-[26px] leading-[1.12]">Just ask.</h1>
-          <p className="mt-2 max-w-[330px] text-[13px] leading-5 text-white/75">Your private finance companion on every device.</p>
-        </div>
-        <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
-          onClick={() => {
-            if (!speakingSupported) return;
-            if (settings.speakReplies) window.speechSynthesis.cancel();
-            onSettingsChange({ ...settings, speakReplies: !settings.speakReplies });
-          }} disabled={!speakingSupported}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 disabled:opacity-40">
-          {settings.speakReplies ? <Speaker size={20}/> : <VolumeX size={20}/>}
-        </button>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px] text-white/75">
-        <span className="flex min-w-0 items-center gap-2"><WifiOff size={15} className="shrink-0"/> Offline calculations + queued questions</span>
-        <span className="max-w-full rounded-full bg-white/10 px-3 py-1 text-[10px] leading-4">
-          {connected ? 'Ollama connected' : connection === 'checking' ? 'Connecting…' : settings.enabled ? 'Auto reconnect on' : 'Local mode'}
-        </span>
-      </div>
+    <section className="flex min-h-[56px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3 py-2 text-white" aria-label="Compass AI model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[12px] font-bold"><BrainCircuit size={18} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
+      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private HYPRBOX Ollama status"}>
+        <span className={connected?"h-2 w-2 shrink-0 rounded-full bg-emerald-400":connection==="checking"?"h-2 w-2 shrink-0 rounded-full bg-amber-300":"h-2 w-2 shrink-0 rounded-full bg-white/50"} aria-hidden="true"/>
+        {connected?"Ollama connected":connection==="checking"?"Checking Ollama":settings.enabled?"Ollama offline":"Ollama not set"}
+      </span>
+      <button type="button" aria-label={settings.speakReplies?"Turn off spoken replies":"Turn on spoken replies"} aria-pressed={settings.speakReplies}
+        onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
+        disabled={!speakingSupported} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 disabled:opacity-40">
+        {settings.speakReplies?<Speaker size={18}/>:<VolumeX size={18}/>}</button>
     </section>
 
-    <section className="overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
+    <section className="flex min-h-[min(64dvh,650px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
           setMessages([]); setLastAgent(null); setStatus('Conversation cleared from page memory.');
         }}><X size={14} className="mr-1 inline"/>Clear</button>
       </div>
-      <div className="border-b border-border px-4 py-3">
-        <label className="flex min-h-9 items-center gap-3 text-[12px] font-semibold">
-          <input type="checkbox" checked={agentMode} disabled={busy}
-            onChange={event => { setAgentMode(event.target.checked); setLastAgent(null); }}
-            aria-label="Enable read-only agent mode"/>
-          <span>Agent mode <span className="font-normal text-muted-foreground">· max 3 read-only tools</span></span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <label className="flex min-h-8 items-center gap-2 text-[12px] font-semibold">
+          <input type="checkbox" checked={agentMode} disabled={busy} onChange={event=>{setAgentMode(event.target.checked);setLastAgent(null);}} aria-label="Enable read-only agent mode"/>
+          Agent mode <span className="text-[10px] font-normal text-muted-foreground">3 read-only tools max</span>
         </label>
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-          Financial records and sources can be reviewed, not edited. Reminders and expense entries are drafts only; banking and trading are disabled.
-        </p>
-        {agentMode && !settings.shareFinancialContext && (
-          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-            Your unlocked iPhone vault entries are not automatically shared with HYPRBOX. To analyse those entries, enable financial-context sharing below. The shared HYPRBOX owner budget is read-only and does not synchronize separate browser vaults.
-          </p>
-        )}
+        <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer">Safety</summary>
+          <p className="max-w-[330px] py-2 leading-5">Tools only review sources. No trading, banking or payment changes. Sharing iPhone vault entries requires separate permission in settings.</p>
+        </details>
       </div>
-      <div className="mc-chat-log max-h-[min(42dvh,340px)] space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-[min(40dvh,340px)] max-h-[min(62dvh,650px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
@@ -824,7 +804,8 @@ export default function VoiceAssistant({
       </div>
     </section>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
+    <div className="mc-assistant-dock flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-4" aria-label="AI tools and connections">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
       <summary className="cursor-pointer text-[13px] font-bold">Spoken replies · voice &amp; pace</summary>
       <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
         Choose an English voice offered by this iPhone or browser. Preview voices without sending your financial replies to another speech service.
@@ -871,7 +852,8 @@ export default function VoiceAssistant({
       </p>
     </details>
 
-    <section className="rounded-[20px] border border-border bg-card p-3.5 shadow-sm sm:p-4" aria-label="Encrypted desktop conversation memory">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary>
+    <section className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
         <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
@@ -911,9 +893,10 @@ export default function VoiceAssistant({
         Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
         Compression is measured; no fixed ratio is guaranteed.
       </p>
-    </section>
+    </section></details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Private financial sources">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[13px] font-bold">Financial sources</summary>
+    <section className="mt-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
         <button type="button" onClick={() => setSourceRefresh(n => n + 1)} disabled={!connected || sourceLoading}
@@ -1005,9 +988,10 @@ export default function VoiceAssistant({
       </div>}
       {sourceError && <p role="status" className="mt-3 text-[11px] leading-5 text-muted-foreground">{sourceError}</p>}
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
-    </section>
+    </section></details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary>
+    <section className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         {ideas.map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
@@ -1016,9 +1000,9 @@ export default function VoiceAssistant({
         </button>)}
       </div>
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
-    </section>
+    </section></details>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-4 shadow-sm">
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Desktop Ollama · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
@@ -1086,5 +1070,6 @@ export default function VoiceAssistant({
         Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run Ollama or continuously listen in the background when closed.
       </p>
     </details>
+    </div>
   </div>;
 }

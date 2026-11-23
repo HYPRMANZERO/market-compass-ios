@@ -19,12 +19,12 @@ test('mobile footer has Home, Markets, AI and Menu only', async () => {
   assert.match(app, /href:'\/drafts'/);
 });
 
-test('Ionic menu uses real scroll content and shows bank route', async () => {
+test('bottom quick menu is scroll-safe and includes the bank route', async () => {
   const app = await file('App.tsx');
-  const modal = app.slice(app.indexOf('<IonModal isOpen={menuOpen}'), app.indexOf('</IonModal>'));
-  assert.match(modal, /<IonContent className="mc-menu-content" scrollY=\{true\}>/);
-  assert.match(modal, /<\/IonContent>/);
-  assert.match(modal, /Link a bank/);
+  const menu = app.slice(app.indexOf('{menuOpen && createPortal('), app.indexOf('document.body)}'));
+  assert.match(menu, /mc-quick-menu-panel/);
+  assert.match(menu, /overflow-y-auto/);
+  assert.match(menu, /Link a bank/);
   assert.match(app, /<Route path="\/banks">/);
 });
 
@@ -45,10 +45,17 @@ test('bank carousel is horizontally swipeable, actionable and on Home screen', a
 test('bank identity files are present and valid png assets', async () => {
   const ids=['standard-bank','absa','fnb','nedbank','capitec','discovery','gotyme','bank-zero','mukuru','african-bank','investec'];
   for (const id of ids) {
-    const jpg = ['standard-bank','absa','bank-zero'].includes(id);
-    const url = new URL(id + (jpg ? '.jpg' : '.png'), assets);
+    const svg = id==='absa';
+    const jpg = ['standard-bank','bank-zero'].includes(id);
+    const url = new URL(id + (svg ? '.svg' : jpg ? '.jpg' : '.png'), assets);
     assert.ok((await stat(url)).size > 500, id + ': missing logo');
     const bytes = await readFile(url);
-    assert.equal(bytes.subarray(0, jpg ? 3 : 8).toString('hex'), jpg ? 'ffd8ff' : '89504e470d0a1a0a', id + ': invalid image');
+    if(svg){
+      const markup=bytes.toString('utf8');
+      assert.match(markup,/<svg[\s>]/);
+      assert.doesNotMatch(markup,/<script|<foreignObject|onload=/i);
+    }else{
+      assert.equal(bytes.subarray(0, jpg ? 3 : 8).toString('hex'), jpg ? 'ffd8ff' : '89504e470d0a1a0a', id + ': invalid image');
+    }
   }
 });

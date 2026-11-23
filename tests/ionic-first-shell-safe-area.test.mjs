@@ -12,7 +12,7 @@ test('primary PWA is Ionic, not an embedded sample preview',async()=>{
   assert.match(app,/<IonHeader className="mc-mobile-header/);
   assert.match(app,/<IonToolbar className="mc-ionic-toolbar">/);
   assert.match(app,/<IonFooter className="mc-ionic-footer/);
-  assert.match(app,/<IonModal isOpen=\{menuOpen\}/);
+  assert.match(app,/menuOpen && createPortal\(/);
   assert.match(app,/<IonSegment className="mc-spend-tabs"/);
   assert.match(app,/<IonSegmentButton key=\{id\}/);
   assert.doesNotMatch(app,/iframe title="Interactive Market Compass Ionic React preview/);
@@ -37,13 +37,15 @@ test('Ionic document flow restores vertical touch scrolling to the login and all
   assert.match(css,/ion-app\.mc-ionic-app \{[\s\S]*?overflow: visible !important;[\s\S]*?contain: none !important;/);
 });
 
-test('Ionic quick menu is premounted, compact and cannot expand to empty screen space',async()=>{
+test('menu is a compact body portal with safe scrolling, not a blank Ionic breakpoint sheet',async()=>{
   const [app,css]=await Promise.all([file('App.tsx'),file('ionic-shell.css')]);
-  assert.match(app,/keepContentsMounted=\{true\}/);
-  assert.match(app,/initialBreakpoint=\{1\} breakpoints=\{\[0,1\]\} expandToScroll=\{false\}/);
-  assert.match(css,/--height: min\(478px, calc\(100dvh/);
-  assert.match(css,/\.mc-ionic-menu::part\(content\) \{[\s\S]*?overflow: hidden;/);
-  assert.match(css,/\.mc-ionic-menu section\[role="dialog"\] \{[\s\S]*?height: auto;[\s\S]*?overflow: visible;/);
+  assert.match(app,/menuOpen && createPortal\(/);
+  assert.match(app,/mc-quick-menu-panel/);
+  assert.match(app,/document\.body\)\}/);
+  assert.match(app,/setMenuOpen\(false\)/);
+  assert.match(css,/\.mc-quick-menu-panel\{max-height:min\(77dvh/);
+  assert.match(css,/html\.mc-menu-open,body\.mc-menu-open\{overflow-y:hidden !important;/);
+  assert.doesNotMatch(app,/<IonModal isOpen=\{menuOpen\}/);
 });
 
 test('account list and category details use Ionic components but keep their finance sources',async()=>{

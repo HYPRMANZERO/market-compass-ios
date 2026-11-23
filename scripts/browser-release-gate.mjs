@@ -353,15 +353,17 @@ async function main(){
     await sleep(450);
     const settled=await tab.invoke(function(){
       const root=document.querySelector('section[role="dialog"][aria-label="Market Compass quick menu"]');
-      const modal=root?.closest('ion-modal.mc-ionic-menu');
-      const sheet=modal?.shadowRoot?.querySelector('[part="content"]');
-      const content=root?.closest('ion-content');
-      const scroll=content?.shadowRoot?.querySelector('[part="scroll"]');
-      return {sheetHeight:sheet?.getBoundingClientRect().height??0,rootHeight:root?.getBoundingClientRect().height??0,scrollExcess:scroll?scroll.scrollHeight-scroll.clientHeight:0,scrollHeight:scroll?.scrollHeight,clientHeight:scroll?.clientHeight,modalCount:document.querySelectorAll('ion-modal').length};
+      const rect=root?.getBoundingClientRect();
+      return {sheetHeight:rect?.height??0,rootHeight:rect?.height??0,
+        scrollExcess:root?root.scrollHeight-root.clientHeight:0,
+        bottom:rect?.bottom??0,screenHeight:innerHeight,
+        bodyPortal:root?.parentElement?.classList.contains('mc-quick-menu-layer')??false};
     });
-    console.log('IONIC_MENU_GEOMETRY '+JSON.stringify({opening:menu.sheetHeight,settled}));
-    assert.ok(settled.sheetHeight>300&&settled.sheetHeight<=520,'Ionic menu must stay a compact, bottom-anchored sheet');
-    assert.ok(settled.scrollExcess<32,'Ionic menu must not allow phantom scrolling beyond its actions');
+    console.log('QUICK_MENU_GEOMETRY '+JSON.stringify(settled));
+    assert.equal(settled.bodyPortal,true,'Quick menu must be mounted outside Ionic scroll containment');
+    assert.ok(settled.sheetHeight>300&&settled.sheetHeight<=520,'Quick menu must stay a compact, bottom-anchored sheet');
+    assert.ok(Math.abs(settled.bottom-settled.screenHeight)<3,'Quick menu must be anchored to viewport bottom');
+    assert.ok(settled.scrollExcess<32,'Quick menu must not allow phantom scrolling beyond its actions');
     for(const text of ['View accounts','Add account','Import document','Ask Compass','Markets','Orders & drafts','Spend history','Link a bank','Vault & backup'])
       assert.ok(menu.labels.includes(text),'quick menu missing '+text);
     await tab.invoke(function(){document.querySelector('button[aria-label="Close Market Compass menu"]')?.click();});
