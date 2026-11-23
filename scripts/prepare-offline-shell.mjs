@@ -23,7 +23,7 @@ async function walk(dir) {
 const allow = path => {
   const rel = relative(root, path).split(sep).join('/');
   return rel === 'index.html' || rel === 'ionic-preview.html' || rel === 'manifest.webmanifest' || rel === 'favicon.svg' ||
-    rel.startsWith('icons/') || rel.startsWith('assets/');
+    rel.startsWith('icons/') || rel.startsWith('bank-logos/') || rel.startsWith('assets/');
 };
 const all = await walk(root);
 const publicFiles = all.filter(allow);

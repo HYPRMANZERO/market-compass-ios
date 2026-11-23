@@ -339,11 +339,29 @@ async function main(){
         const rect=root?.getBoundingClientRect();
         const tiles=[...root?.querySelectorAll('button')||[]].filter(b=>b.getBoundingClientRect().height>=36);
         const trigger=document.querySelector('[data-testid="mobile-nav-menu"]');
-        return {visible:!!rect&&rect.width>220&&rect.height>120&&getComputedStyle(root).visibility!=='hidden',expanded:trigger?.getAttribute('aria-expanded')==='true',actionTiles:tiles.length,labels:root?.innerText||''};
+        const modal=root?.closest('ion-modal.mc-ionic-menu')||document.querySelector('ion-modal.mc-ionic-menu');
+        const sheet=modal?.shadowRoot?.querySelector('[part="content"]');
+        const content=root?.closest('ion-content');
+        const scroll=content?.shadowRoot?.querySelector('[part="scroll"]');
+        const sheetRect=sheet?.getBoundingClientRect();
+        const scrollExcess=scroll?scroll.scrollHeight-scroll.clientHeight:0;
+        return {visible:!!rect&&rect.width>220&&rect.height>120&&getComputedStyle(root).visibility!=='hidden',expanded:trigger?.getAttribute('aria-expanded')==='true',actionTiles:tiles.length,labels:root?.innerText||'',sheetHeight:sheetRect?.height??0,scrollExcess,screenHeight:innerHeight,rootHeight:rect?.height??0,scrollHeight:scroll?.scrollHeight??0,clientHeight:scroll?.clientHeight??0,modalFound:!!modal,shadowFound:!!modal?.shadowRoot,modalCount:document.querySelectorAll('ion-modal').length,modalHeight:modal?getComputedStyle(modal).getPropertyValue('--height').trim():'',sheetShadowParts:modal?.shadowRoot?[...modal.shadowRoot.querySelectorAll('[part]')].map(el=>({part:el.getAttribute('part'),height:Math.round(el.getBoundingClientRect().height)})):[]};
       });
       return state.visible&&state.expanded&&state.actionTiles>=5?state:false;
     },'visible Ionic quick menu action tiles');
     assert.equal(menu.visible,true,'iPhone menu must display visible action tiles');
+    await sleep(450);
+    const settled=await tab.invoke(function(){
+      const root=document.querySelector('section[role="dialog"][aria-label="Market Compass quick menu"]');
+      const modal=root?.closest('ion-modal.mc-ionic-menu');
+      const sheet=modal?.shadowRoot?.querySelector('[part="content"]');
+      const content=root?.closest('ion-content');
+      const scroll=content?.shadowRoot?.querySelector('[part="scroll"]');
+      return {sheetHeight:sheet?.getBoundingClientRect().height??0,rootHeight:root?.getBoundingClientRect().height??0,scrollExcess:scroll?scroll.scrollHeight-scroll.clientHeight:0,scrollHeight:scroll?.scrollHeight,clientHeight:scroll?.clientHeight,modalCount:document.querySelectorAll('ion-modal').length};
+    });
+    console.log('IONIC_MENU_GEOMETRY '+JSON.stringify({opening:menu.sheetHeight,settled}));
+    assert.ok(settled.sheetHeight>300&&settled.sheetHeight<=520,'Ionic menu must stay a compact, bottom-anchored sheet');
+    assert.ok(settled.scrollExcess<32,'Ionic menu must not allow phantom scrolling beyond its actions');
     for(const text of ['View accounts','Add account','Import document','Ask Compass','Markets','Orders & drafts','Spend history','Link a bank','Vault & backup'])
       assert.ok(menu.labels.includes(text),'quick menu missing '+text);
     await tab.invoke(function(){document.querySelector('button[aria-label="Close Market Compass menu"]')?.click();});

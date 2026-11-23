@@ -35,6 +35,9 @@ test('bank carousel is horizontally swipeable, actionable and on Home screen', a
   assert.match(component, /overflow-x-auto/);
   assert.match(component, /onClick=\{\(\) => setSelected\(bank.id\)\}/);
   assert.match(component, /onClick=\{onImportDocuments\}/);
+  assert.match(component, /loading="eager"/);
+  assert.match(component, /<Landmark size=\{25\} aria-hidden="true"\/>/);
+  assert.doesNotMatch(component, /\{bank\.monogram\}/,'avoid displaying transient bank initials while icons load');
   assert.match(component, /Live account linking is not enabled|Secure live account linking is not enabled/);
   assert.match(component, /Bank Zero–Mukuru/);
 });

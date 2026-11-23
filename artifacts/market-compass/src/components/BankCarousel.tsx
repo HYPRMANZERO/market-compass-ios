@@ -38,8 +38,8 @@ export default function BankCarousel({
         <button type="button" aria-label={`Select ${bank.name}`} aria-pressed={selected === bank.id} data-testid={`bank-option-${bank.id}`}
           onClick={() => setSelected(bank.id)} className={`flex min-h-[122px] w-full flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-center transition-colors ${selected === bank.id ? 'border-primary bg-primary/10 ring-2 ring-primary/20' : 'border-border bg-background active:bg-muted'}`}>
           <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white text-[13px] font-extrabold shadow-sm" style={{color:bank.color}}>
-            <span aria-hidden="true">{bank.monogram}</span>
-            <img src={`${import.meta.env.BASE_URL}bank-logos/${bank.id}.${['standard-bank','absa','bank-zero'].includes(bank.id)?'jpg':'png'}`} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-contain p-1.5" onError={e => {e.currentTarget.style.display = 'none';}}/>
+            <Landmark size={25} aria-hidden="true"/>
+            <img src={`${import.meta.env.BASE_URL}bank-logos/${bank.id}.${['standard-bank','absa','bank-zero'].includes(bank.id)?'jpg':'png'}`} alt="" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-contain p-1.5" onError={e => {e.currentTarget.style.display = 'none';}}/>
           </span>
           <span className="line-clamp-2 min-h-[30px] text-[11px] font-semibold leading-[15px]">{bank.name}</span>
         </button>

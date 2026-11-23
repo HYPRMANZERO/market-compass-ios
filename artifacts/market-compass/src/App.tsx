@@ -447,7 +447,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
       </header>
       <InstallHelp/>
-      <IonModal isOpen={menuOpen} onDidDismiss={()=>setMenuOpen(false)} initialBreakpoint={0.72} breakpoints={[0,0.72,0.95]} className="mc-ionic-menu" aria-label="Market Compass quick menu">
+      <IonModal isOpen={menuOpen} keepContentsMounted={true} onDidDismiss={()=>setMenuOpen(false)} initialBreakpoint={1} breakpoints={[0,1]} expandToScroll={false} handle={true} className="mc-ionic-menu" aria-label="Market Compass quick menu">
         <IonContent className="mc-menu-content" scrollY={true}><section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="w-full max-w-md rounded-[24px] bg-card p-4 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
           <div className="flex items-center justify-between gap-3"><h2 className="text-[18px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
           <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>

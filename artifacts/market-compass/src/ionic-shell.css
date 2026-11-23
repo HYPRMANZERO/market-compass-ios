@@ -151,17 +151,31 @@ ion-app.mc-ionic-app {
   background: transparent;
 }
 .mc-ionic-menu {
+  /* A short, fixed-height sheet prevents Ionic's default 72%-95% viewport expansion
+     and avoids the full-white screen seen during the first iPhone modal open. */
+  --height: min(478px, calc(100dvh - env(safe-area-inset-top, 0px) - 48px));
   --background: #fffefa;
   --border-radius: 26px 26px 0 0;
   --box-shadow: 0 -14px 44px rgba(10,28,24,.2);
 }
-.mc-ionic-menu::part(content) { overflow: auto; }
+.mc-ionic-menu::part(content) {
+  overflow: hidden;
+  max-height: var(--height);
+}
+.mc-ionic-menu .mc-menu-content {
+  --background: #fffefa;
+  --padding-top: 0;
+  --padding-bottom: 0;
+  --offset-bottom: 0;
+  overscroll-behavior-y: contain;
+}
 .mc-ionic-menu section[role="dialog"] {
-  padding: 18px 18px max(22px,env(safe-area-inset-bottom,0px));
-  overflow: auto;
+  padding: 14px 18px max(18px, env(safe-area-inset-bottom, 0px));
   width: 100%;
   max-width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
   border: none;
   border-radius: 0;
   box-shadow: none;

@@ -37,6 +37,15 @@ test('Ionic document flow restores vertical touch scrolling to the login and all
   assert.match(css,/ion-app\.mc-ionic-app \{[\s\S]*?overflow: visible !important;[\s\S]*?contain: none !important;/);
 });
 
+test('Ionic quick menu is premounted, compact and cannot expand to empty screen space',async()=>{
+  const [app,css]=await Promise.all([file('App.tsx'),file('ionic-shell.css')]);
+  assert.match(app,/keepContentsMounted=\{true\}/);
+  assert.match(app,/initialBreakpoint=\{1\} breakpoints=\{\[0,1\]\} expandToScroll=\{false\}/);
+  assert.match(css,/--height: min\(478px, calc\(100dvh/);
+  assert.match(css,/\.mc-ionic-menu::part\(content\) \{[\s\S]*?overflow: hidden;/);
+  assert.match(css,/\.mc-ionic-menu section\[role="dialog"\] \{[\s\S]*?height: auto;[\s\S]*?overflow: visible;/);
+});
+
 test('account list and category details use Ionic components but keep their finance sources',async()=>{
   const [home,spend,activity]=await Promise.all([
     file('components/MobileOverview.tsx'),
