@@ -10,6 +10,7 @@ import type { MarketSeries } from '@workspace/api-client-react';
 import { approximateLocalValue, type FxReference } from '@/lib/fxRates';
 import { maskDocumentPII } from '@/lib/documentIntelligence';
 import FinancialPulse from '@/components/FinancialPulse';
+import BankCarousel from '@/components/BankCarousel';
 import EvidenceReviewInbox from '@/components/EvidenceReviewInbox';
 import {recurringPatterns} from '@/lib/historicalRecurring';
 import {localDate} from '@/lib/dailyBackup';
@@ -140,6 +141,8 @@ export default function MobileOverview({
         </div>
       </div>
     </section>
+
+    <BankCarousel compact onImportDocuments={onImportDocuments}/>
 
     <section aria-label="Workspace snapshot" className="mc-app-section">
       <div className="mc-app-section-heading">
