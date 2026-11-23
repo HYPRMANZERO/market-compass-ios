@@ -6,6 +6,7 @@ import {
 import { Link } from 'wouter';
 import type { MarketSeries } from '@workspace/api-client-react';
 import { approximateLocalValue, type FxReference } from '@/lib/fxRates';
+import { maskDocumentPII } from '@/lib/documentIntelligence';
 
 type AccountPreview = {
   id: string;
@@ -155,7 +156,7 @@ export default function MobileOverview({
             <summary>
               <span className="mc-account-avatar" aria-hidden="true"><WalletCards size={20}/></span>
               <span className="mc-account-label">
-                <strong>{account.name.trim()||`Account ${index+1}`}</strong>
+                <strong>{maskDocumentPII(account.name.trim())||`Account ${index+1}`}</strong>
                 <small>Manual entry · Not bank connected</small>
               </span>
               <span className="mc-account-right">

@@ -296,7 +296,7 @@ async function main(){
       },label,value);
       assert.equal(result,'filled','Debt field '+label+' must be editable');
     }
-    await fillDebtField('Account name','SYNTHETIC CREDIT CARD');
+    await fillDebtField('Account name','SYNTHETIC CREDIT CARD 123456789012');
     await fillDebtField('Balance','1840');
     await fillDebtField('APR (%)','18.5');
     await fillDebtField('Minimum / month','120');
@@ -323,7 +323,14 @@ async function main(){
     assert.ok(accountUi?.details?.includes('18.5%'),
       'account details must preserve owner-entered APR');
     assert.match(accountUi?.source??'',/Not bank connected/);
-    console.log('PASS: vertical per-account banking row, saved balance, APR and source status');
+    const privateLabels=await tab.invoke(function(){
+      return [...document.querySelectorAll('.mc-account-label strong')].map(element=>element.textContent);
+    });
+    assert.ok(privateLabels.some(label=>label?.includes('[redacted number]')),
+      'account identifiers entered in names must be masked in the mobile banking view');
+    assert.ok(privateLabels.every(label=>!label?.includes('123456789012')),
+      'the full synthetic account identifier must never be displayed as a label');
+    console.log('PASS: vertical account row, privacy-masked identifier, saved balance and APR');
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));

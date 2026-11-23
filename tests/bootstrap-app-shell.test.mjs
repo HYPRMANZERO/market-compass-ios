@@ -43,6 +43,7 @@ test('mobile overview uses Bootstrap columns for meaningful, consented account d
     /href="\/assistant"/
   ])assert.match(ui,expected);
   assert.match(ui,/Manual entry · Not bank connected/);
+  assert.match(ui,/maskDocumentPII\(account\.name\.trim\(\)\)/);
   assert.match(ui,/Not a live or bank-verified balance/);
   assert.match(ui,/Not entered/);
   assert.match(app,/documentsCount=\{docs\.length\} approvedEntryCount=\{entries\.length\}/);
