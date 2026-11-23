@@ -6,7 +6,10 @@
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { createHash } from 'node:crypto';
-const root = resolve(process.cwd(), 'artifacts/market-compass/dist/public');
+import { protectDeployedPwaDist } from './protect-gateway-dist.mjs';
+const root = resolve(process.env.MC_PWA_OUT_DIR || resolve(process.cwd(), 'artifacts/market-compass/dist/public'));
+// Even a service-worker-only rebuild can alter the live private PWA.
+protectDeployedPwaDist(root);
 const sw = join(root, 'sw.js');
 async function walk(dir) {
   const files = [];
