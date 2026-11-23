@@ -1,5 +1,6 @@
 import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { IonApp, IonHeader, IonToolbar, IonFooter, IonModal, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
@@ -371,7 +372,8 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     </aside>
 
     <main className="min-w-0">
-      <header className="mc-mobile-header sticky top-0 z-30 border-b border-white/10 bg-[hsl(165,24%,19%)] px-4 pb-3 pt-3 text-white lg:hidden">
+      <IonHeader className="mc-mobile-header sticky top-0 z-30 lg:hidden" role="banner">
+        <IonToolbar className="mc-ionic-toolbar">
         <div className="flex min-h-[49px] items-center gap-3">
           <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
           <div className="min-w-0 flex-1">
@@ -383,13 +385,14 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
           </div>
           <button type="button" onClick={()=>setMenuOpen(true)} aria-label="Open Market Compass menu" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><Menu size={21}/></button>
         </div>
-      </header>
+        </IonToolbar>
+      </IonHeader>
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
         <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
       </header>
       <InstallHelp/>
-      {menuOpen&&<div role="presentation" className="fixed inset-0 z-[85] flex items-end justify-center bg-black/60 px-3 pb-[calc(14px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>setMenuOpen(false)}>
+      <IonModal isOpen={menuOpen} onDidDismiss={()=>setMenuOpen(false)} initialBreakpoint={0.72} breakpoints={[0,0.72,0.95]} className="mc-ionic-menu" aria-label="Market Compass quick menu">
         <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="w-full max-w-md rounded-[24px] bg-card p-4 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
           <div className="flex items-center justify-between gap-3"><h2 className="text-[18px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
           <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
@@ -400,10 +403,11 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             <button type="button" onClick={()=>{setMenuOpen(false);openSettings();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
           </div>
         </section>
-      </div>}
+      </IonModal>
       <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
-    <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)] px-1.5 pt-2 shadow-[0_-5px_16px_rgba(17,39,33,.05)] lg:hidden">
+    <IonFooter className="mc-ionic-footer lg:hidden">
+      <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <div className="mx-auto grid max-w-[550px] grid-cols-6 gap-0.5">
         {navItems.map(({ href, label, icon: Icon }) => {
           const selected = href === path;
@@ -417,7 +421,8 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
           </Link>;
         })}
       </div>
-    </nav>
+      </nav>
+    </IonFooter>
   </div>;
 }
 
@@ -432,11 +437,12 @@ function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string;
 }
 
 function Panel({ children, className = '', title, action }: { children: ReactNode; className?: string; title?: string; action?: ReactNode }) {
-  return <section className={`mc-ui-panel min-w-0 overflow-hidden rounded-[22px] border border-border bg-card shadow-sm ${className}`}>
-    {(title || action) && <div className="flex min-h-12 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
-      <h2 className="text-[13px] font-semibold tracking-[.01em]">{title}</h2>{action}
-    </div>}<div>{children}</div>
-  </section>;
+  return <IonCard className={`mc-ui-panel mc-ionic-surface min-w-0 overflow-hidden rounded-[22px] border border-border bg-card shadow-sm ${className}`}>
+    {(title || action) && <IonCardHeader className="mc-ionic-panel-head">
+      <IonCardTitle className="text-[13px] font-semibold tracking-[.01em]">{title}</IonCardTitle>{action}
+    </IonCardHeader>}
+    <IonCardContent className="mc-ionic-panel-content">{children}</IonCardContent>
+  </IonCard>;
 }
 
 function EmptyState({ icon: Icon, title, description, action }: { icon: typeof Search; title: string; description: string; action?: ReactNode }) {
@@ -985,8 +991,6 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
   const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
-  const [ionicPreview,setIonicPreview]=useState(false);
-  const [ionicPreviewOpen,setIonicPreviewOpen]=useState(false);
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   const options=[
@@ -998,7 +1002,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
     <PageIntro eyebrow="Evidence first, decisions second" title="Your finances"
       description="Start with a document, review its information, and decide what should become a transaction. Your local financial plan updates only from the records you approve."
       trailing={<StatusTag tone="warn">Owner-reviewed · not bank verified</StatusTag>} />
-    <section aria-label="Spend workspace" className="mb-6 rounded-[24px] border border-border bg-card p-3 shadow-sm sm:p-5">
+    <IonCard role="region" aria-label="Spend workspace" className="mc-ionic-surface mb-6 rounded-[24px] border border-border bg-card p-3 shadow-sm sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-3 px-1 sm:mb-4">
         <div>
           <h2 className="text-[14px] font-bold">Your workspace</h2>
@@ -1006,56 +1010,26 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         </div>
         <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">Private · on device</span>
       </div>
-      <nav aria-label="Spend sections" className="grid grid-cols-3 gap-2">
-        {options.map(({id,title,subtitle,count,Icon})=><button key={id} type="button"
-          aria-pressed={section===id}
-          onClick={()=>setSection(id)}
-          className={`flex min-h-[104px] min-w-0 flex-col items-start justify-between rounded-[18px] border px-3 py-3 text-left transition-colors sm:min-h-[112px] sm:px-4 ${section===id?
-            'border-primary/40 bg-primary/[.07] text-foreground shadow-sm':
-            'border-border bg-background text-foreground hover:bg-muted/50'}`}>
-          <div className="flex w-full items-center justify-between gap-1">
-            <Icon size={19} className={section===id?'text-primary':'text-muted-foreground'} aria-hidden="true"/>
-            {count!==null&&<span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{count}</span>}
-          </div>
-          <span className="mt-2 block min-w-0">
-            <span className="block truncate text-[12px] font-bold sm:text-[14px]">{title}</span>
-            <span className="mt-1 block text-[10px] leading-[1.4] text-muted-foreground">{subtitle}</span>
-          </span>
-        </button>)}
+      <nav aria-label="Spend sections">
+        <IonSegment className="mc-spend-tabs" value={section}
+          onIonChange={event=>{
+            const next=event.detail.value;
+            if(next==='documents'||next==='activity'||next==='plan')setSection(next);
+          }}>
+          {options.map(({id,title,subtitle,count,Icon})=><IonSegmentButton key={id} value={id}
+            aria-pressed={section===id} aria-label={title} onClick={()=>setSection(id)}>
+            <Icon size={18} className="mc-spend-tab-icon" aria-hidden="true"/>
+            <IonLabel className="mc-spend-tab-label">{title}</IonLabel>
+            <span className="mc-spend-tab-meta">{count===null?subtitle:count+' saved'}</span>
+          </IonSegmentButton>)}
+        </IonSegment>
       </nav>
-    </section>
-    <section aria-label="Ionic native-style design preview" className="mb-5 rounded-[20px] border border-border bg-card p-3 shadow-sm sm:p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><p className="text-[12px] font-bold">Ionic UI Preview</p>
-          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            Try account cards, category drilldowns and action sheets with sample data. Your encrypted records remain untouched.
-          </p>
-        </div>
-        <button type="button" aria-expanded={ionicPreviewOpen} onClick={()=>setIonicPreviewOpen(v=>!v)}
-          className="min-h-11 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
-          {ionicPreviewOpen?'Close Ionic preview':'Try Ionic design'}
-        </button>
-      </div>
-      {ionicPreviewOpen&&<div className="mt-4 overflow-hidden rounded-[20px] border border-border bg-background">
-        <iframe title="Interactive Market Compass Ionic React preview using only sample data"
-          src={import.meta.env.BASE_URL+'ionic-preview.html'}
-          className="block h-[min(72dvh,680px)] min-h-[420px] w-full border-0" loading="lazy"/>
-      </div>}
-    </section>
+    </IonCard>
     {section==='documents'&&ledger.length>0&&<button type="button" onClick={()=>setSection('activity')}
       className="mb-5 flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[.065] px-4 py-3 text-left text-[12px] font-semibold">
       <span>{ledger.length} approved or manually recorded transaction(s) are ready in your spending portfolio.</span>
       <ArrowRight size={19} className="shrink-0" aria-hidden="true"/>
     </button>}
-    <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-      <div><p className="text-[12px] font-bold">Compare Ionic components</p>
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Try native-style spending cards and transaction filters using the same approved local ledger.</p>
-      </div>
-      <button type="button" aria-pressed={ionicPreview} onClick={()=>{setIonicPreview(v=>!v);setSection('activity');}}
-        className={`min-h-11 shrink-0 rounded-xl border px-3 text-[12px] font-bold ${ionicPreview?'border-primary bg-primary text-primary-foreground':'border-border bg-background'}`}>
-        {ionicPreview?'Original UI':'Try Ionic'}
-      </button>
-    </div>
     <div aria-label={section==='documents'?'Document importer and reviewed files':
       section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
       className="min-w-0 space-y-5">
@@ -1087,11 +1061,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
-        {ionicPreview?<Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Opening Ionic Spend components…</p>}>
+        <Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Loading transactions…</p>}>
           <IonicSpendPreview entries={ledger} currency={data.currency}
-            onOpenDocuments={()=>{setIonicPreview(false);setSection('documents');}}/>
-        </Suspense>:
-          <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>}
+            onOpenDocuments={()=>setSection('documents')}/>
+        </Suspense>
+        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
@@ -1360,7 +1334,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <IonApp className="mc-ionic-app"><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider></IonApp>;
 }
 
 export default App;
