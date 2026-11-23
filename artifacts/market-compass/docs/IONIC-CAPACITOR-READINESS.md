@@ -29,3 +29,9 @@ Updated: 23 November 2026
 - Inline Ionic React components are lazy-loaded to keep the original first-render bundle and CSS separate until the owner requests the preview.
 - Verified both sources with TypeScript checks, all regression tests, isolated browser release gates, and production candidates under `MarketCompass/ReleaseCandidates/ionic-live-20261123/`.
 - A production build is not proof of installation on iPhone. Verify both PWA origins independently and retain their encrypted exports before any public deployment. Native iOS still requires macOS/Xcode and Apple signing.
+
+## Release note: opt-in live Ionic preview and native Android sync
+- Private authenticated gateway static promotion succeeded with an offline-prepared candidate. Previous bundle rollback: `artifacts/market-compass/dist/public-before-finance-ux-20261123-120340`. Candidate and live index hashes matched; Ionic preview asset and service-worker precache were confirmed.
+- Public Pages candidate built and passed synthetic Chromium verification, but is **not deployed to GitHub Pages** by the private static promotion.
+- Fixed `native:sync:android` and `native:sync:ios` scripts to invoke `node scripts/build-native.mjs` directly because the Windows HYPRBOX CLI resolves `corepack pnpm`, not the bare `pnpm` executable.
+- Private Capacitor Android `native:sync:android` now succeeds and copies the latest web bundle; no signed Android APK or iOS IPA was created.
