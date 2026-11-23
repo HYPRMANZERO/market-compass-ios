@@ -505,6 +505,31 @@ async function main(){
     await expectText(tab,'1 of 100 saved','first saved, second skipped');
     console.log('PASS: two selected files queued, first saved and second skipped');
 
+    // The owner must see saved evidence in Home without silently posting it.
+    await tab.invoke(function(){
+      document.querySelector('a[aria-label="Go to Market Compass home"]')?.click();
+    });
+    await expectText(tab,'Needs review','document review inbox on Home');
+    const inbox=await tab.invoke(function(){
+      const panel=document.querySelector('.mc-evidence-inbox');
+      const nums=[...panel?.querySelectorAll('[aria-label="Review counts"] strong')||[]]
+        .map(x=>Number(x.textContent));
+      panel?.querySelector('details summary')?.click();
+      return {nums,card:panel?.textContent,overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.ok(inbox.card?.includes('Review by document'),'per-document review is available');
+    assert.equal(inbox.nums[2],1,'one saved imported document, not the skipped second file');
+    assert.ok(inbox.nums[0]>=1,'document evidence needs explicit owner review');
+    assert.equal(inbox.nums[1],0,'import must not auto-post Spend entries');
+    assert.equal(inbox.overflow,false,'review inbox cannot overflow iPhone width');
+    await tab.invoke(function(){
+      const link=[...document.querySelectorAll('a')]
+        .find(a=>a.getAttribute('href')?.endsWith('/expenses'));
+      if(!link)throw Error('Spend link missing');link.click();
+    });
+    await expectText(tab,'Import & review','return to Spend from review inbox');
+    console.log('PASS: synthetic Home review inbox counts imported evidence, no automatic posting');
+
     await chooseFiles(tab,picker,[{...firstCsv,name:'synthetic-renamed.csv'}]);
     await expectText(tab,'Synthetic groceries','duplicate preview');
     await click(tab,'Save these reviewed excerpts');
