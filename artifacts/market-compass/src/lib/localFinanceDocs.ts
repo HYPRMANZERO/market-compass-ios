@@ -264,7 +264,7 @@ export function extractLocalFinanceDocument(
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
   const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+safeOwnerLabel):'unclassified';
-  const suggested=classifyDocument(text,fileName+' '+safeOwnerLabel);
+  const suggested=classifyDocument(text);
   // Labels and filenames alone never make arbitrary text a complete payslip.
   // Require a source heading, or multiple independent payroll field labels.
   const sourcePayrollFields=[
