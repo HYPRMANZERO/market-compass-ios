@@ -181,7 +181,7 @@ export default function VoiceAssistant({
   useEffect(() => {
     if (publicPagesEdition) {
       setConnection('paused');
-      setConnectionMessage('Private Ollama is not available on the unauthenticated public edition.');
+      setConnectionMessage('Private Compass AI is not available on the unauthenticated public edition.');
       return;
     }
     if (!settings.enabled) {
@@ -240,7 +240,7 @@ export default function VoiceAssistant({
           throw Error('The desktop AI service is not responding as an authorized session.');
         if (!('modelAvailable' in payload) || payload.modelAvailable !== true) {
           const why = 'reason' in payload && typeof payload.reason === 'string'
-            ? payload.reason : 'The configured Ollama model is not available.';
+            ? payload.reason : 'The configured Compass model is not available.';
           throw Error(why);
         }
         if (!active || probeSerial.current !== id) return;
@@ -550,7 +550,7 @@ export default function VoiceAssistant({
         expenseSummary: context.expenseSummary,
         documentFacts,
       } : undefined;
-      const useAgent = agentMode; // Every AI reply comes from HYPRBOX Ollama, with read-only agent safety.
+      const useAgent = agentMode; // Every AI reply comes from the authenticated private Compass model, with read-only agent safety.
       const response = await fetch(url + (useAgent ? (ownerPreviewModel ? '/api/agent/preview' : '/api/agent/run') : '/api/chat'), {
         method: 'POST', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
@@ -573,17 +573,17 @@ export default function VoiceAssistant({
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
-        setStatus(`Desktop Ollama · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+        setStatus(`Compass AI · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
       } else {
         if (!('reply' in payload) || typeof payload.reply !== 'string' ||
           !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model')
-          throw Error('Desktop did not confirm an Ollama-generated chat response.');
+          throw Error('Desktop did not confirm an model-generated chat response.');
         const reply = payload.reply.slice(0,1800);
         const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
           ? payload.answerSource : 'private-desktop-model';
         add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
         setStatus(answerSource === 'private-desktop-model'
-          ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
+          ? 'Answered by your desktop Compass model. Independently verify financial claims.'
           : answerSource === 'private-assistant-shortcut'
             ? 'Market Compass answered your greeting locally without accessing financial records.'
             : answerSource === 'official-luno-api'
@@ -597,7 +597,7 @@ export default function VoiceAssistant({
       if (messageSerial.current !== id) return;
       setConnection('offline');
       setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
-      add('local', 'Desktop Ollama is unavailable. Read-only questions can be saved locally for your approval and sent when the private gateway reconnects.');
+      add('local', 'Compass AI is unavailable. Read-only questions can be saved locally for your approval and sent when the private gateway reconnects.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
 
@@ -625,7 +625,7 @@ export default function VoiceAssistant({
     const localSafetyRefusal = result.type === 'answer' &&
       result.reply.startsWith('I cannot transfer money');
     // Device-local navigation and fixed safety refusals do not need model inference.
-    // Any financial explanation must come from HYPRBOX Ollama, not a local AI substitute.
+    // Any financial explanation must come from the authenticated private Compass model, not a local AI substitute.
     if (result.type === 'navigate' || localSafetyRefusal) {
       add('local',result.reply);
       if(result.destination)onNavigate(result.destination);
@@ -705,9 +705,9 @@ export default function VoiceAssistant({
   return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
     <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass AI model connection">
       <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
-      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private HYPRBOX Ollama status"}>
+      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private Compass model connection status"}>
         <span className={connected?"h-2 w-2 shrink-0 rounded-full bg-emerald-400":connection==="checking"?"h-2 w-2 shrink-0 rounded-full bg-amber-300":"h-2 w-2 shrink-0 rounded-full bg-white/50"} aria-hidden="true"/>
-        {connected?(activeModel==='qwen3.5:4b'?(ownerPreviewModel?'Qwen 4B preview':'Qwen 4B connected'):'Ollama connected'):connection==="checking"?'Checking Ollama':settings.enabled?(ownerPreviewModel?'4B preview offline':'Ollama offline'):'Ollama not set'}
+        {connected?(activeModel==='qwen3.5:4b'?(ownerPreviewModel?'Compass preview':'Compass connected'):'Compass connected'):connection==="checking"?'Connecting Compass':settings.enabled?(ownerPreviewModel?'Compass preview offline':'Compass offline'):'Compass not connected'}
       </span>
       <button type="button" aria-label={settings.speakReplies?"Turn off spoken replies":"Turn on spoken replies"} aria-pressed={settings.speakReplies}
         onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
@@ -725,7 +725,7 @@ export default function VoiceAssistant({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="flex min-h-8 items-center gap-2 text-[12px] font-semibold" aria-label="Read-only agent mode always active">
           <ShieldCheck size={15} className="text-primary" aria-hidden="true"/> Agent mode on
-          <span className="text-[10px] font-normal text-muted-foreground">Ollama · 3 read-only tools max</span>
+          <span className="text-[10px] font-normal text-muted-foreground">Compass · 3 read-only tools max</span>
         </span>
         <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer">Safety</summary>
           <p className="max-w-[330px] py-2 leading-5">Tools only review sources. No trading, banking or payment changes. Sharing iPhone vault entries requires separate permission in settings.</p>
@@ -735,15 +735,15 @@ export default function VoiceAssistant({
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
-            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
-            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama · Read-only agent</span>}
+            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass</span>}
+            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Read-only agent</span>}
             {message.text}
             {message.link && <a href={message.link.url} target="_blank" rel="noopener noreferrer"
               className="mt-2 inline-flex min-h-10 items-center rounded-xl border border-primary/35 bg-background px-3 py-2 text-[12px] font-semibold text-primary underline-offset-4 hover:underline"
               aria-label={message.link.label}>{message.link.label}</a>}
           </div>
         </div>)}
-        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}
+        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for Compass…'}</div>}
         <div ref={bottom}/>
       </div>
       {reviewedQueue.length>0 && <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/40 p-3" aria-label="Encrypted offline agent questions">
@@ -973,7 +973,7 @@ export default function VoiceAssistant({
     </section></details>
 
     <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-4 shadow-sm">
-      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Desktop Ollama · saved connection
+      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
@@ -996,7 +996,7 @@ export default function VoiceAssistant({
       {protectedSameOrigin && (
         <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
           You are on the protected website: <strong>{window.location.hostname}</strong>.
-          {' '}Your iPhone uses this authenticated gateway for HYPRBOX Ollama even when a Tailscale host is saved for separately authorised desktop devices.
+          {' '}Your iPhone uses this authenticated gateway for private Compass AI even when a Tailscale host is saved for separately authorised desktop devices.
           {privateTailnetOrigin(host) !== protectedSameOrigin && ' Tap “Use this protected website for AI” below to save the correct address without changing your token.'}
         </p>
       )}
@@ -1037,7 +1037,7 @@ export default function VoiceAssistant({
       </div> : settings.url ? <button type="button" onClick={()=>onSettingsChange({...settings, enabled:true})} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">Resume automatic connection</button> : null}
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
         <CircleHelp size={14} className="mt-0.5 shrink-0"/>
-        Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run Ollama or continuously listen in the background when closed.
+        Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run the standalone model or continuously listen in the background when closed.
       </p>
     </details>
     </div>

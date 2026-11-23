@@ -8,7 +8,7 @@ const source=readFileSync(resolve(root,'artifacts/market-compass/src/components/
 test('stronger-model canary requires an explicitly requested protected owner origin',()=>{
   assert.match(source,/const ownerPreviewModel = Boolean\(protectedSameOrigin\)/);
   assert.match(source,/new URLSearchParams\(window\.location\.search\)\.get\('compassAI'\) === 'qwen35-4b'/);
-  assert.match(source,/publicPagesEdition[\s\S]*?Private Ollama is not available on the unauthenticated public edition/);
+  assert.match(source,/publicPagesEdition[\s\S]*?Private Compass AI is not available on the unauthenticated public edition/);
 });
 test('canary session and read-only agent use dedicated routes; normal mode keeps original',()=>{
   assert.match(source,/ownerPreviewModel \? '\/api\/session\/preview' : '\/api\/session'/);
