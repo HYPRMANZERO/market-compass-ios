@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
@@ -683,12 +683,18 @@ export default function VoiceAssistant({
     } catch (err) { setListening(false); setStatus(explainError(err)); }
   }
 
-  return <div className="space-y-4" data-testid="voice-assistant">
-    <section className="overflow-hidden rounded-[24px] bg-[hsl(165,24%,20%)] px-5 py-5 text-white">
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (!busy && query.trim()) submit(query);
+  }
+
+  return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
+    <section className="overflow-hidden rounded-[22px] bg-[hsl(165,24%,20%)] px-4 py-4 text-white sm:px-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[hsl(43,65%,74%)]"><BrainCircuit size={15}/> Compass AI</div>
-          <h1 className="serif mt-3 text-[30px] leading-[1.05]">Just ask.</h1>
+          <h1 className="serif mt-2 text-[26px] leading-[1.12]">Just ask.</h1>
           <p className="mt-2 max-w-[330px] text-[13px] leading-5 text-white/75">Your private finance companion on every device.</p>
         </div>
         <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
@@ -701,15 +707,15 @@ export default function VoiceAssistant({
           {settings.speakReplies ? <Speaker size={20}/> : <VolumeX size={20}/>}
         </button>
       </div>
-      <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75">
-        <WifiOff size={16}/> Offline calculations + queued questions
-        <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px] text-white/75">
+        <span className="flex min-w-0 items-center gap-2"><WifiOff size={15} className="shrink-0"/> Offline calculations + queued questions</span>
+        <span className="max-w-full rounded-full bg-white/10 px-3 py-1 text-[10px] leading-4">
           {connected ? 'Ollama connected' : connection === 'checking' ? 'Connecting…' : settings.enabled ? 'Auto reconnect on' : 'Local mode'}
         </span>
       </div>
     </section>
 
-    <section className="rounded-[20px] border border-border bg-card shadow-sm">
+    <section className="overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
@@ -732,9 +738,10 @@ export default function VoiceAssistant({
           </p>
         )}
       </div>
-      <div className="max-h-[340px] min-h-[160px] space-y-3 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log max-h-[min(42dvh,340px)] space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+        {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
-          <div className={`max-w-[92%] rounded-[16px] px-4 py-3 text-[13px] leading-6 ${message.source === 'owner' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted/75 text-foreground'}`}>
+          <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
             {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
             {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama · Read-only agent</span>}
             {message.text}
@@ -798,20 +805,21 @@ export default function VoiceAssistant({
         </section>
       )}
       <div className="border-t border-border p-3">
-        <form className="flex items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_44px_44px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
-            <textarea value={query} rows={2} maxLength={500} placeholder="Ask about debt, markets or your budget…" onChange={e=>setQuery(e.target.value)}
-              className="max-h-28 min-h-[54px] w-full resize-none rounded-[15px] border border-input bg-background px-3 py-3 text-[16px] leading-5"/>
+            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder="Ask about debt or your budget…" onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
+              aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[64px] w-full resize-y rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
           <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'}
-            className={`grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
             {listening ? <MicOff size={22}/> : <Mic size={23}/>}
           </button>
           <button type="submit" disabled={!query.trim() || busy} aria-label="Send question"
-            className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={20}/></button>
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
         </form>
-        {!recognitionSupported && <p className="mt-2 text-[11px] text-muted-foreground">Use your iPhone keyboard microphone for dictation. Offline typed questions still work.</p>}
-        {status && <p role="status" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{status}</p>}
+        <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
+        {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use the iPhone keyboard microphone to dictate.</p>}
+        {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
 
@@ -862,9 +870,9 @@ export default function VoiceAssistant({
       </p>
     </details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Encrypted desktop conversation memory">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[14px] font-bold">Compact Vault · private memory</h2>
+    <section className="rounded-[20px] border border-border bg-card p-3.5 shadow-sm sm:p-4" aria-label="Encrypted desktop conversation memory">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
         <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
           disabled={!connected || memoryBusy} onClick={() => void readCompactMemory(false)}>
           <RefreshCw size={14} className="mr-1 inline"/> Refresh
@@ -912,6 +920,27 @@ export default function VoiceAssistant({
           <RefreshCw size={15}/> Refresh
         </button>
       </div>
+      <details className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-3" aria-label="Bank connectivity and consent status">
+        <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-[12px] font-semibold">
+          <span>Bank connections</span>
+          <span className="rounded-full bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+            {sourceInventory?.bankOAuthConnected ? 'Authorization reported · verify scope' : 'Not connected'}
+          </span>
+        </summary>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Direct bank feeds are not activated in this release. Partner-approved, account-scoped,
+          read-only consent is required before transactions can be retrieved. No banking passwords
+          or payment permissions should be entered into this app.
+        </p>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Planned: provider approval, consent expiry and revocation, dated sync, duplicate checks,
+          and explicit review before saving transactions. Missing bank data is unknown, not R0.
+        </p>
+        <button type="button" onClick={()=>onNavigate('/expenses')}
+          className="mt-3 min-h-11 rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
+          Import a statement instead <ArrowRight size={13} className="ml-1 inline"/>
+        </button>
+      </details>
       {sourceLoading && <p className="mt-3 text-[12px] text-muted-foreground">Reading the private source inventory…</p>}
       <OwnerBudgetPanel view={ownerBudget} connected={connected} available={ownerBudgetAvailable}/>
       {sourceHealth ? <div className="mt-3 rounded-xl border border-border p-3" aria-label="Financial source freshness">

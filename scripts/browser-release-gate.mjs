@@ -367,6 +367,80 @@ async function main(){
     console.log('PASS: vertical account row, privacy-masked identifier, saved balance and APR');
 
     await tab.invoke(function(){
+      const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/assistant'));
+      if(!link)throw Error('Assistant tab missing');link.click();
+    });
+    await expectText(tab,'Conversation','assistant chat');
+    const beforeChat=await tab.invoke(function(){
+      const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      const send=document.querySelector('button[aria-label="Send question"]');
+      const mic=document.querySelector('button[aria-label="Speak a question"]');
+      return {
+        present:!!input&&!!send&&!!mic,
+        width:input?.getBoundingClientRect().width??0,
+        font:input?getComputedStyle(input).fontSize:null,
+        micWidth:mic?.getBoundingClientRect().width??0,
+        sendWidth:send?.getBoundingClientRect().width??0,
+        bubbles:document.querySelectorAll('.mc-chat-bubble').length,
+        bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
+        overflow:document.documentElement.scrollWidth>innerWidth+1
+      };
+    });
+    assert.equal(beforeChat.present,true,'chat input and buttons present');
+    assert.ok(beforeChat.width>=155,'iPhone text input cannot be crowded out');
+    assert.equal(beforeChat.font,'16px','no Safari keyboard focus zoom');
+    assert.ok(beforeChat.micWidth>=44&&beforeChat.sendWidth>=44,'accessible send/voice buttons');
+    assert.equal(beforeChat.overflow,false,'AI tab must not horizontally overflow');
+    assert.ok(beforeChat.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
+    if(process.env.MC_TEST_ASSISTANT_SCREENSHOT){
+      const shot=await tab.command('Page.captureScreenshot',{
+        format:'png',captureBeyondViewport:false,fromSurface:true
+      });
+      await writeFile(process.env.MC_TEST_ASSISTANT_SCREENSHOT,Buffer.from(shot.data,'base64'));
+      console.log('Synthetic assistant screenshot captured for mobile layout inspection');
+    }
+    await tab.invoke(function(){
+      const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')
+        .set.call(field,'What is my total debt?');
+      field.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !document.querySelector('button[aria-label="Send question"]').disabled;
+    }),'ready to send typed question');
+    const protections=await tab.invoke(function(){
+      const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      const shift=new KeyboardEvent('keydown',{key:'Enter',shiftKey:true,bubbles:true,cancelable:true});
+      field.dispatchEvent(shift);
+      const composition=new KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true,cancelable:true});
+      field.dispatchEvent(composition);
+      const unchanged=document.querySelectorAll('.mc-chat-bubble').length;
+      const enter=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+      field.dispatchEvent(enter);
+      return {shift:shift.defaultPrevented,composition:composition.defaultPrevented,
+        bubblesBefore:unchanged,enter:enter.defaultPrevented};
+    });
+    assert.equal(protections.shift,false,'Shift+Enter must allow a newline');
+    assert.equal(protections.composition,false,'IME completion must not send');
+    assert.equal(protections.bubblesBefore,beforeChat.bubbles,'modifiers do not send');
+    assert.equal(protections.enter,true,'plain Enter must send and prevent newline');
+    await waitFor(()=>tab.invoke(function(){
+      return document.querySelectorAll('.mc-chat-bubble').length>=3;
+    }),'a single local AI answer');
+    const afterChat=await tab.invoke(function(){
+      return {bubbles:document.querySelectorAll('.mc-chat-bubble').length,
+        input:document.querySelector('textarea[aria-describedby="mc-composer-hint"]').value};
+    });
+    assert.equal(afterChat.bubbles,beforeChat.bubbles+2,'send exactly once');
+    assert.equal(afterChat.input,'','clear sent question');
+    await tab.invoke(function(){
+      const btn=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Clear');
+      if(!btn)throw Error('Clear button missing');btn.click();
+    });
+    await expectText(tab,'Conversation cleared. Ask a new question below.','compact clear state');
+    console.log('PASS: iPhone chat bubbles and compact composer; Enter, Shift+Enter, IME and Clear');
+
+    await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));
       if(!link)throw Error('Spend route unavailable');
       link.click();
