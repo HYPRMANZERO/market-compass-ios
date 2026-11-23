@@ -378,3 +378,10 @@ ion-app.mc-ionic-app {
 .mc-ionic-app .mc-ionic-surface select { min-height:44px; border-radius:12px; }
 .mc-ionic-app .mc-quick-action.ion-activatable { position:relative; overflow:hidden; }
 .mc-ionic-app .mc-wallet-cta.ion-activatable { position:relative; overflow:hidden; }
+
+.mc-assistant-dock{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;}
+.mc-assistant-dock-card{width:min(68vw,270px);flex:0 0 min(68vw,270px);max-height:65dvh;overflow-y:auto;overscroll-behavior:contain;}
+
+html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-behavior:none !important;}
+.mc-quick-menu-layer{touch-action:pan-y;overscroll-behavior:contain;}
+.mc-quick-menu-panel{max-height:min(77dvh,calc(100dvh - env(safe-area-inset-top,0px) - 14px));overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;}

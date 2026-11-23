@@ -1,11 +1,15 @@
 import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
+import {createPortal} from 'react-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { IonApp, IonHeader, IonToolbar, IonFooter, IonModal, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
+import { IonApp, IonHeader, IonToolbar, IonFooter, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
+import SavedCategoryReview from '@/components/SavedCategoryReview';
+import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
@@ -24,6 +28,7 @@ import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSetti
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
@@ -343,6 +348,14 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     const frame = window.requestAnimationFrame(reset);
     return () => window.cancelAnimationFrame(frame);
   }, [path]);
+  useEffect(() => {
+    if(!menuOpen)return;
+    const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setMenuOpen(false);};
+    document.documentElement.classList.add('mc-menu-open');
+    document.body.classList.add('mc-menu-open');
+    window.addEventListener('keydown',key);
+    return ()=>{document.documentElement.classList.remove('mc-menu-open');document.body.classList.remove('mc-menu-open');window.removeEventListener('keydown',key);};
+  },[menuOpen]);
   const openSettings = () => {
     const el = document.getElementById('mc-backup-controls') as HTMLDetailsElement | null;
     if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -392,18 +405,20 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
       </header>
       <InstallHelp/>
-      <IonModal isOpen={menuOpen} onDidDismiss={()=>setMenuOpen(false)} initialBreakpoint={0.72} breakpoints={[0,0.72,0.95]} className="mc-ionic-menu" aria-label="Market Compass quick menu">
-        <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="w-full max-w-md rounded-[24px] bg-card p-4 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3"><h2 className="text-[18px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
-          <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
-          <div className="grid grid-cols-2 gap-2">
-            {([{label:'View accounts',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
-            <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
-            <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
-            <button type="button" onClick={()=>{setMenuOpen(false);openSettings();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
-          </div>
-        </section>
-      </IonModal>
+      {menuOpen && createPortal(
+        <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
+          <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
+            <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
+              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
+            </div>
+          </section>
+        </div>,document.body)}
       <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
@@ -835,7 +850,24 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
   const [errorMessage, setErrorMessage] = useState('');
   const accounts = data.accounts;
   const update = (id: string, key: keyof Omit<DebtAccount, 'id'>, value: string) => setData((old) => ({ ...old, accounts: old.accounts.map((account) => account.id === id ? { ...account, [key]: value } : account) }));
-  const addAccount = () => setData((old) => ({ ...old, accounts: [...old.accounts, { id: crypto.randomUUID(), name: '', balance: '', apr: '', minimumPayment: '' }] }));
+  // The add form is a temporary draft. Opening it never creates an empty
+  // persisted account; saved accounts appear in a separate collapsed list.
+  const blankAccount=()=>({name:'',balance:'',apr:'',minimumPayment:''});
+  const [newAccount,setNewAccount]=useState(blankAccount);
+  const [accountError,setAccountError]=useState('');
+  const addAccount=()=>{
+    const next=newAccount;
+    const fields=[next.balance,next.apr,next.minimumPayment];
+    if(!next.name.trim() || fields.some(value=>value.trim()==='' || !Number.isFinite(Number(value)) || Number(value)<0) ||
+       Number(next.apr)>200){
+      setAccountError('Enter an account name, balance, APR (0–200), and minimum monthly payment before saving.');
+      return;
+    }
+    if(accounts.length>=50){setAccountError('The maximum of 50 saved accounts has been reached.');return;}
+    setData(old=>({...old,accounts:[...old.accounts,{id:crypto.randomUUID(),...next,name:next.name.trim()}]}));
+    setNewAccount(blankAccount());
+    setAccountError('');
+  };
   const removeAccount = (id: string) => setData((old) => ({ ...old, accounts: old.accounts.filter((account) => account.id !== id) }));
   const hasMoneyEntered = accounts.some(a => Number(a.balance) > 0 || Number(a.minimumPayment) > 0) || Number(data.monthlyExtra) > 0 || Number(data.emergencyReserve) > 0;
   const changeCurrency = (next: string, nextRegion?: string) => {
@@ -871,11 +903,46 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
     <FinancialReadinessChecklist data={data} />
     <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
       <div className="space-y-4">
-        <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50</span>}>
-          {accounts.length ? <div className="divide-y divide-border">
-            {accounts.map((account, index) => <div key={account.id} className="p-4 sm:p-5"><div className="mb-4 flex items-center justify-between"><span className="mono text-[10px] text-muted-foreground">ACCOUNT {String(index + 1).padStart(2, '0')}</span><button type="button" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label={`Remove ${account.name || 'account'}`} onClick={() => removeAccount(account.id)}><Trash2 size={15} /></button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="Account name" value={account.name} onChange={(v) => update(account.id, 'name', v)} placeholder="e.g. Card" /><Field label="Balance" value={account.balance} onChange={(v) => update(account.id, 'balance', v)} type="number" min="0" step="0.01" placeholder="0.00" /><Field label="APR (%)" value={account.apr} onChange={(v) => update(account.id, 'apr', v)} type="number" min="0" step="0.01" placeholder="0.00" /><Field label="Minimum / month" value={account.minimumPayment} onChange={(v) => update(account.id, 'minimumPayment', v)} type="number" min="0" step="0.01" placeholder="0.00" /></div></div>)}
-          </div> : <EmptyState icon={WalletCards} title="No debt accounts yet" description="Start with the balances, rates, and minimum payments you know. You can adjust these at any time." />}
-          <div className="border-t border-border p-4"><button type="button" disabled={accounts.length >= 50} onClick={addAccount} className="inline-flex items-center gap-2 text-[11px] font-semibold text-primary disabled:opacity-40"><Plus size={15} /> Add an account</button></div>
+        <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50 saved</span>}>
+          {accounts.length ? <div className="divide-y divide-border" aria-label="Saved debt accounts">
+            {accounts.map((account,index)=><details key={account.id} className="group">
+              <summary className="flex min-h-14 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-[13px]">
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate">{maskDocumentPII(account.name.trim())||`Incomplete saved account ${index+1}`}</strong>
+                  <small className="text-[10px] text-muted-foreground">Saved account · Tap to edit</small>
+                </span>
+                <strong className="shrink-0 tabular-nums">{account.balance.trim()?money(Number(account.balance)||0,data.currency):'Balance missing'}</strong>
+                <ChevronDown size={17} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true"/>
+              </summary>
+              <div className="border-t border-border bg-muted/20 px-4 py-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="Account name" value={account.name} onChange={v=>update(account.id,'name',v)} placeholder="e.g. Personal loan"/>
+                  <Field label="Balance" value={account.balance} onChange={v=>update(account.id,'balance',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                  <Field label="APR (%)" value={account.apr} onChange={v=>update(account.id,'apr',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                  <Field label="Minimum / month" value={account.minimumPayment} onChange={v=>update(account.id,'minimumPayment',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                </div>
+                <button type="button" onClick={()=>{if(window.confirm('Remove this saved account from the encrypted workspace? This does not delete historic transactions.'))removeAccount(account.id);}}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-destructive/30 px-3 text-[11px] font-semibold text-destructive">
+                  <Trash2 size={14}/> Remove saved account
+                </button>
+              </div>
+            </details>)}
+          </div>:<EmptyState icon={WalletCards} title="No debt accounts yet" description="Add a debt account below. Nothing is saved until you tap Save account."/>}
+          <div id="mc-add-debt-account" className="scroll-mt-24 border-t border-border p-4 sm:p-5" aria-label="Add a new debt account">
+            <h3 className="text-[14px] font-bold">Add an account</h3>
+            <p className="mb-3 mt-1 text-[11px] text-muted-foreground">This form stays blank after saving. Existing accounts stay collapsed above.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Account name" value={newAccount.name} onChange={v=>setNewAccount(old=>({...old,name:v}))} placeholder="e.g. Capfin loan"/>
+              <Field label="Balance" value={newAccount.balance} onChange={v=>setNewAccount(old=>({...old,balance:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+              <Field label="APR (%)" value={newAccount.apr} onChange={v=>setNewAccount(old=>({...old,apr:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+              <Field label="Minimum / month" value={newAccount.minimumPayment} onChange={v=>setNewAccount(old=>({...old,minimumPayment:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+            </div>
+            <button type="button" disabled={accounts.length>=50} onClick={addAccount}
+              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+              <Plus size={16}/> Save account
+            </button>
+            {accountError&&<p role="alert" className="mt-2 text-[11px] text-destructive">{accountError}</p>}
+          </div>
         </Panel>
         <Panel title="Monthly guardrails">
           <div className="grid gap-4 p-5 sm:grid-cols-2">
@@ -1062,9 +1129,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
       </>}
       {section==='activity'&&<>
         <Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Loading transactions…</p>}>
-          <IonicSpendPreview entries={ledger} currency={data.currency}
+          <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
+        <SavedCategoryReview entries={ledger} currency={data.currency}
+          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
         <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
@@ -1273,9 +1342,11 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
   const { data, setData } = vault;
   const [,navigate]=useLocation();
   const addAccount=()=>{
-    if(data.accounts.length>=50)return;
-    setData(old=>({...old,accounts:[...old.accounts,{id:crypto.randomUUID(),name:'',balance:'',apr:'',minimumPayment:''}]}));
+    // Navigate to the blank draft form; never create an empty vault account.
     navigate('/debt');
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>
+      document.getElementById('mc-add-debt-account')?.scrollIntoView({behavior:'smooth',block:'start'})
+    ));
   };
   const [importOpen,setImportOpen]=useState(false);
   const [recoveryOpen,setRecoveryOpen]=useState(false);
@@ -1287,6 +1358,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
+    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Organize account documents; secure live bank connections are not enabled."/><BankCarousel onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
     {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-2 pt-4 pb-[calc(10px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>

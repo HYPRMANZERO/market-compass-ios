@@ -824,54 +824,10 @@ export default function VoiceAssistant({
       </div>
     </section>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
-      <summary className="cursor-pointer text-[13px] font-bold">Spoken replies · voice &amp; pace</summary>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-        Choose an English voice offered by this iPhone or browser. Preview voices without sending your financial replies to another speech service.
-      </p>
-      <label className="mt-3 block text-[12px] font-semibold">
-        Spoken voice
-        <select value={settings.voiceURI===DEVICE_DEFAULT_VOICE ? DEVICE_DEFAULT_VOICE :
-          availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
-          onChange={e=>onSettingsChange({...settings,voiceURI:e.target.value})}
-          disabled={!speakingSupported}
-          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="">Automatic · best Safari-listed English voice</option>
-          <option value={DEVICE_DEFAULT_VOICE}>Use iPhone system default voice</option>
-          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
-        </select>
-      </label>
-      <label className="mt-3 block text-[12px] font-semibold">
-        Speaking pace
-        <select value={settings.voicePace||'natural'}
-          onChange={e=>onSettingsChange({...settings,voicePace:e.target.value as VoicePace})}
-          disabled={!speakingSupported}
-          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="natural">Natural · relaxed</option>
-          <option value="calm">Calm · slower</option>
-          <option value="brisk">Brisk · quicker</option>
-        </select>
-      </label>
-      <button type="button" disabled={!speakingSupported}
-        onClick={()=>speak('Hello. I am Compass. This is your iPhone voice preview. Your historical financial plan is dated the fifteenth of October. No current bank balance is verified.',true)}
-        className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
-        <Speaker size={15} className="mr-1 inline"/> Preview this voice
-      </button>
-      <button type="button" disabled={!speakingSupported}
-        onClick={()=>setAvailableVoices(sortedEnglishVoices(window.speechSynthesis.getVoices()))}
-        className="ml-2 mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
-        <RefreshCw size={14} className="mr-1 inline"/> Refresh iPhone voices
-      </button>
-      {voicePreviewStatus && <p role="status" aria-live="polite" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{voicePreviewStatus}</p>}
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-        Safari reports {availableVoices.length} English voices on this device. The iPhone system default
-        option lets iOS choose instead. Safari may not expose all downloaded Enhanced/Premium
-        iPhone voices; unavailable voices cannot be forced by a web app. Try voice previews
-        and keep the one you prefer. No financial reply is sent to a new voice service.
-      </p>
-    </details>
 
-    <section className="rounded-[20px] border border-border bg-card p-3.5 shadow-sm sm:p-4" aria-label="Encrypted desktop conversation memory">
+
+    <div className="mc-assistant-dock flex snap-x snap-mandatory items-start gap-2 overflow-x-auto pb-3" aria-label="AI tools and connections">
+    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[12px] font-bold">Private memory</summary><div className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
         <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
@@ -911,9 +867,9 @@ export default function VoiceAssistant({
         Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
         Compression is measured; no fixed ratio is guaranteed.
       </p>
-    </section>
+    </div></details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Private financial sources">
+    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[12px] font-bold">Financial sources</summary><div className="mt-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
         <button type="button" onClick={() => setSourceRefresh(n => n + 1)} disabled={!connected || sourceLoading}
@@ -1005,9 +961,9 @@ export default function VoiceAssistant({
       </div>}
       {sourceError && <p role="status" className="mt-3 text-[11px] leading-5 text-muted-foreground">{sourceError}</p>}
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
-    </section>
+    </div></details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[12px] font-bold">Suggested questions</summary><div className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         {ideas.map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
@@ -1016,9 +972,9 @@ export default function VoiceAssistant({
         </button>)}
       </div>
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
-    </section>
+    </div></details>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm">
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Desktop Ollama · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
@@ -1085,5 +1041,6 @@ export default function VoiceAssistant({
         Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run Ollama or continuously listen in the background when closed.
       </p>
     </details>
+    </div>
   </div>;
 }

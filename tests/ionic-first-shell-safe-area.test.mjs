@@ -12,7 +12,7 @@ test('primary PWA is Ionic, not an embedded sample preview',async()=>{
   assert.match(app,/<IonHeader className="mc-mobile-header/);
   assert.match(app,/<IonToolbar className="mc-ionic-toolbar">/);
   assert.match(app,/<IonFooter className="mc-ionic-footer/);
-  assert.match(app,/<IonModal isOpen=\{menuOpen\}/);
+  assert.match(app,/menuOpen && createPortal\(/);
   assert.match(app,/<IonSegment className="mc-spend-tabs"/);
   assert.match(app,/<IonSegmentButton key=\{id\}/);
   assert.doesNotMatch(app,/iframe title="Interactive Market Compass Ionic React preview/);
@@ -45,7 +45,7 @@ test('account list and category details use Ionic components but keep their fina
   ]);
   assert.match(home,/<IonCard className="mc-wallet-hero"/);
   assert.match(home,/<IonList className="mc-account-list">/);
-  assert.match(home,/<IonModal isOpen=\{accountActionsOpen\}/);
+  assert.match(home,/accountActionsOpen && createPortal\(/);
   assert.match(spend,/<IonAccordionGroup multiple=\{true\}/);
   assert.match(spend,/spendingCycleSummaries\(/);
   assert.match(activity,/const valid=entries\.filter/);

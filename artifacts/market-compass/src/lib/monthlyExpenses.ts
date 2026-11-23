@@ -1,6 +1,6 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
-export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'savings' | 'other' | 'unsorted';
+export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
   id: string;
   date: string;
@@ -28,7 +28,7 @@ export const DEFAULT_EXPENSE_SETTINGS: ExpenseSettings = {
 };
 export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'salary',label:'Salary'},{value:'side-income',label:'Other income'},
-  {value:'car',label:'Car installment'},{value:'credit-card',label:'Credit card repayment'},
+  {value:'car',label:'Car installment'},{value:'credit-card',label:'Credit card repayment'},{value:'personal-loan',label:'Personal loan repayment'},
   {value:'housing',label:'Housing / board'},{value:'groceries',label:'Groceries and food'},
   {value:'transport',label:'Fuel and transport'},{value:'utilities',label:'Utilities'},
   {value:'insurance',label:'Insurance'},{value:'fees',label:'Bank and finance fees'},

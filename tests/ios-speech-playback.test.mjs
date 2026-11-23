@@ -34,7 +34,7 @@ test('native preview stays on-device and explicitly reports Safari start/end/err
   assert.match(s,/utterance\.onend=/);
   assert.match(s,/utterance\.onerror=/);
   assert.match(s,/queueNativeSpeech\(synth,utterance\)/);
-  assert.match(s,/voicePreviewStatus && <p role="status"/);
-  assert.match(s,/Use iPhone system default voice/);
+  assert.match(s,/Turn on spoken replies|Turn off spoken replies/);
+  assert.doesNotMatch(s,/Spoken response voice preferences/);
   assert.doesNotMatch(s,/const synth=window\.speechSynthesis;\s*synth\.cancel\(\);\s*const utterance/);
 });

@@ -11,7 +11,7 @@ test('existing PWA shell uses Ionic with retained locally isolated demo assets',
   ]);
   assert.match(app,/<IonApp className="mc-ionic-app"/);
   assert.match(app,/<IonHeader className="mc-mobile-header/);
-  assert.match(app,/<IonModal isOpen=\{menuOpen\}/);
+  assert.match(app,/menuOpen && createPortal\(/);
   assert.doesNotMatch(app,/Try Ionic design|Compare Ionic components/);
   assert.match(shell,/safe-area-inset-top/);
   assert.match(html,/ionic-preview-main\.tsx/);
