@@ -34,3 +34,8 @@ On iPhone, a historical bank statement with 300 extracted lines showed source da
 2. Open a saved historical statement in Spend > Documents. Correct its title/issuer/type if needed, and approve the eligible source-dated rows once; do not re-upload the same statement merely to reflect Spend.
 3. Go to Spend > Activity > Your spending portfolio. Choose the relevant 26th–25th salary cycle and expand a category; confirm purchases by their original statement dates.
 4. Verify account menu behavior and reopen import popup in iPhone Safari. Confirm the Close button stays below the blurred top header, and check the distinct vaults are still present.
+
+## Public release status (23 November 2026)
+- Public source commit `89ec9ab` pushed to `feature/public-source-dates-bank-ui-20261123`; a separate production candidate and service-worker bundle were compiled and tested.
+- Public GitHub Pages **has not been published** from this branch. Draft PR #70 targets `main`; it is unmerged pending review of all 30 changed files, CI mergeability, physical iPhone Safari vault restore and rollback. The private gateway's successful static promotion does not update or synchronize the public browser origin.
+
