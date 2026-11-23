@@ -2,6 +2,7 @@ import {useState} from 'react';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {EXPENSE_CATEGORIES,salaryCycle,type ExpenseEntry,type ExpenseCategory} from '@/lib/monthlyExpenses';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
+import {spendingCycleSummaries} from '@/lib/spendingCycleSummaries';
 
 type Props={entries:ExpenseEntry[];documents:LocalFinanceDocument[];currency:string};
 const zar=(n:number)=>new Intl.NumberFormat('en-ZA',{
@@ -25,6 +26,8 @@ export default function SpendingPortfolio({entries,documents,currency}:Props){
   const cycles=[...new Set(entries.map(item=>{
     try{return salaryCycle(item.date).start;}catch{return null;}
   }).filter((v):v is string=>Boolean(v)))].sort().reverse();
+  const timeline=spendingCycleSummaries(entries.filter(item=>account==='all'||sourceId(item,documents)===account),6);
+  const timelineMax=Math.max(1,...timeline.map(point=>point.spending));
   const filtered=entries.filter(item=>{
     if(item.currency!=='ZAR'||!Number.isFinite(item.amount))return false;
     if(account!=='all'&&sourceId(item,documents)!==account)return false;
@@ -65,6 +68,28 @@ export default function SpendingPortfolio({entries,documents,currency}:Props){
         </select>
       </label>
     </div>
+    {timeline.length>0&&<section aria-label="Historical spending by salary cycle" className="mt-4 rounded-[19px] border border-border bg-background p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[13px] font-bold">Spending by salary cycle</h3>
+        <button type="button" onClick={()=>setPeriod('all')}
+          className="min-h-9 rounded-lg border border-border px-2.5 text-[11px] font-semibold">All history</button>
+      </div>
+      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+        Tap a cycle to see its recorded transactions below. Historical imported spending appears here after approval, not when a file is merely extracted.
+      </p>
+      <div className="mt-3 space-y-2">{timeline.map(point=><button type="button" key={point.start}
+        aria-pressed={period===point.start} onClick={()=>setPeriod(point.start)}
+        className={`w-full rounded-xl border p-2.5 text-left transition-colors ${period===point.start?'border-primary bg-primary/5':'border-border hover:bg-muted/40'}`}>
+        <span className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="font-semibold">{cycleTitle(point.start)}</span>
+          <span className="font-bold tabular-nums">{zar(point.spending)}</span>
+        </span>
+        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <span className="block h-full rounded-full bg-primary/80" style={{width:point.spending?Math.max(2,point.spending/timelineMax*100)+'%':'0%'}}/>
+        </span>
+        <span className="mt-1 block text-[10px] text-muted-foreground">{point.expenseCount} recorded purchases/repayments · {zar(point.income)} recorded income</span>
+      </button>)}</div>
+    </section>}
     <div className="mt-4 rounded-[19px] bg-primary px-4 py-5 text-primary-foreground">
       <p className="text-[12px] font-medium opacity-80">Recorded spending and debt repayments</p>
       <strong className="mt-1 block text-[27px] font-bold tracking-tight">{currency==='ZAR'?zar(total):'ZAR review required'}</strong>
