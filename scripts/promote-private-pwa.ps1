@@ -24,14 +24,14 @@ foreach($f in @($indexFile,$swFile,$manifestFile)) {
 }
 $index = Get-Content -LiteralPath $indexFile -Raw
 $sw = Get-Content -LiteralPath $swFile -Raw
-if ($index -notmatch '/market-compass-ios/assets/index-[A-Za-z0-9_-]+\.js' -or
+if ($index -notmatch '/market-compass-ios/assets/(?:index|main)-[A-Za-z0-9_-]+\.js' -or
     $index -notmatch '/market-compass-ios/manifest.webmanifest' -or
     $sw -match '__PRECACHE_JSON__|__BUILD_ID__' -or
     $sw -notmatch 'notificationclick') {
     throw 'Candidate has incorrect base path or unprepared service worker.'
 }
 $existingIndex = Get-Content (Join-Path $active 'index.html') -Raw
-if ($existingIndex -notmatch '/market-compass-ios/assets/index-[A-Za-z0-9_-]+\.js') {
+if ($existingIndex -notmatch '/market-compass-ios/assets/(?:index|main)-[A-Za-z0-9_-]+\.js') {
     throw 'Unexpected live base path; refusing promotion.'
 }
 $time = Get-Date -Format 'yyyyMMdd-HHmmss'

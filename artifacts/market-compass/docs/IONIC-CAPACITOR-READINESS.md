@@ -30,3 +30,10 @@ Updated: 23 November 2026
 - No Android APK was built: Java was unavailable on this HYPRBOX terminal, and the Android SDK was not verified. Generated Android icons are placeholders; replace before any public store release.
 - The public Pages worktree contains only the independent Ionic PWA entry and Capacitor setup; its native Android platform is not yet generated there.
 - The public browser release remains separate from private gateway promotion, and physical iPhone Safari testing remains outstanding.
+
+## Private Ionic PWA static promotion verified (23 November 2026)
+- Created and verified the isolated `MarketCompass/ReleaseCandidates/ionic-preview-20261123/private` bundle, including the independent Ionic CSS/JS entry and service-worker precache.
+- Safely promoted to the existing authenticated HYPRBOX gateway using `scripts/promote-private-pwa.ps1`. Earlier source commit `d08e977` contains Spend double-count protection.
+- Exact active and candidate `index.html` hashes matched; active `ionic-preview.html` exists; deployed service worker contains the Ionic preview; backup of the complete previous static bundle exists at `artifacts/market-compass/dist/public-before-finance-ux-20261123-115343`.
+- Protected browser release gate passed with synthetic Chromium data and the embedded Ionic iframe. Android `cap sync android` passed. The actual physical iPhone/ngrok Safari experience must still be visually tested by its owner.
+- The public GitHub Pages PWA remains subject to a separate main/Pages release review. Do not replace an existing vault or clear Safari site data to refresh assets.
