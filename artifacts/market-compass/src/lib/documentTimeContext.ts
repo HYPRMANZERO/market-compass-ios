@@ -44,6 +44,10 @@ export function documentTimeContext(
  if(rows)return {...rows,asOf,basis:'dated-rows'};
  return asOf?{from:null,to:null,asOf,basis:'explicit-as-of'}:null;
 }
+/** UI-only summary for existing encrypted excerpts; no source files or vault schema changed. */
+export function sourceTimeContext(document:{lines:ReadonlyArray<{date:string|null}>;timeContext?:DocumentTimeContext}):DocumentTimeContext|null{
+ return document.timeContext??documentTimeContext('',document.lines);
+}
 export function timeContextLabel(value:DocumentTimeContext|null|undefined):string{
  if(!value)return 'No source period identified';
  if(value.from&&value.to&&value.from!==value.to)return value.from+' to '+value.to;

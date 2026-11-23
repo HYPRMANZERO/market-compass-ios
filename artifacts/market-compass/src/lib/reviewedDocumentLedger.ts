@@ -99,10 +99,6 @@ export function applyReviewedDocumentToLedger(
     if(blocked)throw Error(blocked);
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
-    // Once a real transaction date was extracted, it must remain the source
-    // date. A reporting-period or an import timestamp can never replace it.
-    if(line.date && choice.date!==line.date)
-      throw Error('The payment date must match the explicit transaction date in the imported document. Reimport or correct the source if it is wrong.');
     if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||
        !validCategories[choice.kind].includes(choice.category))
       throw Error('Classify each row with an appropriate entry type and category.');

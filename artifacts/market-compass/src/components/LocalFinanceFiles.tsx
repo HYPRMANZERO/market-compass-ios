@@ -5,7 +5,7 @@ import ReviewedDocumentLedger from './ReviewedDocumentLedger';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {classifyDocument,maskDocumentPII} from '@/lib/documentIntelligence';
-import {timeContextLabel} from '@/lib/documentTimeContext';
+import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
 import {importFinanceBatch} from '@/lib/batchFinanceImport';
 import {buildPayrollHistory} from '@/lib/earningsHistory';
@@ -195,8 +195,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       </p>
       <div className="rounded-lg border border-primary/20 bg-background px-3 py-2 text-[12px]">
         <strong>Source-dated history</strong>
-        <p className="mt-1 text-muted-foreground">{timeContextLabel(preview.timeContext)} · {preview.timeContext?.basis==='explicit-period'?'Explicit reporting period':preview.timeContext?.basis==='dated-rows'?'Range of dated lines':preview.timeContext?.basis==='explicit-as-of'?'As-of date only':'No confirmed period'}</p>
-        {preview.timeContext?.asOf&&<p className="mt-1 text-muted-foreground">Historical statement/as-of date: {preview.timeContext.asOf}</p>}
+        <p className="mt-1 text-muted-foreground">{timeContextLabel(sourceTimeContext(preview))} · {sourceTimeContext(preview)?.basis==='explicit-period'?'Explicit reporting period':sourceTimeContext(preview)?.basis==='dated-rows'?'Range of dated lines':sourceTimeContext(preview)?.basis==='explicit-as-of'?'As-of date only':'No confirmed period'}</p>
+        {sourceTimeContext(preview)?.asOf&&<p className="mt-1 text-muted-foreground">Historical statement/as-of date: {sourceTimeContext(preview)?.asOf}</p>}
         <p className="mt-1 text-[11px] text-muted-foreground">A reporting period never replaces a missing individual transaction date.</p>
       </div>
       <p className="rounded-lg border border-primary/20 bg-background p-3 text-[12px] font-semibold">
@@ -272,9 +272,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
             document.accountProfile.name+' · '+document.accountProfile.category.replaceAll('-',' '):
             financeLabel(document.documentKind??detectFinanceDocument(document.lines.map(l=>l.label).join(' '),document.label))}
         </p>
-        {document.timeContext&&<p className="mt-2 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
-          <strong className="text-foreground">Source reporting history:</strong> {timeContextLabel(document.timeContext)} · {document.timeContext.basis.replaceAll('-',' ')}
-          {document.timeContext.asOf?' · historical as of '+document.timeContext.asOf:''}. These dates do not establish an undated payment.
+        {sourceTimeContext(document)&&<p className="mt-2 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+          <strong className="text-foreground">Source reporting history:</strong> {timeContextLabel(sourceTimeContext(document))} · {sourceTimeContext(document)?.basis.replaceAll('-',' ')}
+          {sourceTimeContext(document)?.asOf?' · historical as of '+sourceTimeContext(document)?.asOf:''}. These dates do not establish an undated payment.
         </p>}
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
           Owner-selected on {new Date(document.importedAt).toLocaleDateString('en-ZA')}.

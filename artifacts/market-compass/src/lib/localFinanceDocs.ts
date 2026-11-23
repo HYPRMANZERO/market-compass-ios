@@ -2,7 +2,6 @@ import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,ty
 import {makeAccountProfile,maskDocumentPII,safeAccountProfile,classifyDocument,type AccountProfile} from './documentIntelligence.ts';
 import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
 import {extractPayslipEvidence,PAYROLL_FIELDS,type PayrollField} from './payslipIntelligence.ts';
-import {documentTimeContext,type DocumentTimeContext} from './documentTimeContext.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -38,8 +37,6 @@ export type LocalFinanceDocument={
   truncated:boolean;
   documentKind?:FinanceDocumentKind;
   accountProfile?:AccountProfile;
-  /** Historical source reporting period, not a per-transaction date. */
-  timeContext?:DocumentTimeContext;
 };
 export const MAX_FINANCE_FILES=100;
 export const MAX_FINANCE_FILE_BYTES=16_000_000;
@@ -251,18 +248,6 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     if(!profile)return null;
     validated.accountProfile=profile;
   }
-  if(input.timeContext!==undefined){
-    if(!asObject(input.timeContext)||
-      !['explicit-period','dated-rows','explicit-as-of'].includes(String(input.timeContext.basis))||
-      (input.timeContext.from!==null&&dateOf(input.timeContext.from)!==input.timeContext.from)||
-      (input.timeContext.to!==null&&dateOf(input.timeContext.to)!==input.timeContext.to)||
-      (input.timeContext.asOf!==null&&dateOf(input.timeContext.asOf)!==input.timeContext.asOf)||
-      Boolean(input.timeContext.from)!==Boolean(input.timeContext.to)||
-      (typeof input.timeContext.from==='string'&&typeof input.timeContext.to==='string'&&input.timeContext.from>input.timeContext.to))return null;
-    validated.timeContext={from:input.timeContext.from as string|null,
-      to:input.timeContext.to as string|null,asOf:input.timeContext.asOf as string|null,
-      basis:input.timeContext.basis as DocumentTimeContext['basis']};
-  }
   return validated;
 }
 export function extractLocalFinanceDocument(
@@ -316,9 +301,7 @@ export function extractLocalFinanceDocument(
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
-    accountProfile:{...makeAccountProfile(text,safeOwnerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified},
-    ...(documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))?{
-      timeContext:documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))!}:{})
+    accountProfile:{...makeAccountProfile(text,safeOwnerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');

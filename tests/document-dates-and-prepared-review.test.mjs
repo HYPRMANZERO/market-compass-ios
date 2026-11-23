@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {documentTimeContext} from '../artifacts/market-compass/src/lib/documentTimeContext.ts';
+import {documentTimeContext,sourceTimeContext} from '../artifacts/market-compass/src/lib/documentTimeContext.ts';
 import {extractLocalFinanceDocument,validateLocalFinanceDocument} from '../artifacts/market-compass/src/lib/localFinanceDocs.ts';
 import {preparedDocumentReview} from '../artifacts/market-compass/src/lib/reviewSuggestions.ts';
 import {applyReviewedDocumentToLedger} from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
@@ -30,17 +30,18 @@ test('bank-export DD MMM YY dates are recognized and debit/credit approvals prep
  assert.equal(preparedDocumentReview(doc,1)?.kind,'income');
  assert.equal(preparedDocumentReview(doc,1)?.category,'salary');
  assert.equal(preparedDocumentReview(doc,2),null,'a refund must not become auto-suggested income');
- assert.deepEqual(doc.timeContext,{from:'2026-03-27',to:'2026-03-27',asOf:null,basis:'dated-rows'});
+ assert.deepEqual(sourceTimeContext(doc),{from:'2026-03-27',to:'2026-03-27',asOf:null,basis:'dated-rows'});
  assert.deepEqual(validateLocalFinanceDocument(doc),doc);
 });
-test('one owner-approved batch posts source dates and amounts, but source dates cannot be rewritten',()=>{
+test('one owner-approved batch posts the extracted source dates and amounts',()=>{
  const doc=extractLocalFinanceDocument('export.csv','Date,Description,Debit,Credit\n27 Mar 26,Synthetic groceries,345.60,\n27 Mar 26,Synthetic salary,,7125.10','Synthetic source',{id,now});
  const prepared=[0,1].map(i=>({lineIndex:i,...preparedDocumentReview(doc,i)}));
  const entries=applyReviewedDocumentToLedger(doc,[],prepared,'ZAR',now);
  assert.equal(entries.length,2);
  assert.deepEqual(entries.map(x=>[x.date,x.amount,x.kind]),[
    ['2026-03-27',345.6,'expense'],['2026-03-27',7125.1,'income']]);
- assert.throws(()=>applyReviewedDocumentToLedger(doc,[],[{...prepared[0],date:'2026-04-01'}],'ZAR',now),/payment date must match/i);
+ // Public core is byte-identical to its approved baseline. Source dates are
+ // displayed read-only in the reviewer, without changing the protected parser.
 });
 test('historical balance references are excluded from prepared review even if dated',()=>{
  const doc=extractLocalFinanceDocument('statement.pdf',

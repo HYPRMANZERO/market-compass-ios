@@ -2,7 +2,7 @@ import {useState} from 'react';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
 import {isReviewableLine} from '@/lib/reviewInbox';
-import {timeContextLabel} from '@/lib/documentTimeContext';
+import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {
   EXPENSE_CATEGORIES,EXPENSE_KINDS,
@@ -132,8 +132,8 @@ export default function ReviewedDocumentLedger({
       </p>:null}
     <div className="mt-3 rounded-xl border border-border bg-muted/35 p-3 text-[11px] leading-5">
       <strong className="block text-foreground">Source date coverage</strong>
-      <p className="mt-1 text-muted-foreground">{timeContextLabel(document.timeContext)} · {document.timeContext?.basis==='explicit-period'?'Explicit statement/reporting period':document.timeContext?.basis==='dated-rows'?'Range of dated transaction rows':document.timeContext?.basis==='explicit-as-of'?'Document as-of date only':'No source reporting period'}</p>
-      {document.timeContext?.asOf&&<p className="mt-1 text-muted-foreground">Historical document as of {document.timeContext.asOf} · not a current balance</p>}
+      <p className="mt-1 text-muted-foreground">{timeContextLabel(sourceTimeContext(document))} · {sourceTimeContext(document)?.basis==='explicit-period'?'Explicit statement/reporting period':sourceTimeContext(document)?.basis==='dated-rows'?'Range of dated transaction rows':sourceTimeContext(document)?.basis==='explicit-as-of'?'Document as-of date only':'No source reporting period'}</p>
+      {sourceTimeContext(document)?.asOf&&<p className="mt-1 text-muted-foreground">Historical document as of {sourceTimeContext(document)?.asOf} · not a current balance</p>}
       <p className="mt-1 text-muted-foreground">Reporting periods do not date individual undated transactions. No unapproved amounts affect Spend.</p>
     </div>
     {prepared.length>0&&<button type="button" disabled={!canApply} onClick={selectPrepared}
