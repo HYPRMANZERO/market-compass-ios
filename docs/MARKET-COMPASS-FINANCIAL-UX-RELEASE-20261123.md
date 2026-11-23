@@ -17,12 +17,12 @@
 - 205 tests passed in each of three full Node test runs.
 - An isolated release-candidate GitHub Pages build and offline service worker were produced at BASE_PATH=/market-compass-ios/.
 - Three actual Chromium mobile-emulation release-gate passes on each release candidate; synthetic vault creation, encrypted document import, local proof of lock/unlock, wrong-password rejection, export fallback and cross-origin synthetic encrypted-vault restore tested.
-- Tests use fabricated documents and temporary loopback origins; no customer's original PWA, real encrypted backup, trusted Safari gesture or HYPRBOX gateway credentials are exercised by those release tests.
+- Tests use fabricated documents and temporary loopback origins; no customer's original PWA, real encrypted backup, trusted Safari gesture or private desktop gateway credentials are exercised by those release tests.
 - CI configuration now runs the full regression suite before static publication and in the Safari launch branch validation workflow.
 
 ## Unresolved gates and product limits
 - Physical iPhone Safari restore in the **original** PWA and actual Save to Files have not been established. A dashboard showing zero records does not prove an imported encrypted backup was restored to that origin. Never clear website data.
-- HYPRBOX assistant and Ollama checks must remain authenticated private gateway-only. No Ollama public binding.
+- private desktop assistant and Ollama checks must remain authenticated private gateway-only. No Ollama public binding.
 - Official read-only bank consent integrations require a real provider contract, account scopes, revocation/expiry, transaction mapping and duplicate reconciliation; not active in this release. Order drafts are non-executable research notes.
 - Files with image-only scanned pages require a separate offline text extractor. Bank statements with missing per-transaction dates must remain unposted, even when their statement period is known.
 - The browser gate is synthetic desktop Chromium, not a claim of Safari native acceptance or commercial launch readiness.

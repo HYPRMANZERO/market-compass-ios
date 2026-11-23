@@ -40,7 +40,7 @@ Tests mock Ozow and verify amount limits, checkout URL allowlisting, origin rule
 From Windows PowerShell:
 
 ```powershell
-cd C:\Users\liamd\market-compass-ios\workers\payment-gateway
+cd C:\Users\<Windows-user>\market-compass-ios\workers\payment-gateway
 npx wrangler login
 npx wrangler deploy
 ```

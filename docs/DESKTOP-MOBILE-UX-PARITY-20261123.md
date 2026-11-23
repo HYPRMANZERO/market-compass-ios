@@ -6,7 +6,7 @@ On mobile, the hero's View accounts button opens the existing account actions di
 
 The original Pages PWA also uses the same four mobile tabs (Home, Markets, AI, Menu). Debt, Spend, Drafts, bank documents and Vault & backup remain available via the shared Menu, while the desktop sidebar retains direct links to those pages.
 
-**Security/data:** These are UI-only changes. Distinct browser origins retain distinct encrypted vaults. No user records, backups or private credentials were read, migrated or uploaded. The authenticated HYPRBOX Qwen 3.5 4B and gateway isolation remain unchanged. The GitHub Pages edition remains a static PWA; it does not bundle Ollama or the desktop token.
+**Security/data:** These are UI-only changes. Distinct browser origins retain distinct encrypted vaults. No user records, backups or private credentials were read, migrated or uploaded. The authenticated private desktop Qwen 3.5 4B and gateway isolation remain unchanged. The GitHub Pages edition remains a static PWA; it does not bundle Ollama or the desktop token.
 
 **Verification:** Typecheck, full Node tests, production Vite build, offline service worker and isolated Chromium browser release gates with synthetic account data. Browser test explicitly checks that phone/desktop hero values agree, both desktop menu buttons work, View accounts navigates to the debt editor, and return to phone layout remains usable. The automated browser is not physical iPhone Safari; request an owner spot-check before calling the UX release fully accepted.
 

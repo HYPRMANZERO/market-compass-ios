@@ -7,10 +7,10 @@ encrypted vault data, or browser tokens in Git.
 
 ## What is shared and what is not
 
-- HYPRBOX runs the private Ollama bridge on **127.0.0.1:8788** with its existing
+- private desktop runs the private Ollama bridge on **127.0.0.1:8788** with its existing
   DPAPI-protected bearer token and read-only source adapters.
-- HYPRSLAP, iPhone, and HYPRBOX join the **same private Tailscale tailnet**.
-  On HYPRBOX, Tailscale Serve can provide a private HTTPS `*.ts.net` URL to
+- authorized management laptop, iPhone, and private desktop join the **same private Tailscale tailnet**.
+  On private desktop, Tailscale Serve can provide a private HTTPS `*.ts.net` URL to
   that loopback bridge. Use **Serve**, never Funnel.
 - In the original PWA's **Assistant → Desktop Ollama**, save the exact `*.ts.net`
   origin and the separate desktop AI bearer token in its encrypted vault.
@@ -27,7 +27,7 @@ encrypted vault data, or browser tokens in Git.
 
 1. Install and sign in to Tailscale on all three devices. Enable MagicDNS and
    HTTPS certificates for the tailnet. Verify tailnet ACLs restrict access.
-2. Keep the current desktop AI bridge bound to loopback only. From HYPRBOX
+2. Keep the current desktop AI bridge bound to loopback only. From private desktop
    PowerShell, verify `tailscale version` and `tailscale status`.
 3. With the desktop bridge healthy, run `tailscale serve --bg 8788` to expose
    the *existing* local API privately. Check `tailscale serve status` and record

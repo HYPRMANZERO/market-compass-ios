@@ -26,7 +26,7 @@ Thus UI-only PRs can be released without downgrading tested public parser behavi
 
 The owner confirmed both iPhone PWAs successfully export encrypted `.json` backups into the device's Files app. That verifies the native export step, **not** successful decryption/restore; a synthetic browser restore was tested separately. Both live PWA origins must retain their independent IndexedDB vaults and existing URLs. Do not clear site data, uninstall the Home Screen app or restore one origin's backup into the other without explicitly choosing which data to keep.
 
-The public PWA follows GitHub Pages `pages.yml` on `main`; the private ngrok PWA uses a separate static directory behind authenticated HYPRBOX gateway with mandatory Ollama loopback. Use protected `MC_PWA_OUT_DIR` staging for private build, then preserve previous static directory on atomic promotion and run `tools/check-market-compass-private-ui.ps1` after promotion.
+The public PWA follows GitHub Pages `pages.yml` on `main`; the private ngrok PWA uses a separate static directory behind authenticated private desktop gateway with mandatory Ollama loopback. Use protected `MC_PWA_OUT_DIR` staging for private build, then preserve previous static directory on atomic promotion and run `tools/check-market-compass-private-ui.ps1` after promotion.
 
 ## Synthetic visual preview
 

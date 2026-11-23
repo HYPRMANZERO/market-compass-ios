@@ -1,39 +1,66 @@
-# Market Compass — GitHub Pages installation package
+# Market Compass — encrypted, local-first Ionic PWA
 
-This is a **sanitized web-only export** of Market Compass's latest encrypted CompactVault and daily Files backup edition. No personal financial snapshots, private trade history, ledger database, uploaded documents or backend secrets are included.
+Market Compass is an offline-capable financial workspace and **Ionic/React progressive web app** for reviewing manually entered debt, budgets, spending and financial documents, with a private, optionally connected AI assistant named **Compass**.
 
-## Create repository
+**Original public PWA:** https://hyprmanzero.github.io/market-compass-ios/
+**Release source:** [main](https://github.com/HYPRMANZERO/market-compass-ios/tree/main)
+**Publish workflow:** [GitHub Pages](https://github.com/HYPRMANZERO/market-compass-ios/actions/workflows/pages.yml)
 
-1. Sign in to GitHub and create **a public repository** named `market-compass-ios` (do not select a license, README, or gitignore; this ZIP already contains them).
-2. Extract this ZIP on your computer.
-3. Open a terminal inside the extracted folder and run:
+This is a living project, **not** a ZIP-install template, Expo application, native iOS/Android binary, online bank dashboard, or bank-connected adviser. This repository contains no private server keys or personal financial records by design.
+
+## What works in the public PWA
+
+- Local AES-GCM password-encrypted browser vault, explicit encrypted JSON backup/restore, offline shell, manual accounts, financial summaries, debt plans and saved market references.
+- Owner-selected documents, PDF/password support and review-before-recording workflows. Dates, historical statement balances and individual transaction amounts remain separate evidence; a saved source does not automatically post Spend entries.
+- Ionic banking-style Home/Menu navigation, clickable account entries, spend and document views, compact chat and built-in browser microphone/speech support when the browser allows it.
+- **Compass** typed questions, deterministic read-only financial calculations, navigation, and Jarvis-derived *safe* voice/text intents: time/date, vetted click-to-open websites and voluntary search links. No arbitrary shell commands or automatic Windows app launching.
+- Optional owner-configured **private** AI connection for eligible, authenticated private-network setups. The public GitHub Pages deployment does **not** automatically access the protected ngrok gateway, private model, bank data or a server.
+
+**Missing data is unknown, not zero or live.** Owner-entered balances are not bank-verified, and offline market references are not executable quotes.
+
+## Separate private AI edition
+
+A separately authenticated private PWA can reach a gateway on an authorized desktop through an outbound-established HTTPS tunnel; authorized management devices may also use Tailscale. These are separate transport paths, not separate AI models. The model is local to the private desktop and must never be exposed directly to the internet.
+
+The standalone **llama.cpp + existing Qwen 4B GGUF** provider has been tested as a **canary**, but its production cutover is a separate gated release. The currently live private gateway may still use its earlier inference service until full compatibility and rollback validation pass. No cloud-model fallback is permitted to impersonate Compass.
+
+Encrypted vaults on different browser origins/devices **do not silently synchronize**. Back up each origin separately and use intentional encrypted restore when appropriate. Do not share vault passwords, PII or API keys via issues or Git.
+
+## Bank integration status — NOT CONNECTED
+
+No official bank OAuth connection or active bank-data feed is deployed. **Investec** and **Nedbank** are candidates for future consent-based, read-only API onboarding; neither integration has been started or authorized. Statements and manually entered accounts are **not** evidence of live bank access.
+
+See [Bank integration status and consent gates](docs/ASSISTANT-MOBILE-AND-BANK-READINESS-20261123.md). No payments, transfers, brokerage orders, unrestricted filesystem access or autonomous expense posting may occur without a separate, explicitly approved implementation.
+
+## Install the original PWA
+
+On an iPhone, open the public HTTPS URL in Safari and use **Share → Add to Home Screen**. On a desktop/laptop, use the link in a modern browser. Unlock or create a vault using a strong password, and explicitly export and verify an encrypted backup using the device's Files/download flow.
+
+**Real iPhone acceptance remains open.** Automated typechecks, synthetic browser tests and successful GitHub Pages deployments are not physical Safari testing. The release audit previously recorded `launchReady=false` with **eight manual acceptance items still open**, including real-device visual/safe-area and offline behavior. See [the release-candidate acceptance gate](docs/PUBLIC-BOOTSTRAP-RELEASE-CANDIDATE-20261123.md) and [the safety test plans](docs/MARKET-COMPASS-FINANCIAL-UX-RELEASE-20261123.md). Do not clear existing browser site data to test upgrades; first save a current encrypted backup for **each** origin.
+
+## Build and verification
+
+Requirements: Node.js 24, pnpm 10, and a supported browser for local visual tests.
 
 ```sh
-git init -b main
-git add .
-git commit -m "Add Market Compass local-first PWA"
-git remote add origin https://github.com/HYPRMANZERO/market-compass-ios.git
-git push -u origin main
+pnpm install --frozen-lockfile
+pnpm --filter @workspace/market-compass typecheck
+node --experimental-strip-types --test tests/*.test.mjs
+BASE_PATH=/market-compass-ios/ pnpm --filter @workspace/market-compass build
+node scripts/prepare-offline-shell.mjs
+node scripts/browser-release-gate.mjs
 ```
 
-4. In the repository, open **Settings → Pages → Build and deployment → Source → GitHub Actions**.
-5. Open **Actions → Publish Market Compass PWA** and confirm the deployment succeeds.
-6. Visit `https://hyprmanzero.github.io/market-compass-ios/` in Safari on your iPhone.
-7. In Safari, tap **Share → Add to Home Screen → Add**.
-8. Launch it from your Home Screen. Create a strong vault password and export an encrypted backup to Files before entering important data.
+PowerShell users can set `$env:BASE_PATH = '/market-compass-ios/'` instead of prefixing the command. The browser gate uses a disposable profile, fabricated data and loopback host. Build output paths for the private gateway must be approved; the build script guards the active deployment directory.
 
-## Local-only boundary
+**No `ios/` or `android/` native projects are committed.** Capacitor configuration and build/sync scripts alone do not produce a native installable app. No App Store/TestFlight distribution or free Apple developer iOS IPA is represented as complete. The first-launch native path is explicitly deferred.
 
-This static site can run the local encrypted workspace and daily snapshots, but GitHub Pages cannot run Market Compass's Node API, SQLite ledger, Python analysis engine, live price feeds, or broker integrations. The interface marks this limitation; do not mistake failed API requests for live prices. The app shell can reopen offline after a successful install, but no live backend data is available.
+## Architecture, status and audit trail
 
-AES-256-GCM encrypted workspace data is stored in browser IndexedDB and is bound to your iPhone/browser installation. The app cannot silently write encrypted files into iOS Files while closed; daily snapshot scheduling occurs while the PWA is open, and Save to Files requires user interaction.
+- [Jarvis source audit](docs/JARVIS-SOURCE-AUDIT-20261123.md) and [Ionic integration boundaries](docs/COMPASS-JARVIS-IONIC-INTEGRATION-20261123.md)
+- [Current security/release hardening and branch inventory](docs/RELEASE-HARDENING-20261123.md)
+- [Document review UX](docs/EVIDENCE-REVIEW-UX-20261123.md) and [desktop/mobile design parity](docs/DESKTOP-MOBILE-UX-PARITY-20261123.md)
 
-GitHub Pages publishes a **public** web application. Do not commit your vault exports, secrets, sensitive market analysis, identity information or financial snapshots. Use a password unique to this vault; keep your backups safe. A PWA cannot provide Expo's native Keychain/Face ID features, and browser data can be erased by the OS or user.
+The older per-feature release documents are historical checkpoints, not a claim that all work is accepted. **Only commits published on `main` appear at the original GitHub Pages URL.** Private feature branches are not public-site releases.
 
-## Update
-
-Commit and push changes to `main`; GitHub Actions rebuilds the PWA automatically. The workflow expects the repository name `market-compass-ios` for the Vite base path; change `BASE_PATH` if the repository name changes.
-
-## Verification status
-
-The production build is configured in Actions but not yet verified on GitHub. If the build fails, check the Actions log; do not assume the site is live until the workflow succeeds and the URL opens in Safari.
+This is a public repository. Keep credentials, precise device names, local usernames/paths, encrypted backups and personal data out of new commits. Older Git history may retain historical identifiers; editing the current tree does not erase Git history.

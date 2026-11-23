@@ -36,7 +36,7 @@ Your existing `tailscale serve --bg 8788` configuration is persistent as long as
 Use your normal Windows account (not an elevated Administrator window) for the Windows startup setup. In PowerShell:
 
 ```powershell
-cd C:\Users\liamd\financial-advisor
+cd C:\Users\<Windows-user>\financial-advisor
 git pull origin main
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\setup-market-compass-ai.ps1
 ```

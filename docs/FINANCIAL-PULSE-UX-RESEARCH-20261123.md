@@ -38,10 +38,10 @@ The visual design retains Market Compass's existing deep-green + parchment/gold 
 
 ## Roadmap after this change (prioritized)
 
-1. **Unified source freshness**: distinguish private owner-entered values, reviewed document excerpts, agent-visible HYPRBOX metadata and any future provider-signed account snapshots; show record dates, status and missing/unknown coverage without merging unlike evidence.
+1. **Unified source freshness**: distinguish private owner-entered values, reviewed document excerpts, agent-visible private desktop metadata and any future provider-signed account snapshots; show record dates, status and missing/unknown coverage without merging unlike evidence.
 2. **Cross-document reconciliation**: deterministic normalized transaction identities where provider IDs exist, source/time/amount match suggestions where not; review duplicate-looking fees and transfer reversals explicitly. No silent posting.
 3. **Recurring bill planner**: only after recurring patterns are approved by owner; do not present forecasts from incomplete statement history as verified balances. Later consider PocketSmith-style bill calendar.
-4. **Direct read-only bank pilot**: identify a single eligible South African institution, acquire approved OAuth sandbox and account-data scope, register a strict authenticated HYPRBOX callback with state/PKCE, token expiry/revocation and DPAPI custody. No client-side bank passwords, no payment scopes or raw tokens in Ollama. User consent and sandbox entitlement required.
+4. **Direct read-only bank pilot**: identify a single eligible South African institution, acquire approved OAuth sandbox and account-data scope, register a strict authenticated private desktop callback with state/PKCE, token expiry/revocation and DPAPI custody. No client-side bank passwords, no payment scopes or raw tokens in Ollama. User consent and sandbox entitlement required.
 5. **High-volume import/OCR and cross-origin vault migration**: per-page streaming, review queues, encrypted snapshot backup and non-destructive restore on Safari, independent origin preservation; do not assume arbitrary background filesystem or mailbox scanning is available to Safari.
 
 ## Release discipline

@@ -35,7 +35,7 @@ New independent unit tests and synthetic Chromium browser interaction verify saf
 
 ## Not yet installed or permitted
 
-The Jarvis Python desktop process, live Vosk voice model, pyttsx3 desktop audio, music-link library, Windows app discovery/launching, and NewsAPI are **not** activated as an agent API. The authenticated standalone model canary uses `llama.cpp` with existing Qwen 4B GGUF on HYPRBOX, but its live ngrok cutover is a separate security and user-acceptance gate. The original public GitHub Pages edition must not directly access the owner ngrok private API.
+The Jarvis Python desktop process, live Vosk voice model, pyttsx3 desktop audio, music-link library, Windows app discovery/launching, and NewsAPI are **not** activated as an agent API. The authenticated standalone model canary uses `llama.cpp` with existing Qwen 4B GGUF on private desktop, but its live ngrok cutover is a separate security and user-acceptance gate. The original public GitHub Pages edition must not directly access the owner ngrok private API.
 
 ## Subsequent gated work
 
@@ -43,6 +43,6 @@ The Jarvis Python desktop process, live Vosk voice model, pyttsx3 desktop audio,
 2. Replace Jarvis's Ollama chat client with an authenticated localhost `llama.cpp` adapter; reuse Compass Core's existing read-only tools and encrypted memory, not a new unprotected AI or duplicate vault.
 3. Provide a strict per-action scope matrix and a local confirmation UI before app launch, email, filesystem, notification or OS control. Never put unrestricted command execution behind the public PWA, Tailscale Serve or ngrok.
 4. Preserve dates, amounts, debit/credit classification, encrypted PDF/payslip/receipt parsing and owner approval. Synthetic-only scikit-learn second opinions must abstain on uncertain evidence and never silently save labels or transactions.
-5. Run real HYPRBOX microphone/device tests and owner iPhone Safari acceptance before claiming Siri/Jarvis equivalence.
+5. Run real private desktop microphone/device tests and owner iPhone Safari acceptance before claiming Siri/Jarvis equivalence.
 
 **No automation, banking access, trading, payments, device scanning, or unrestricted app-launch permissions were granted by this archive upload.**

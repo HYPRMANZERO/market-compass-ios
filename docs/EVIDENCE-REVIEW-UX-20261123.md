@@ -25,7 +25,7 @@ Reference product features, markets, access and prices may change. Market Compas
 ## Test evidence
 
 - Five deterministic synthetic tests cover account statement date, approval IDs, nontransaction references, unknown amount, legacy PDFs, a malformed date, legitimate same-looking fees, privacy and no mutation.
-- Both PWA test suites, TypeScript and production Vite builds run from distinct HYPRBOX development worktrees, not the private gateway's active PWA directory.
+- Both PWA test suites, TypeScript and production Vite builds run from distinct private desktop development worktrees, not the private gateway's active PWA directory.
 - Private Chromium gate selects two synthetic files, saves one, skips one and verifies the Home inbox displays exactly one source document with unapproved candidate excerpts, without writing the Spend ledger.
 - Public Chromium gate checks that a new vault has an empty inbox, a reachable Spend review link, and no 390px horizontal overflow.
 - Recheck secure ngrok asset routing and iPhone Safari manually after any static promotion. Retain prior encrypted JSON Files backups for both origins. Browser test is NOT physical iPhone acceptance.

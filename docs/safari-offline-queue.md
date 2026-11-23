@@ -3,7 +3,7 @@
 ## Goal and current boundary
 
 The owner is using an iPhone 11 with Safari and two already-installed web apps.
-They cannot currently install additional iOS apps. HYPRBOX can be running at
+They cannot currently install additional iOS apps. private desktop can be running at
 home, but the iPhone may have no network connection or may be unable to reach
 a private Tailscale-only endpoint.
 
@@ -22,7 +22,7 @@ that can be sent **after reconnecting**, not fictitious persistent access.
    - Treat salary, incentive, hourly rate, normal costs, exceptional months and
      historical statements as owner-reported *planning figures*.
    - The existing backend financial mirror remains separate: saving a draft
-     on this iPhone does **not** send anything to HYPRBOX or the other PWA.
+     on this iPhone does **not** send anything to private desktop or the other PWA.
 2. **Offline question queue** in Assistant:
    - Locally answer known read-only finance questions when possible.
    - For unknown or missing historical-source questions, offer local queueing.
@@ -33,7 +33,7 @@ that can be sent **after reconnecting**, not fictitious persistent access.
    - Questions **expire after seven days for dispatch**; expired items remain
      visible until the owner removes them. Never silently discard a queue.
    - No request is automatically transmitted on reconnection, browser resume
-     or background sync. The owner must unlock the PWA, connect to HYPRBOX,
+     or background sync. The owner must unlock the PWA, connect to private desktop,
      review the question and tap **Send now · read-only**.
    - A queue entry is removed only after the bridge returns an authenticated,
      validated read-only agent response.
@@ -48,14 +48,14 @@ that can be sent **after reconnecting**, not fictitious persistent access.
 
 ## What is and is not mirrored
 
-| Item | PWA vault | HYPRBOX shared owner profile | Second PWA |
+| Item | PWA vault | private desktop shared owner profile | Second PWA |
 |---|---|---|---|
 | New owner budget draft | Encrypted on the device where saved | Not automatically transferred | Not automatically transferred |
-| Existing HYPRBOX budget (once owner imports) | Read-only rendered reference | Encrypted authoritative file | Same read-only reference when connected |
+| Existing private desktop budget (once owner imports) | Read-only rendered reference | Encrypted authoritative file | Same read-only reference when connected |
 | Offline read-only question queue | Encrypted and origin-specific | No server task exists until owner sends | Its own encrypted queue |
 | Agent answer after owner sends | Visible in current PWA conversation | Read-only agent and approved memory behaviour | Not automatically copied to another vault |
 
-The original PWA uses private **Tailscale Serve** for its HYPRBOX AI link.
+The original PWA uses private **Tailscale Serve** for its private desktop AI link.
 The second PWA uses the existing protected **ngrok gateway**. Without an
 installed Tailscale app, the user's iPhone can still use the browser-accessible
 protected ngrok route when online, but the Tailscale-only route cannot be
@@ -63,7 +63,7 @@ reached through the public internet.
 
 ## Future: real remote supervisory device commands (NOT implemented)
 
-A future HYPRBOX/HYPRSLAP agent can offer owner-approved command classes:
+A future private desktop/authorized management laptop agent can offer owner-approved command classes:
 - **Read-only:** status of allowed services, logs, document inventory,
   source freshness, health checks; no arbitrary full-disk reads.
 - **Limited maintenance:** pre-registered, parameter-validated scripts only,
@@ -111,5 +111,5 @@ review**, never promises of continuous background operation.
 - No production success claims until tests on both real devices pass.
 
 **Status:** application code implemented in PRs; a GitHub merge does not
-remotely update already-served HYPRBOX static assets or install private
+remotely update already-served private desktop static assets or install private
 owner financial data. Actual offline/on-device acceptance remains pending.

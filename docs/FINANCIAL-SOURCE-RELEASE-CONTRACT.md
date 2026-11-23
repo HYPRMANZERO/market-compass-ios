@@ -5,7 +5,7 @@
 ## Edition roles
 
 - **Original owner PWA:** `main` → GitHub Pages at `https://hyprmanzero.github.io/market-compass-ios/`. This is an owner-use **installation**, not a privately hosted website; static files are publicly accessible. The unlocked financial workspace and encrypted vault reside on the owner's device, not in public source code. New changes must be validated and backed up before promotion.
-- **Commercial/public-release testing PWA:** `feature/ios-safari-launch-2026-11-26` → owner-authenticated HYPRBOX/ngrok staging route, with a distinct device/browser vault. This is a testing channel, **not yet an App Store or publicly available commercial release**. No production user credentials or real-account data belong in synthetic public tests.
+- **Commercial/public-release testing PWA:** `feature/ios-safari-launch-2026-11-26` → owner-authenticated private desktop/ngrok staging route, with a distinct device/browser vault. This is a testing channel, **not yet an App Store or publicly available commercial release**. No production user credentials or real-account data belong in synthetic public tests.
 - Different Safari/Home Screen origins and storage containers are **not synchronized automatically**. Never clear either storage origin or replace a vault to make the interfaces look aligned. Vault migration requires explicit, verified encrypted backup and restore.
 
 ## Shared financial-source rules
@@ -20,7 +20,7 @@ The following modules must be **identical** in owner and staging editions, enfor
 4. If dates/column meanings are ambiguous, reject or mark rows as unresolved; do not guess amounts, debit versus credit, missing months, duplicates, bank verification or current balances. Source sign conventions are provider-specific. Deduplication hints do not imply two equal fees are duplicate payments.
 5. Mask account numbers, South African ID numbers, email addresses, phone numbers and identifiers in retained excerpts. This is a defence-in-depth rule and must be tested with synthetic examples; client-side regex masking is **not a comprehensive data-loss-prevention guarantee**. Full source PDFs and temporary PDF passwords remain local and are not saved by the current importer.
 6. Document-derived historical evidence may update the **evidence dashboard** after review/save, but only an explicit, individually approved transaction may update the **Spend ledger and salary-cycle totals**. An owner-confirmed **current account** entry in Debt Plan must be distinguished from an older statement figure.
-7. All AI-generated reasoning in the private Assistant must use the authenticated HYPRBOX Ollama path. Deterministic local parsing is not itself AI; no other model should silently take over financial document interpretation. Optional Ollama enrichment would require an explicit, data-minimising consent flow and separate validation.
+7. All AI-generated reasoning in the private Assistant must use the authenticated private desktop Ollama path. Deterministic local parsing is not itself AI; no other model should silently take over financial document interpretation. Optional Ollama enrichment would require an explicit, data-minimising consent flow and separate validation.
 8. This phase has a **64 MiB per-PDF browser-memory safeguard** and bounded encrypted excerpt retention; it removes the former fixed 12-page limit, **not all device or storage limits**. Scanned/image-only PDFs require a future offline OCR workflow.
 
 ## Future official bank integration

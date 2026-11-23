@@ -33,6 +33,16 @@ jobs:
           staging_sha=$(git rev-parse FETCH_HEAD)
           git fetch --no-tags origin "$base_ref"
           base_sha=$(git rev-parse FETCH_HEAD)
+          # Keep the old parity references visible and measurable without
+          # automatically merging them into the current protected main.
+          read -r main_only staging_only < <(git rev-list --left-right --count "${base_sha}...${staging_sha}")
+          echo "Parity comparison: base ${base_ref} (${base_sha:0:7}), staging ${staging_ref} (${staging_sha:0:7}), base-only ${main_only}, staging-only ${staging_only}."
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            echo "### Financial parser parity refs" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Base: \`${base_ref}\` at \`${base_sha:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Staging: \`${staging_ref}\` at \`${staging_sha:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Divergence: ${main_only} base-only and ${staging_only} staging-only commits; not proof of source or semantic parity." >> "$GITHUB_STEP_SUMMARY"
+          fi
           changed_count=0
           baseline_drift=0
           for name in vehicleFinance documentIntelligence bankStatementParser financialSourceNormalizer standardBankPdfLayout localFinanceDocs localPdfText reviewedDocumentLedger; do

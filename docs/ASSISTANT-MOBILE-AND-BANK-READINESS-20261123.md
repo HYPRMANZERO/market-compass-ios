@@ -21,8 +21,8 @@ Current official candidate pathways (eligibility is not authorization):
 ## Incremental implementation and gates
 
 1. Confirm eligible banking provider, official developer contract, approved read-only product scope and test/sandbox tenant. No passwords, OTPs, API tokens or bank data belong in Git, AI prompts or chat logs.
-2. On HYPRBOX's **authenticated private gateway**, separately add allowlisted OAuth callback, CSRF state, PKCE as applicable, issuer/audience, expiration and redirect checks, replay protection and structured disconnect/revocation. Do not expose Ollama, the bridge, or gateway secrets.
-3. Keep bank tokens/refresh tokens on HYPRBOX protected by DPAPI and file ACLs; never in a public PWA bundle or either browser vault. Mask all source account identifiers before UI.
+2. On private desktop's **authenticated private gateway**, separately add allowlisted OAuth callback, CSRF state, PKCE as applicable, issuer/audience, expiration and redirect checks, replay protection and structured disconnect/revocation. Do not expose Ollama, the bridge, or gateway secrets.
+3. Keep bank tokens/refresh tokens on private desktop protected by DPAPI and file ACLs; never in a public PWA bundle or either browser vault. Mask all source account identifiers before UI.
 4. Convert consented account/transaction data through `financialSourceNormalizer.ts`. The private variant now matches the public normalizer for direction: positive absolute debits are marked **outgoing** only when explicitly mapped by the adapter; missing direction is **unclassified**, never guessed from sign. Invalid dates, other currency, subcent values and account-number labels are rejected.
 5. Preserve posted/pending flags, account separation, page cursors, provider transaction IDs and observed timestamps on the server. Do not treat a matchHint as a transaction identity: identical fees can be legitimate separate transactions.
 6. Normalize into **pending-owner-review** candidates; do not silently modify encrypted Spend, debts or balances, and do not add payment/write endpoints. Report stale/expired/revoked/unknown feeds honestly.
