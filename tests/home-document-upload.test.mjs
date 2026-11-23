@@ -7,7 +7,8 @@ test('Home keeps earlier mobile overview and displays a first-class document upl
   const app=await read('App.tsx');
   const home=app.slice(app.indexOf('function Overview('),app.indexOf('function Metric('));
   assert.match(home,/function Overview\(\{ data, setData \}/);
-  assert.ok(home.indexOf('id="mc-home-upload"')<home.indexOf('<MobileOverview'));
+  assert.ok(home.indexOf('<MobileOverview')<home.indexOf('id="mc-home-upload"'),
+    'The main mobile banking overview should appear before the optional uploader');
   assert.match(home,/Upload financial documents/);
   assert.match(home,/<MobileOverview/);
   assert.match(home,/<HomeFinancialEvidence/);

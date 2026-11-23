@@ -416,7 +416,7 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
         <div className="flex min-h-[49px] items-center gap-3">
           <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-bold leading-5">Market Compass</div>
+            <div className="truncate text-[16px] font-extrabold tracking-[-.02em] leading-5">Market Compass</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
               <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
@@ -439,7 +439,7 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
           const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label === 'Expenses' ? 'Spend' : label;
           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-            className={`relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+            className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
             <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
             <span className="text-[10px] font-semibold leading-none">{short}</span>
             {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
@@ -461,7 +461,7 @@ function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string;
 }
 
 function Panel({ children, className = '', title, action }: { children: ReactNode; className?: string; title?: string; action?: ReactNode }) {
-  return <section className={`min-w-0 overflow-hidden rounded-2xl border border-border bg-card ${className}`}>
+  return <section className={`mc-ui-panel min-w-0 overflow-hidden rounded-[22px] border border-border bg-card shadow-sm ${className}`}>
     {(title || action) && <div className="flex min-h-12 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
       <h2 className="text-[13px] font-semibold tracking-[.01em]">{title}</h2>{action}
     </div>}<div>{children}</div>
@@ -499,7 +499,14 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
-    <details id="mc-home-upload" className="mb-4 rounded-2xl border border-primary/30 bg-card p-3 shadow-sm sm:p-4">
+    <div className="mb-5 lg:hidden">
+      <MobileOverview currency={data.currency} totalDebt={debtTotal}
+        accountsCount={data.accounts.length} accounts={data.accounts}
+        documentsCount={docs.length} approvedEntryCount={entries.length}
+        pendingDrafts={openDrafts} market={feed}
+        fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
+    </div>
+    <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Upload size={20}/></span>
         <span className="min-w-0 flex-1">
@@ -531,16 +538,6 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
         />
       </div>
     </details>
-    <div className="lg:hidden">
-      <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
-        pendingDrafts={openDrafts} market={feed} fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
-      <Link href="/expenses"
-        aria-label="Go to Spend to import private financial files"
-        className="mb-4 mt-3 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3 text-[12px] font-semibold shadow-sm">
-        <span>{data.ownerBudgetDraft?'View or update my private finance imports':'Import private financial files from iPhone Files'}</span>
-        <ArrowRight size={17} className="shrink-0" />
-      </Link>
-    </div>
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
@@ -1248,7 +1245,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
 function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const { data, setData } = vault;
   const pending = data.drafts.filter((draft) => draft.status === 'pending').length;
-  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><BackupControls vault={vault} /><Switch>
+  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><Switch>
     <Route path="/"><Overview data={data} setData={setData} /></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
@@ -1256,7 +1253,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} /></Route>
     <Route component={NotFound} />
-  </Switch></AppShell>
+  </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
     {vault.locking&&<div role="alertdialog" aria-modal="true" aria-label="Securing encrypted workspace"
       className="fixed inset-0 z-[100] grid place-items-center bg-black/70 px-5">
       <div className="w-full max-w-sm rounded-2xl bg-card p-5 text-center text-foreground shadow-xl">

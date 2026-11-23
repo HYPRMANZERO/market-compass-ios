@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
 
+// Bootstrap 5.3 grid only: locally bundled, no CDN, Bootstrap JS, or global
+// buttons/forms/reboot rules. Tailwind remains the design-system owner.
+import './vendor/bootstrap/bootstrap-grid.min.css';
 import './index.css';
 
 createRoot(document.getElementById('root')!, {
