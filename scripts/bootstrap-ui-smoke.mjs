@@ -185,6 +185,20 @@ try{
     return [...review.querySelectorAll('button[aria-pressed]')].some(x=>
       x.textContent.trim()==='Previous'&&x.getAttribute('aria-pressed')==='true');
   }),'previous salary cycle selected');
+  const reviewInbox=await js(function(){
+    const section=document.querySelector('.mc-evidence-inbox');
+    if(!section)return null;
+    const counts=[...section.querySelectorAll('[aria-label="Review counts"] strong')].map(el=>Number(el.textContent));
+    return {counts,empty:section.textContent.includes('Nothing imported yet'),
+      hasReviewLink:[...section.querySelectorAll('a')].some(a=>a.getAttribute('href')?.endsWith('/expenses')),
+      noOverflow:document.documentElement.scrollWidth<=innerWidth+1};
+  });
+  assert.ok(reviewInbox,'evidence review inbox must be visible on public Home');
+  assert.deepEqual(reviewInbox.counts,[0,0,0],'new encrypted vault cannot invent evidence');
+  assert.equal(reviewInbox.empty,true);
+  assert.equal(reviewInbox.hasReviewLink,true);
+  assert.equal(reviewInbox.noOverflow,true);
+  console.log('PASS: empty evidence inbox, source disclosures and mobile fit');
   console.log('PASS: financial pulse, cycle navigation, consented evidence and missing-data disclosure');
   console.log('PASS: local Bootstrap grid, private dashboard, iPhone viewport, six tabs');
   await js(function(){
