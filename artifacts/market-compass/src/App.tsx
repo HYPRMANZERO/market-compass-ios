@@ -242,7 +242,7 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
     <div className="mx-auto w-full max-w-[390px]">
       <div className="mb-4 flex items-center gap-3 px-1">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={22}/></span>
-        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
+        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">{isFinanceEdition()?'Your private financial advisor':'Your personal AI + financial workspace'}</p></div>
       </div>
       <div className="rounded-[22px] bg-[hsl(44,33%,99%)] p-4 text-foreground shadow-[0_16px_44px_rgba(0,0,0,.12)] sm:p-6">
         <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
@@ -285,6 +285,11 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
     </div>
   </main>;
 }
+
+// The original Pages PWA is the flagship Personal+Finance edition.
+// The protected ngrok host displays the finance-only specialist; server policy is authoritative.
+const isFinanceEdition = () => typeof window !== 'undefined' &&
+  /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname);
 
 const navItems = [
   { href: '/', label: 'Overview', icon: Compass },
@@ -366,7 +371,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       <div className="flex h-full w-full flex-col border-r border-sidebar-border px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><Compass size={21} strokeWidth={1.8}/></span>
-          <span><span className="serif block text-[21px] leading-none">Market Compass</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">Personal workspace</span></span>
+          <span><span className="serif block text-[21px] leading-none">Market Compass</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">{isFinanceEdition()?'Financial advisor':'Personal + finance'}</span></span>
         </Link>
         <div className="mt-11 px-3 text-[10px] font-semibold uppercase tracking-[.22em] text-sidebar-foreground/40">Your workspace</div>
         <nav className="mt-3 space-y-1" aria-label="Desktop main navigation">
@@ -398,7 +403,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         <div className="flex min-h-[49px] items-center gap-3">
           <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-bold leading-5">Market Compass</div>
+            <div className="truncate text-[16px] font-bold leading-5">{isFinanceEdition()?'Compass Financial':'Compass Personal'}</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
               <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
@@ -409,7 +414,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         </IonToolbar>
       </IonHeader>
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
-        <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
+        <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">{isFinanceEdition()?'Financial advisor & markets':'Personal AI + finances'}</div>
         <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
           <button type="button" data-testid="desktop-header-menu" aria-label="Open Market Compass menu"
@@ -515,6 +520,11 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
+    {!isFinanceEdition() && <Link href="/assistant" aria-label="Open Compass Personal AI assistant" className="mb-5 flex items-center gap-3 rounded-[20px] border border-primary/20 bg-primary/5 px-4 py-4 shadow-sm">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Compass size={20}/></span>
+      <span className="min-w-0 flex-1"><span className="block text-[14px] font-bold">Ask Compass Personal</span><span className="mt-1 block text-[12px] leading-5 text-muted-foreground">Your everyday assistant and complete finance workspace. Ask, research, write, plan and review finances with approved private tools.</span></span>
+      <ArrowRight size={18} className="shrink-0 text-primary"/>
+    </Link>}
     <div className="mb-5 lg:hidden">
       <MobileOverview currency={data.currency} totalDebt={debtTotal}
         accountsCount={data.accounts.length} accounts={data.accounts}

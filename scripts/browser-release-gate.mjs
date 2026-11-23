@@ -228,7 +228,7 @@ async function main(){
       await waitFor(async()=>{
         if(child.exitCode!==null)throw Error('Vite preview exited');
         const r=await fetch(url);
-        return r.status===200 && (await r.text()).includes('Market Compass');
+        return r.status===200 && /(?:Market Compass|Compass Personal)/.test(await r.text());
       },'localhost-only PWA preview '+port);
       return url;
     };

@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Market Compass",
-  "short_name": "Compass",
-  "description": "Private market research and decision ledger.",
+  "name": "Compass Personal",
+  "short_name": "Personal",
+  "description": "Your private personal AI and complete finance workspace.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

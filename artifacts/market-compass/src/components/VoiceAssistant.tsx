@@ -72,7 +72,7 @@ type Props = {
   onQueueReadOnlyQuestion:(question:string)=>QueuedReadOnlyQuestion;
   onRemoveQueuedReadOnlyQuestion:(id:string)=>void;
 };
-const ideas = [
+const financeIdeas = [
   'What is my total debt?',
   'Which debt has the highest APR?',
   'How much extra can I afford?',
@@ -80,6 +80,7 @@ const ideas = [
   'What recurring expenses could I cut to improve cash flow?',
   'Open Debt Plan',
 ];
+const personalIdeas = ['Help me plan my day', 'Explain a topic simply', 'Search for the latest news', 'Review my spending', 'What is my total debt?'];
 const micAvailable = () => typeof window !== 'undefined' && Boolean((window as RecognitionWindow).SpeechRecognition || (window as RecognitionWindow).webkitSpeechRecognition);
 const voiceAvailable = () => typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 const explainError = (error: unknown) => error instanceof Error ? error.message : 'The private desktop is unreachable.';
@@ -90,7 +91,9 @@ export default function VoiceAssistant({
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', source: 'local',
-    text: 'Welcome back. I can help with your saved debt plan, affordable surplus and market history. Ask a question or tap one of the suggestions below.'
+    text: typeof window !== 'undefined' && /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
+      ? 'Welcome back to Compass Financial Advisor. Ask about your accounts, spending, debt, financial documents, markets and plans. My tools are read-only.'
+      : 'Welcome back to Compass Personal, your personal and financial assistant. Ask about daily plans, writing, research, budgeting or markets. Private actions require permission.'
   }]);
   const [query, setQuery] = useState('');
   const [recognitionSupported] = useState(micAvailable);
@@ -107,6 +110,7 @@ export default function VoiceAssistant({
     window.location.hostname.endsWith('.ts.net')
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
+  const financeEdition = typeof window !== 'undefined' && /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname);
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
@@ -233,7 +237,7 @@ export default function VoiceAssistant({
           throw Error('The desktop AI service is not responding as an authorized session.');
         if (!('modelAvailable' in payload) || payload.modelAvailable !== true) {
           const why = 'reason' in payload && typeof payload.reason === 'string'
-            ? payload.reason : 'The configured Ollama model is not available.';
+            ? payload.reason : 'The configured Compass model is not available.';
           throw Error(why);
         }
         if (!active || probeSerial.current !== id) return;
@@ -451,9 +455,9 @@ export default function VoiceAssistant({
       utterance.rate=speakingRate(settings.voicePace);
       utterance.pitch=1;
       speechUtterance.current=utterance;
-      if(preview)setVoicePreviewStatus('Starting iPhone voice preview…');
+      if(preview)setVoicePreviewStatus('Starting device voice preview…');
       utterance.onstart=()=>{
-        if(preview)setVoicePreviewStatus('Playing native iPhone voice'+
+        if(preview)setVoicePreviewStatus('Playing device voice'+
           (utterance.voice?' · '+utterance.voice.name:' · system default')+'.');
       };
       utterance.onend=()=>{
@@ -463,15 +467,15 @@ export default function VoiceAssistant({
       utterance.onerror=(event)=>{
         if(speechUtterance.current===utterance)speechUtterance.current=null;
         const code=typeof event.error==='string'?event.error:'unavailable';
-        if(preview)setVoicePreviewStatus('iPhone preview failed ('+code+
-          '). Try Use iPhone system default voice, then Preview this voice again.');
+        if(preview)setVoicePreviewStatus('Voice preview failed ('+code+
+          '). Try Use device system default voice, then Preview this voice again.');
         else setStatus('Safari speech playback failed ('+code+'). The written response remains available.');
       };
       // Unlike cancel-then-speak, this does not cancel an already-idle iOS
       // speech queue just before a user-triggered short preview.
       queueNativeSpeech(synth,utterance);
     } catch {
-      if(preview)setVoicePreviewStatus('Native iPhone preview is unavailable. The reply text is still accessible.');
+      if(preview)setVoicePreviewStatus('Device voice preview is unavailable. The reply text is still accessible.');
       else setStatus('Audio playback is unavailable; the reply is still available as text.');
     }
   }
@@ -513,7 +517,7 @@ export default function VoiceAssistant({
     const url = privateTailnetOrigin(settings.url);
     if (!url || !settings.token || !connected) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 65000);
+    const timer = window.setTimeout(() => controller.abort(), 130000); // Local Qwen 4B CPU inference may need up to ~2 minutes.
     try {
       const validAccount = (a: CompassCommandContext['accounts'][number]) =>
         a.name.trim().length > 0 && [a.balance, a.apr, a.minimumPayment].every(v =>
@@ -550,6 +554,10 @@ export default function VoiceAssistant({
         body: JSON.stringify({ query: prompt, financialContext: summary }),
       });
       const payload: unknown = await response.json();
+      if(response.status===403 && financeEdition && payload && typeof payload==='object' &&
+         'error' in payload && payload.error==='Compass Financial Advisor handles finance only. Open Compass Personal for general assistance.'){
+        add('local',payload.error);setStatus('Finance-only scope enforced by Compass Core.');return;
+      }
       if (!response.ok) throw Error(`Desktop AI returned HTTP ${response.status}. Check the local service and model.`);
       if (!payload || typeof payload !== 'object') throw Error('Desktop AI returned an invalid response.');
       if (messageSerial.current !== id) return;
@@ -565,17 +573,17 @@ export default function VoiceAssistant({
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
-        setStatus(`Desktop Ollama · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+        setStatus(`Compass AI · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
       } else {
         if (!('reply' in payload) || typeof payload.reply !== 'string' ||
           !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model')
-          throw Error('Desktop did not confirm an Ollama-generated chat response.');
+          throw Error('Desktop did not confirm an Compass-generated chat response.');
         const reply = payload.reply.slice(0,1800);
         const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
           ? payload.answerSource : 'private-desktop-model';
         add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
         setStatus(answerSource === 'private-desktop-model'
-          ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
+          ? 'Answered by your private Compass model. Independently verify financial claims.'
           : answerSource === 'private-assistant-shortcut'
             ? 'Market Compass answered your greeting locally without accessing financial records.'
             : answerSource === 'official-luno-api'
@@ -587,6 +595,14 @@ export default function VoiceAssistant({
       if (queuedId) onRemoveQueuedReadOnlyQuestion(queuedId);
     } catch (error) {
       if (messageSerial.current !== id) return;
+      if (controller.signal.aborted) {
+        // An unusually slow local model is not proof that the private
+        // network/session is disconnected. Preserve encrypted credentials and
+        // let the owner retry deliberately instead of silently resending.
+        setStatus('Compass exceeded the 130-second response limit. The connection is retained; retry manually.');
+        add('local', 'Compass took too long to answer on the private desktop. No action was executed. Please retry when the model is ready.');
+        return;
+      }
       setConnection('offline');
       setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
       add('local', 'The desktop AI is temporarily unavailable. Offline questions about your saved debt plan and markets still work.');
@@ -602,7 +618,7 @@ export default function VoiceAssistant({
     setLastAgent(null);
     // Jarvis's browser-safe shortcuts are deterministic and never invoke
     // server-side desktop actions. The user must explicitly tap an external link.
-    const personal = interpretJarvisPersonalCommand(question);
+    const personal = !financeEdition ? interpretJarvisPersonalCommand(question) : null;
     if(personal){
       add('local', personal.text,personal.kind==='link'?{url:personal.url,label:personal.label}:undefined);
       speak(personal.text);
@@ -633,7 +649,7 @@ export default function VoiceAssistant({
       if(isReadOnlyOfflineQuestion(question)){
         try{
           onQueueReadOnlyQuestion(question);
-          const saved='Read-only question placed in your unlocked iPhone workspace. Check that the encrypted vault auto-save finishes. It will NOT contact HYPRBOX until the phone reconnects and you tap Send now. Safari cannot deliver requests while truly offline.';
+          const saved='Read-only question placed in your unlocked encrypted workspace. Check that the encrypted vault auto-save finishes. It will NOT contact HYPRBOX until your device reconnects and you tap Send now. Safari cannot deliver requests while truly offline.';
           add('local',saved);setStatus('Queued locally · not sent or scheduled.');speak(saved);
         }catch(e){
           const msg=e instanceof Error?e.message:'Could not queue this request.';
@@ -702,8 +718,8 @@ export default function VoiceAssistant({
 
   return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
     <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass</span>
-      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage || 'Compass private HYPRBOX connection status'}>
+      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> {financeEdition?'Compass Financial Advisor':'Compass Personal'}</span>
+      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage || 'Compass private desktop connection status'}>
         <span className={connected ? 'h-2 w-2 shrink-0 rounded-full bg-emerald-400' : connection === 'checking' ? 'h-2 w-2 shrink-0 rounded-full bg-amber-300' : 'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
         {connected ? 'Compass connected' : connection === 'checking' ? 'Connecting' : settings.enabled ? 'Offline · auto reconnect' : 'Local commands'}
       </span>
@@ -755,7 +771,7 @@ export default function VoiceAssistant({
       {reviewedQueue.length>0 && <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/40 p-3" aria-label="Encrypted offline agent questions">
         <h3 className="text-[12px] font-bold">Offline questions · {reviewedQueue.length} pending</h3>
         <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-          Saved in this iPhone's encrypted vault. No remote job has been created.
+          Saved in this device's encrypted vault. No remote job has been created.
           Reconnect through the authorised private gateway, then explicitly review and send.
           Safari cannot guarantee background delivery when closed or without internet.
         </p>
@@ -820,7 +836,7 @@ export default function VoiceAssistant({
             className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
         </form>
         <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
-        {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use the iPhone keyboard microphone to dictate.</p>}
+        {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use your device keyboard microphone to dictate.</p>}
         {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
@@ -864,7 +880,7 @@ export default function VoiceAssistant({
         For general topics, try: "search public info about compound interest." This searches public Wikipedia references only and sends no private financial context.
       </p>
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-        Offline read-only questions stay in this iPhone's encrypted vault until you review and send them after reconnection. Only successful desktop AI conversations are stored on HYPRBOX.
+        Offline read-only questions stay in this device's encrypted vault until you review and send them after reconnection. Only successful desktop AI conversations are stored on HYPRBOX.
         Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
         Compression is measured; no fixed ratio is guaranteed.
       </p>
@@ -931,7 +947,7 @@ export default function VoiceAssistant({
       </p> : null}
 
       {sourceInventory&&<p className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
-        The counts below describe HYPRBOX desktop source folders only. This iPhone's encrypted vault is separate: it contains {context.accounts.length} entered debt account(s) and {context.localFinanceDocuments?.length??0} saved document(s). A missing desktop source does not mean your phone records are missing. No automatic syncing occurs.
+        The counts below describe HYPRBOX desktop source folders only. This device's encrypted vault is separate: it contains {context.accounts.length} entered debt account(s) and {context.localFinanceDocuments?.length??0} saved document(s). A missing desktop source does not mean your phone records are missing. No automatic syncing occurs.
       </p>}
       {sourceInventory ? <div className="mt-3 space-y-2 text-[12px]">
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Financial Advisor documents</span><strong>{sourceInventory.documentSources.length} local files</strong></div>
@@ -967,7 +983,7 @@ export default function VoiceAssistant({
     <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[12px] font-bold">Suggested questions</summary><div className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
-        {ideas.map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
+        {(financeEdition?financeIdeas:personalIdeas).map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
           className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-left text-[12px] font-medium disabled:opacity-40">
           {idea}<ArrowRight size={13} className="ml-1 inline"/>
         </button>)}
@@ -976,11 +992,11 @@ export default function VoiceAssistant({
     </div></details>
 
     <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm">
-      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Desktop Ollama · saved connection
+      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
-        Configure once per encrypted vault. Market Compass reconnects after unlocking, when this screen is opened, and when your iPhone comes back online. No need to re-enter the address or token each time.
+        Configure once per encrypted vault. Market Compass reconnects after unlocking, when this screen is opened, and when this device comes back online. No need to re-enter the address or token each time.
       </p>
       <div role="status" className="mt-3 rounded-xl bg-muted/70 p-3 text-[12px] leading-5">
         <div className="flex items-center gap-2 font-semibold"><span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : connection === 'checking' ? 'bg-amber-500' : 'bg-muted-foreground'}`}/>
@@ -990,9 +1006,9 @@ export default function VoiceAssistant({
       </div>
       {publicPagesEdition && (
         <p role="note" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] leading-5">
-          <strong>This Home Screen icon is the public GitHub Pages edition ({window.location.hostname}).</strong>
-          {' '}Connect to your own desktop's private Tailscale Serve HTTPS address (*.ts.net) while your device is connected to the same tailnet.
-          If you later install a separate private-hosted edition, its encrypted browser vault will not automatically inherit this app's data. Export an encrypted backup before moving any records.
+          <strong>This is Compass Personal, the original GitHub Pages PWA ({window.location.hostname}).</strong>
+          {' '}For standalone Compass AI on a desktop or laptop, join your authorized private tailnet, enter the desktop's Tailscale Serve HTTPS address (*.ts.net) and your separately issued private AI token below, then save the connection. This public site never receives an embedded server token.
+          {' '}You can install this PWA from your browser's Install app menu. The private ngrok PWA has a different encrypted vault; export a password-encrypted backup before moving any records.
         </p>
       )}
       {tailnetSameOrigin && (
@@ -1005,7 +1021,7 @@ export default function VoiceAssistant({
       <label className="mt-4 block text-[12px] font-semibold">Private AI HTTPS URL (Tailscale Serve)
         <input type="url" value={host} onChange={e=>setHost(e.target.value)}
           onBlur={() => {const url=privateTailnetOrigin(host); if(url)setHost(url+'/');}}
-          placeholder="https://hyprbox.your-tailnet.ts.net/"
+          placeholder="https://desktop.your-tailnet.ts.net/"
           className="mt-1 h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal"/>
       </label>
       {tailnetSameOrigin && privateTailnetOrigin(host) !== tailnetSameOrigin && (
@@ -1039,7 +1055,7 @@ export default function VoiceAssistant({
       </div> : settings.url ? <button type="button" onClick={()=>onSettingsChange({...settings, enabled:true})} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">Resume automatic connection</button> : null}
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
         <CircleHelp size={14} className="mt-0.5 shrink-0"/>
-        Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run Ollama or continuously listen in the background when closed.
+        Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run the private model or continuously listen in the background when closed.
       </p>
     </details>
     </div>
