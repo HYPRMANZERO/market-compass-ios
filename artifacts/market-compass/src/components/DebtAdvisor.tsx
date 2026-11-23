@@ -191,11 +191,19 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
       </label>
       <button type="button" className="rounded-lg bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-40" onClick={prepareOffline} disabled={!ready || !confirmed}>Generate offline debt guidance</button>
       <details className="border-t border-border pt-4"><summary className="cursor-pointer text-[12px] font-semibold">Use desktop/laptop Ollama securely (optional)</summary>
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Only connect to your own HTTPS Tailscale Serve hostname. The token stays in this page's memory and is not saved in the encrypted workspace. Only press Ask Ollama when you want these financial inputs sent to your own private desktop.</p>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Only connect using an authorized private HTTPS endpoint. A public GitHub Pages PWA cannot send its AI token to a different ngrok origin. This optional tool does not reuse the Assistant's saved connection; it sends only the reviewed debt inputs when you press Ask.</p>
         <label className="mt-3 block text-[11px]">Private HTTPS server URL <input type="url" className="mt-1 h-10 w-full rounded border border-input bg-background px-3 text-[12px]" value={endpoint} placeholder="https://your-desktop.your-tailnet.ts.net/" onChange={e => setEndpoint(e.target.value)}/></label>
         <label className="mt-3 block text-[11px]">Separate AI access token (48+ characters) <input type="password" autoComplete="off" className="mt-1 h-10 w-full rounded border border-input bg-background px-3 text-[12px]" value={token} onChange={e => setToken(e.target.value)}/></label>
+        <p role="status" className="mt-3 rounded-lg bg-muted/50 p-3 text-[11px] leading-5 text-muted-foreground">
+          {!ready?'Step 1: Complete every debt account and all four current cash-flow inputs in ZAR.':
+            !confirmed?'Step 2: Tick the confirmation above after checking your current figures.':
+            !serverUrl(endpoint)?'Step 3: Enter an allowed private HTTPS origin. Use the existing protected app origin when on ngrok; the public edition cannot connect cross-origin.':
+            token.length<48?'Step 4: Enter the separate, valid 48+ character AI access token.':
+            running?'Request in progress; private model confirmation is pending.':
+            'All local prerequisites are met. The private server connection will be checked only when you press Ask.'}
+        </p>
         <button type="button" onClick={() => { void askOllama(); }} disabled={!ready || !confirmed || !serverUrl(endpoint) || token.length < 48 || running} className="mt-3 rounded-lg border border-border bg-background px-4 py-2.5 text-[12px] font-semibold disabled:opacity-40">{running ? 'Awaiting private Ollama…' : 'Ask self-hosted Ollama'}</button>
-        <button type="button" className="ml-2 mt-3 rounded-lg border border-border px-3 py-2 text-[11px]" onClick={() => {setToken('');setEndpoint('');}}>Disconnect</button>
+        {(endpoint||token)&&<button type="button" className="ml-2 mt-3 rounded-lg border border-border px-3 py-2 text-[11px]" onClick={() => {setToken('');setEndpoint('');}}>Clear connection fields</button>}
       </details>
       {notice && <p role="status" className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-5">{notice}</p>}
       {stress && <div className="rounded-lg border border-border bg-muted/45 p-4 text-[11px] leading-5">

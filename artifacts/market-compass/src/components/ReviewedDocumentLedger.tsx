@@ -1,5 +1,8 @@
 import {useState} from 'react';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
+import {preparedDocumentReview} from '@/lib/reviewSuggestions';
+import {isReviewableLine} from '@/lib/reviewInbox';
+import {timeContextLabel} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {
   EXPENSE_CATEGORIES,EXPENSE_KINDS,
@@ -52,6 +55,20 @@ export default function ReviewedDocumentLedger({
   });
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
+  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
+    .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
+      item.proposal!==null&&!applied.has(item.index));
+  const selectPrepared=()=>{
+    if(!canApply)return;
+    setDraft(old=>{
+      const next={...old};
+      for(const {index,proposal} of prepared){
+        next[index]={checked:true,date:proposal.date,kind:proposal.kind,category:proposal.category};
+      }
+      return next;
+    });
+    setError('');setFeedback('');
+  };
   const change=(index:number,fields:Partial<ReviewRow>)=>{
     setDraft(old=>{
       const previous=old[index]??initialRow(index);
@@ -90,8 +107,9 @@ export default function ReviewedDocumentLedger({
       </span>
     </summary>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      Check the direction shown in the source document and select the transactions to add.
-      Recognized merchants receive a suggested category. Unknown categories stay Unsorted, and you may label them later in Spend. Transfers, refunds and unclear directions need human review; no unapproved row affects your budget.
+      Explicit transaction dates are populated automatically; no duplicate date entry is needed.
+      You can prepare clear source-labelled rows together and approve once to record them.
+      Source direction is taken from the document's explicitly labelled or signed transactions; check it before approving. Recognized merchants receive a suggested category. Unknown categories stay Unsorted, and you may label them later in Spend. Transfers, refunds and unclear directions need human review; no unapproved row affects your budget.
     </p>
     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Unreviewed historical money movements">
       {[
@@ -112,6 +130,16 @@ export default function ReviewedDocumentLedger({
         Your currency needs review. This importer does not know whether the source
         document uses a currency other than ZAR. Verify currency before adding.
       </p>:null}
+    <div className="mt-3 rounded-xl border border-border bg-muted/35 p-3 text-[11px] leading-5">
+      <strong className="block text-foreground">Source date coverage</strong>
+      <p className="mt-1 text-muted-foreground">{timeContextLabel(document.timeContext)} · {document.timeContext?.basis==='explicit-period'?'Explicit statement/reporting period':document.timeContext?.basis==='dated-rows'?'Range of dated transaction rows':document.timeContext?.basis==='explicit-as-of'?'Document as-of date only':'No source reporting period'}</p>
+      {document.timeContext?.asOf&&<p className="mt-1 text-muted-foreground">Historical document as of {document.timeContext.asOf} · not a current balance</p>}
+      <p className="mt-1 text-muted-foreground">Reporting periods do not date individual undated transactions. No unapproved amounts affect Spend.</p>
+    </div>
+    {prepared.length>0&&<button type="button" disabled={!canApply} onClick={selectPrepared}
+      className="mt-3 min-h-11 w-full rounded-xl border border-primary/30 bg-primary/10 px-3 text-[12px] font-semibold disabled:opacity-40">
+      Prepare {prepared.length} dated, source-labelled transaction(s) for one approval
+    </button>}
     {suggested.length>0&&<button type="button" disabled={!canApply}
       className="mt-2 min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
       onClick={()=>{
@@ -128,6 +156,7 @@ export default function ReviewedDocumentLedger({
         const blocked=documentRowBlockReason(document,line);
         const unusable=line.amount===null||line.amount===0||Boolean(blocked);
         const row=draft[index]??initialRow(index);
+        const proposal=preparedDocumentReview(document,index);
         const options=row.kind?allowedDocumentCategories(row.kind):[];
         return <div key={index} className={`rounded-xl border bg-background p-3 ${row.checked ? 'border-primary/40 shadow-sm' : 'border-border'}`}>
           <label className="flex items-start gap-2 text-[12px] font-semibold">
@@ -144,14 +173,18 @@ export default function ReviewedDocumentLedger({
               </span>
             </span>
           </label>
+          {line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">Transaction date extracted from file: <strong className="text-foreground">{line.date}</strong> · no date entry needed</p>}
+          {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No transaction date extracted from this row. The document period is not a substitute.</p>}
+          {proposal&&!already&&!unusable&&<p className="mt-1 pl-6 text-[10px] text-muted-foreground">Prepared classification: {proposal.kind} · {proposal.category}. {proposal.explanation}. Confirm before recording.</p>}
           {!already&&!unusable&&row.checked&&<div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {line.date?<div className="text-[11px] font-semibold">Source payment date<p className="mt-1 rounded-lg border border-border bg-muted/35 px-3 py-3 text-[12px]">{line.date}</p></div>:
             <label className="text-[11px] font-semibold">
-              Confirm date
+              Missing transaction date · enter only if source proves it
               <input aria-label={'Date for imported line '+(index+1)}
                 type="date" value={row.date}
                 onChange={e=>change(index,{date:e.target.value})}
                 className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[16px]"/>
-            </label>
+            </label>}
             <label className="text-[11px] font-semibold">
               Transaction type
               <select aria-label={'Type for imported line '+(index+1)}
@@ -185,7 +218,7 @@ export default function ReviewedDocumentLedger({
     <button type="button" disabled={selected.length===0||!canApply}
       onClick={submit}
       className="mt-2 min-h-12 w-full rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
-      Review confirmation and add {selected.length} selected line(s) to Spend
+      Approve and record {selected.length} selected source transaction(s)
     </button>
     {error&&<p role="alert" className="mt-2 text-[12px] text-destructive">{error}</p>}
     {feedback&&<p role="status" className="mt-2 text-[12px] text-muted-foreground">{feedback}</p>}

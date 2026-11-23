@@ -64,6 +64,7 @@ type ConnectionStatus = 'not-configured' | 'paused' | 'checking' | 'connected' |
 type Props = {
   context: CompassCommandContext;
   onNavigate: (path: string) => void;
+  onImportDocuments?: () => void;
   settings: DesktopAiSettings;
   onSettingsChange: (settings: DesktopAiSettings) => void;
   queuedReadOnlyQuestions: QueuedReadOnlyQuestion[];
@@ -83,7 +84,7 @@ const voiceAvailable = () => typeof window !== 'undefined' && 'speechSynthesis' 
 const explainError = (error: unknown) => error instanceof Error ? error.message : 'The private desktop is unreachable.';
 
 export default function VoiceAssistant({
-  context,onNavigate,settings,onSettingsChange,
+  context,onNavigate,onImportDocuments,settings,onSettingsChange,
   queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([{
@@ -936,9 +937,9 @@ export default function VoiceAssistant({
           Planned: provider approval, consent expiry and revocation, dated sync, duplicate checks,
           and explicit review before saving transactions. Missing bank data is unknown, not R0.
         </p>
-        <button type="button" onClick={()=>onNavigate('/expenses')}
+        <button type="button" onClick={()=>onImportDocuments ? onImportDocuments() : onNavigate('/expenses')}
           className="mt-3 min-h-11 rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
-          Import a statement instead <ArrowRight size={13} className="ml-1 inline"/>
+          Import a statement now <ArrowRight size={13} className="ml-1 inline"/>
         </button>
       </details>
       {sourceLoading && <p className="mt-3 text-[12px] text-muted-foreground">Reading the private source inventory…</p>}
@@ -971,6 +972,10 @@ export default function VoiceAssistant({
       </div> : sourceInventory ? <p className="mt-3 text-[11px] text-muted-foreground">
         This bridge has not supplied the source-freshness report yet. Inventory counts below are not evidence of current balances.
       </p> : null}
+
+      {sourceInventory&&<p className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+        The counts below describe HYPRBOX desktop source folders only. This iPhone's encrypted vault is separate: it contains {context.accounts.length} entered debt account(s) and {context.localFinanceDocuments?.length??0} saved document(s). A missing desktop source does not mean your phone records are missing. No automatic syncing occurs.
+      </p>}
       {sourceInventory ? <div className="mt-3 space-y-2 text-[12px]">
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Financial Advisor documents</span><strong>{sourceInventory.documentSources.length} local files</strong></div>
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Historic baseline</span><strong>{sourceInventory.historicalSnapshotDate ?? 'Not found'}</strong></div>

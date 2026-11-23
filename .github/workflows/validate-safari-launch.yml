@@ -27,6 +27,8 @@ jobs:
       - run: node --experimental-strip-types --test tests/live-crypto-quotes.test.mjs
       - run: node --test tests/iphone-mobile-shell.test.mjs
       - run: node --test tests/iphone-finance-import-access.test.mjs
+      - name: Run complete source-dated finance and UI regression suite
+        run: node --experimental-strip-types --test tests/*.test.mjs
       - run: pnpm run typecheck:libs
       - run: pnpm --filter @workspace/market-compass run typecheck
       - name: Build static iPhone PWA
