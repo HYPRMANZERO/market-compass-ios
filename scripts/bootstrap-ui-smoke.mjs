@@ -161,6 +161,31 @@ try{
   assert.ok(Math.abs(ui.colWidth/ui.width-1/3)<0.025);
   assert.equal(ui.tabs,6);assert.equal(ui.privacy,true);
   assert.equal(ui.horizontalOverflow,false,'no horizontal scrolling at iPhone width');
+  const pulse=await js(function(){
+    const review=document.querySelector('.mc-financial-pulse');
+    return {
+      present:!!review,
+      buttons:[...review?.querySelectorAll('button[aria-pressed]')||[]].map(x=>x.textContent.trim()),
+      missing:review?.textContent.includes('Not recorded'),
+      bank:review?.textContent.includes('Not connected · No automatic sync'),
+      width:review?.getBoundingClientRect().width??0
+    };
+  });
+  assert.equal(pulse.present,true,'monthly review visible');
+  assert.deepEqual(pulse.buttons,['Current','Previous','Earlier']);
+  assert.equal(pulse.missing,true,'unknown income/outflows never become zero');
+  assert.equal(pulse.bank,true,'no invented bank API connection');
+  assert.ok(pulse.width>200&&pulse.width<=390);
+  await js(function(){
+    const review=document.querySelector('.mc-financial-pulse');
+    [...review.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent.trim()==='Previous')?.click();
+  });
+  await until(()=>js(function(){
+    const review=document.querySelector('.mc-financial-pulse');
+    return [...review.querySelectorAll('button[aria-pressed]')].some(x=>
+      x.textContent.trim()==='Previous'&&x.getAttribute('aria-pressed')==='true');
+  }),'previous salary cycle selected');
+  console.log('PASS: financial pulse, cycle navigation, consented evidence and missing-data disclosure');
   console.log('PASS: local Bootstrap grid, private dashboard, iPhone viewport, six tabs');
   await js(function(){
     const a=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/debt'));
