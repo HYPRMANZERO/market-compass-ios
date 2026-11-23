@@ -60,3 +60,24 @@ test('prepared review UX does not demand date input for source-dated rows',async
  assert.match(source,/window\.confirm/);
  assert.doesNotMatch(source,/fetch\(|sendBeacon\(/);
 });
+
+
+test('statement reference suggestions separate rent, petrol, fees, and ambiguous debit orders',()=>{
+ const csv=[
+  'Date,Description,Debit,Credit',
+  '26 May 26,Synthetic rental payment rent EFT,4000.00,',
+  '26 May 26,Synthetic petrol payment IB,750.00,',
+  '26 May 26,FEE - DEBIT ORDER FEE,25.00,',
+  '26 May 26,DEBIT ORDER FEE,15.00,',
+  '26 May 26,DEBIT ORDER,500.00,',
+  '26 May 26,ELECTRONIC ACCOUNT PAYMENT,350.00,',
+  '26 May 26,Unknown incoming amount,,125.00'
+ ].join('\n');
+ const doc=extractLocalFinanceDocument('synthetic.csv',csv,'Synthetic statement',{id,now});
+ assert.deepEqual(doc.lines.map((_,index)=>preparedDocumentReview(doc,index)?.category??null),[
+  'housing','transport','fees','fees','other','other',null
+ ]);
+ assert.equal(preparedDocumentReview(doc,4)?.explanation,'Source debit; category needs owner confirmation');
+ assert.equal(preparedDocumentReview(doc,6),null,'unknown credits are not assumed income');
+ assert.equal(doc.lines.length,7);
+});

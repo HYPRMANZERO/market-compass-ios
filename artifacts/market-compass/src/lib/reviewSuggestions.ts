@@ -32,7 +32,7 @@ export function preparedDocumentReview(
        /\b(?:insurance|premium)\b/.test(label)?'insurance':
        /\b(?:subscription|netflix|spotify|gym)\b/.test(label)?'subscriptions':
        /\b(?:electricity|water|utilities|municipal)\b/.test(label)?'utilities':
-       /\b(?:bank fee|service fee|commission|charges)\b/.test(label)?'fees':
+       /\b(?:bank fee|service fee|transaction fee|account fee|debit[ -]?order fee|fee[ -]+debit[ -]?order|commission|charges)\b/.test(label)?'fees':
        /\b(?:pharmacy|medical|hospital|clinic)\b/.test(label)?'health':'other';
      explanation=category==='other'?'Source debit; category needs owner confirmation':
        'Source debit with matching description';
