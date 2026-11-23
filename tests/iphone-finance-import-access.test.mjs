@@ -7,8 +7,10 @@ const owner=await readFile(new URL('components/OwnerBudgetDraftEditor.tsx',root)
 const statements=await readFile(new URL('components/LocalFinanceFiles.tsx',root),'utf8');
 const assistant=await readFile(new URL('components/VoiceAssistant.tsx',root),'utf8');
 
-test('original PWA Home and Spend expose straightforward iPhone file access',()=>{
-  assert.match(app,/<Link href="\/expenses"[\s\S]*?Import private financial files from iPhone Files/);
+test('original PWA Home and Spend expose straightforward iPhone file access',async()=>{
+  const mobile=await readFile(new URL('components/MobileOverview.tsx',root),'utf8');
+  assert.match(mobile,/href="\/expenses" className="mc-quick-action"/);
+  assert.match(app,/id="mc-home-upload"/);
   assert.match(app,/<Route path="\/expenses"><ExpenseLedger data=\{data\} setData=\{setData\}/);
   assert.match(app,/<OwnerBudgetDraftEditor/);
   assert.match(app,/<LocalFinanceFiles/);

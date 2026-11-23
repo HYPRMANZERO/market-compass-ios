@@ -220,32 +220,47 @@ function useWorkspaceVault() {
 }
 
 function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
+  const isStandalone=typeof window!=='undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & {standalone?:boolean}).standalone===true);
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<void>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
-  return <main className="flex min-h-[100dvh] flex-col bg-[hsl(165,24%,19%)] px-4 pb-[calc(26px+env(safe-area-inset-bottom))] pt-[calc(32px+env(safe-area-inset-top))] text-white sm:justify-center">
-    <div className="mx-auto w-full max-w-[430px]">
-      <div className="mb-7 flex items-center gap-3 px-1">
-        <span className="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={27}/></span>
-        <div><h1 className="serif text-[27px] leading-none">Market Compass</h1><p className="mt-1 text-[11px] uppercase tracking-[.17em] text-white/60">Your private finance app</p></div>
+  return <main className="mc-vault-entry flex min-h-[100dvh] flex-col bg-[hsl(165,24%,19%)] px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] text-white sm:justify-center">
+    <div className="mx-auto w-full max-w-[390px]">
+      <div className="mb-4 flex items-center gap-3 px-1">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={22}/></span>
+        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
       </div>
-      <div className="rounded-[26px] bg-[hsl(44,33%,99%)] p-5 text-foreground shadow-[0_20px_60px_rgba(0,0,0,.12)] sm:p-7">
-        <div className="mb-4 flex items-center gap-2"><ShieldCheck className="text-primary" size={23}/><h2 className="text-[21px] font-bold">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
-        <p className="text-[13px] leading-6 text-muted-foreground">Debt plans, saved markets and notes are stored encrypted on this device. No bank sign-in is required.</p>
-        {!vault.hasVault && <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
-          Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
-        </p>}
-        {vault.hasLegacy && !vault.hasVault && <p className="mt-3 rounded-xl bg-muted p-3 text-[12px] leading-5">Older unencrypted workspace detected. Creating a vault will encrypt it and remove the old local copy once saved.</p>}
+      <div className="rounded-[22px] bg-[hsl(44,33%,99%)] p-4 text-foreground shadow-[0_16px_44px_rgba(0,0,0,.12)] sm:p-6">
+        <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
+        <p className="text-[12px] leading-[1.6] text-muted-foreground">Your debt plans, markets and notes are encrypted on this device. No bank login required.</p>
+        <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">{isStandalone?'Home Screen app':'Safari browser tab'} · Vault & privacy information</summary>
+          <p role="note" className="mt-2 leading-[1.6]">
+            Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>.
+            Browser tabs, Home Screen apps and different HTTPS addresses can have separate encrypted vaults.
+            If your password works elsewhere, open the original session where your documents were saved.
+            Do not clear website data or overwrite either vault.
+          </p>
+        </details>
+        {!vault.hasVault && <details className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px]">
+          <summary className="cursor-pointer font-semibold text-foreground">Already have a vault? Restore it instead</summary>
+          <p role="note" className="mt-2 leading-[1.6] text-muted-foreground">
+            Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
+          </p>
+        </details>}
+        {vault.hasLegacy && !vault.hasVault && <p className="mt-3 rounded-xl bg-muted p-3 text-[11px] leading-[1.6]">Older unencrypted workspace detected. Creating a vault will encrypt it and remove the old local copy once saved.</p>}
         {vault.error && <p role="alert" className="mt-3 rounded-xl bg-destructive/10 p-3 text-[12px] text-destructive">{vault.error}</p>}
-        {vault.initializing ? <p className="mt-6 text-[13px]">Opening your encrypted storage…</p> : <>
-          <label className="mt-5 block text-[13px] font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Choose a password (12+ characters)'}</label>
+        {vault.initializing ? <p className="mt-4 text-[12px]">Opening your encrypted storage…</p> : <>
+          <label className="mt-4 block text-[12px] font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Choose a password (12+ characters)'}</label>
           <input id="vault-password" type="password" autoComplete="off" value={entered} onChange={e => setEntered(e.target.value)}
-            className="mt-2 h-13 w-full rounded-xl border border-input bg-background px-4 text-[16px]" placeholder="Enter your private password" />
+            className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3.5 text-[16px]" placeholder="Enter your private password" />
           <button type="button" disabled={busy || !entered} onClick={() => { void run(() => vault.hasVault ? vault.unlock(entered) : vault.create(entered)); }}
-            className="mt-4 flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[14px] font-bold text-primary-foreground disabled:opacity-40">
+            className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-[13px] font-bold text-primary-foreground disabled:opacity-40">
             <ShieldCheck size={17}/>{busy ? 'Opening…' : vault.hasVault ? 'Unlock Market Compass' : 'Create encrypted workspace'}
           </button>
-          <details className="mt-5 rounded-xl border border-border bg-muted/30 p-3 text-[12px]">
+          <details className="mt-4 rounded-xl border border-border bg-muted/30 px-3 py-3 text-[12px]">
             <summary className="cursor-pointer font-semibold">Restore from encrypted backup</summary>
             <p className="mt-2 leading-5 text-muted-foreground">Enter the backup password above. Restoring replaces the saved vault on this device.</p>
             <input aria-label="Import encrypted vault backup" type="file" accept=".json,application/json" disabled={busy}
@@ -253,8 +268,8 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
           </details>
         </>}
       </div>
-      <div className="mt-5 flex items-center justify-center gap-2 text-center text-[11px] text-white/70"><ShieldCheck size={14}/> Encrypted on your device · Offline-ready</div>
-      <p className="mt-2 text-center text-[11px] leading-5 text-white/55">If your password is lost, the vault cannot be recovered without a backup and its password.</p>
+      <div className="mt-4 flex items-center justify-center gap-2 text-center text-[10px] text-white/70"><ShieldCheck size={13}/> Encrypted on your device · Offline-ready</div>
+      <p className="mt-1.5 text-center text-[10px] leading-4 text-white/60">Keep your password and exported encrypted backup safe.</p>
     </div>
   </main>;
 }
@@ -375,7 +390,7 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
           const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label === 'Expenses' ? 'Spend' : label;
           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-            className={`relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+            className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
             <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
             <span className="text-[10px] font-semibold leading-none">{short}</span>
             {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
@@ -397,7 +412,7 @@ function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string;
 }
 
 function Panel({ children, className = '', title, action }: { children: ReactNode; className?: string; title?: string; action?: ReactNode }) {
-  return <section className={`min-w-0 overflow-hidden rounded-2xl border border-border bg-card ${className}`}>
+  return <section className={`mc-ui-panel min-w-0 overflow-hidden rounded-[22px] border border-border bg-card shadow-sm ${className}`}>
     {(title || action) && <div className="flex min-h-12 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
       <h2 className="text-[13px] font-semibold tracking-[.01em]">{title}</h2>{action}
     </div>}<div>{children}</div>
@@ -435,7 +450,14 @@ function Overview({ data,setData }: { data: WorkspaceData;setData:Dispatch<SetSt
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
-    <details id="mc-home-upload" className="mb-4 rounded-2xl border border-primary/30 bg-card p-3 shadow-sm sm:p-4">
+    <div className="mb-5 lg:hidden">
+      <MobileOverview currency={data.currency} totalDebt={debtTotal}
+        accountsCount={data.accounts.length} accounts={data.accounts}
+        documentsCount={docs.length} approvedEntryCount={entries.length}
+        pendingDrafts={openDrafts} market={feed}
+        fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null}/>
+    </div>
+    <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Upload size={20}/></span>
         <span className="min-w-0 flex-1">
@@ -475,16 +497,6 @@ function Overview({ data,setData }: { data: WorkspaceData;setData:Dispatch<SetSt
         ...old.accounts,{...account,id:crypto.randomUUID()}
       ]}))}/>
     <HistoricalRecurringInsights documents={docs} entries={entries} currency={data.currency}/>
-    <div className="lg:hidden">
-      <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
-        pendingDrafts={openDrafts} market={feed} fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
-      <Link href="/expenses"
-        aria-label="Go to Spend to import private financial files"
-        className="mb-4 mt-3 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3 text-[12px] font-semibold shadow-sm">
-        <span>{data.ownerBudgetDraft?'View or update my private finance imports':'Import private financial files from iPhone Files'}</span>
-        <ArrowRight size={17} className="shrink-0" />
-      </Link>
-    </div>
     <div className="hidden lg:block">
     <PageIntro eyebrow="A clearer view, at your pace" title="Your compass" description="A quiet place to see what is known, what is estimated, and what still needs your attention." trailing={<div className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-[11px] text-muted-foreground"><span className="mono mr-2 text-foreground">TODAY</span>{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>} />
     <div className="grid gap-4 md:grid-cols-3">
@@ -1194,7 +1206,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
 function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const { data, setData } = vault;
   const pending = data.drafts.filter((draft) => draft.status === 'pending').length;
-  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><BackupControls vault={vault} /><Switch>
+  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><Switch>
     <Route path="/"><Overview data={data} setData={setData} /></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
@@ -1202,7 +1214,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} /></Route>
     <Route component={NotFound} />
-  </Switch></AppShell></RoutedErrorBoundary>;
+  </Switch><div className="mt-8"><BackupControls vault={vault}/></div></AppShell></RoutedErrorBoundary>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {

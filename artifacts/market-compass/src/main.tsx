@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
 
+// Offline Bootstrap grid only; no reboot, JS or CDN. Tailwind owns forms and vault UI.
+import './vendor/bootstrap/bootstrap-grid.min.css';
 import './index.css';
 
 createRoot(document.getElementById('root')!, {
