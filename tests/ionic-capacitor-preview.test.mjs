@@ -4,14 +4,16 @@ import {readFile} from 'node:fs/promises';
 
 const root=new URL('../artifacts/market-compass/',import.meta.url);
 const read=p=>readFile(new URL(p,root),'utf8');
-test('original PWA includes isolated, interactive Ionic React preview with no live vault access',async()=>{
-  const [app,html,preview,style,vite]=await Promise.all([
+test('existing PWA shell uses Ionic with retained locally isolated demo assets',async()=>{
+  const [app,html,preview,style,vite,shell]=await Promise.all([
     read('src/App.tsx'),read('ionic-preview.html'),read('src/IonicPreviewApp.tsx'),
-    read('src/ionic-preview.css'),read('vite.config.ts')
+    read('src/ionic-preview.css'),read('vite.config.ts'),read('src/ionic-shell.css')
   ]);
-  assert.match(app,/Ionic UI Preview/);
-  assert.match(app,/src=\{import\.meta\.env\.BASE_URL\+'ionic-preview\.html'\}/);
-  assert.match(app,/setIonicPreviewOpen/);
+  assert.match(app,/<IonApp className="mc-ionic-app"/);
+  assert.match(app,/<IonHeader className="mc-mobile-header/);
+  assert.match(app,/<IonModal isOpen=\{menuOpen\}/);
+  assert.doesNotMatch(app,/Try Ionic design|Compare Ionic components/);
+  assert.match(shell,/safe-area-inset-top/);
   assert.match(html,/ionic-preview-main\.tsx/);
   assert.match(vite,/ionicPreview: path\.resolve/);
   assert.match(preview,/IonActionSheet|IonModal/);

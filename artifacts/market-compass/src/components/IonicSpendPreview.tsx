@@ -1,90 +1,71 @@
-import {useState,type CSSProperties} from 'react';
-import {
-  IonButton,IonCard,IonCardContent,IonCardHeader,IonCardSubtitle,IonCardTitle,
-  IonChip,IonItem,IonLabel,IonList,IonSegment,IonSegmentButton,setupIonicReact
-} from '@ionic/react';
-import '@ionic/react/css/core.css';
+import {useState} from 'react';
+import {IonButton,IonCard,IonCardContent,IonChip,IonItem,IonLabel,IonList,IonSegment,IonSegmentButton} from '@ionic/react';
 import type {ExpenseEntry,ExpenseKind} from '@/lib/monthlyExpenses';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 
-// Isolated opt-in Ionic UI: uses the same encrypted React workspace props,
-// never creates a second vault, storage store, provider session or payment flow.
-setupIonicReact({mode:'ios'});
 type Props={entries:ExpenseEntry[];currency:string;onOpenDocuments:()=>void};
-const amount=(value:number)=>new Intl.NumberFormat('en-ZA',{
-  style:'currency',currency:'ZAR',minimumFractionDigits:2,maximumFractionDigits:2
-}).format(value);
+const zar=(amount:number)=>new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(amount);
 
+/** Main Ionic Spend activity. Reads existing approved encrypted-vault props; does not
+ * approve, migrate, upload or duplicate financial entries. */
 export default function IonicSpendPreview({entries,currency,onOpenDocuments}:Props){
   const [filter,setFilter]=useState<'all'|ExpenseKind>('all');
-  const safe=entries.filter(entry=>entry.currency==='ZAR'&&Number.isFinite(entry.amount));
-  const visible=filter==='all'?safe:safe.filter(entry=>entry.kind===filter);
-  const ordered=[...visible].sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
-  const expenses=safe.filter(entry=>entry.kind==='expense'||entry.kind==='debt-payment');
-  const total=expenses.reduce((sum,entry)=>sum+entry.amount,0);
-  return <section className="mc-ionic-preview mb-5" aria-label="Ionic component preview of saved Spend data"
-    style={{'--ion-color-primary':'#284c42','--ion-color-primary-rgb':'40,76,66',
-      '--ion-color-primary-contrast':'#ffffff','--ion-background-color':'#ffffff',
-      '--ion-text-color':'#23352f','--ion-border-color':'#d9d6ce'} as CSSProperties}>
-    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-      <div><p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Optional Ionic preview</p>
-        <h2 className="mt-1 text-[18px] font-bold">Native-style finance workspace</h2>
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-          Live local records, new Ionic UI. This preview does not change the existing dashboard or vault.
-        </p>
-      </div>
-      <IonChip color="primary">iOS styling</IonChip>
+  const valid=entries.filter(entry=>entry.currency==='ZAR'&&Number.isFinite(entry.amount)&&entry.amount>0);
+  const spending=valid.filter(entry=>entry.kind==='expense'||entry.kind==='debt-payment');
+  const income=valid.filter(entry=>entry.kind==='income');
+  const transfers=valid.filter(entry=>entry.kind==='transfer');
+  const visible=valid.filter(entry=>filter==='all'||entry.kind===filter)
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
+  const total=spending.reduce((sum,item)=>sum+item.amount,0);
+  return <section className="mc-ionic-finance mb-4" aria-label="Ionic spending dashboard">
+    <div className="mb-3 px-1">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Your transactions</p>
+      <h2 className="mt-1 text-[20px] font-bold">Spend overview</h2>
     </div>
-    <IonCard className="!mx-0 !my-3 !rounded-[22px]">
-      <IonCardHeader>
-        <IonCardSubtitle>Recorded spending · historical</IonCardSubtitle>
-        <IonCardTitle>{currency==='ZAR'?amount(total):'Confirm ZAR currency'}</IonCardTitle>
-      </IonCardHeader>
+    <IonCard className="mc-ionic-finance-card">
       <IonCardContent>
-        <p>{expenses.length} recorded purchases and repayments, not a live bank balance.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <IonChip>{safe.filter(e=>e.kind==='income').length} income records</IonChip>
-          <IonChip>{safe.filter(e=>e.kind==='transfer').length} transfers excluded</IonChip>
+        <p className="mc-finance-eyebrow">Recorded spending · historical</p>
+        <strong className="mc-finance-total">{currency==='ZAR'?zar(total):'Review currency'}</strong>
+        <p className="mc-finance-helper">{spending.length} approved purchases and debt repayments. Not a live bank balance.</p>
+        <div className="mc-finance-metrics">
+          <div><span>Income recorded</span><strong>{zar(income.reduce((sum,item)=>sum+item.amount,0))}</strong></div>
+          <div><span>Transfers excluded</span><strong>{transfers.length}</strong></div>
         </div>
       </IonCardContent>
     </IonCard>
-    <IonCard className="!mx-0 !my-3 !rounded-[22px]">
-      <IonCardHeader>
-        <IonCardTitle className="!text-lg">Your activity</IonCardTitle>
-        <IonCardSubtitle>Tap a segment to filter the existing Spend ledger</IonCardSubtitle>
-      </IonCardHeader>
+    <IonCard className="mc-ionic-finance-card mt-3">
       <IonCardContent>
-        <IonSegment scrollable value={filter} onIonChange={event=>setFilter(
-          ['expense','income','debt-payment','transfer'].includes(String(event.detail.value))
-            ?event.detail.value as ExpenseKind:'all'
-        )} aria-label="Ionic transaction filter">
+        <div className="mb-3">
+          <h3 className="text-[16px] font-bold">Recent activity</h3>
+          <p className="mt-1 text-[12px] text-muted-foreground">Choose a transaction type to filter your saved history.</p>
+        </div>
+        <IonSegment scrollable value={filter} aria-label="Transaction type" onIonChange={event=>{
+          const value=String(event.detail.value);
+          setFilter(value==='expense'||value==='income'||value==='debt-payment'||value==='transfer'?value:'all');
+        }}>
           <IonSegmentButton value="all"><IonLabel>All</IonLabel></IonSegmentButton>
           <IonSegmentButton value="expense"><IonLabel>Purchases</IonLabel></IonSegmentButton>
           <IonSegmentButton value="income"><IonLabel>Income</IonLabel></IonSegmentButton>
           <IonSegmentButton value="debt-payment"><IonLabel>Debt</IonLabel></IonSegmentButton>
         </IonSegment>
-        {ordered.length===0?<p className="px-1 py-5 text-sm text-muted-foreground">
-          No approved transactions in this filter. Imported statement evidence is not automatically posted.
-        </p>:<IonList inset={false}>
-          {ordered.slice(0,12).map(entry=><IonItem key={entry.id} lines="full">
+        {visible.length===0?<div className="mc-ionic-finance-empty">
+          <p className="font-semibold">No approved transactions in this view</p>
+          <p className="mt-1">Review a saved financial document to add its verified source-dated transactions, or record a purchase manually.</p>
+        </div>:<IonList className="mc-ionic-finance-list">
+          {visible.slice(0,15).map(item=><IonItem key={item.id} lines="full">
             <IonLabel className="ion-text-wrap">
-              <h3>{maskDocumentPII(entry.description)}</h3>
-              <p>{entry.date} · {entry.kind.replaceAll('-',' ')} · {entry.category.replaceAll('-',' ')}</p>
+              <h3>{maskDocumentPII(item.description)}</h3>
+              <p>{item.date} · {item.category.replaceAll('-',' ')}</p>
             </IonLabel>
-            <strong slot="end" className="text-[12px]">{amount(entry.amount)}</strong>
+            <strong slot="end" className="mc-finance-row-amount">{zar(item.amount)}</strong>
           </IonItem>)}
         </IonList>}
-        {ordered.length>12&&<p className="text-[11px] text-muted-foreground">
-          Previewing the 12 most recent records. The standard Activity view retains full history.
-        </p>}
+        {visible.length>15&&<p className="mt-3 text-[11px] text-muted-foreground">Showing 15 recent records. The full activity ledger remains below.</p>}
+        <IonButton expand="block" className="mc-finance-documents-button mt-4" onClick={onOpenDocuments}>Review financial documents</IonButton>
       </IonCardContent>
     </IonCard>
-    <IonButton expand="block" color="primary" onClick={onOpenDocuments}>
-      Review financial documents
-    </IonButton>
-    <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-      Ionic visual comparison only. No bank connection, payment, order execution or account migration occurs.
-      Switch back to the original layout at any time.
+    <p className="mt-2 px-1 text-[11px] leading-5 text-muted-foreground">
+      Your approved local records only. Bank integrations are not connected; no payments or trading actions are performed here.
     </p>
   </section>;
 }

@@ -316,58 +316,14 @@ async function main(){
     await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
     await expectText(tab,'Your finances','Spend landing page');
     await tab.invoke(function(){
-      const button=[...document.querySelectorAll('button')].find(x=>x.textContent?.includes('Try Ionic design'));
-      if(!button)throw Error('Ionic preview entry missing from Spend');
-      button.click();
+      if(!document.querySelector('ion-app.mc-ionic-app'))throw Error('Ionic app shell missing');
+      if(!document.querySelector('ion-header.mc-mobile-header'))throw Error('Ionic mobile header missing');
+      if(!document.querySelector('ion-footer.mc-ionic-footer'))throw Error('Ionic navigation footer missing');
+      if(document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]'))
+        throw Error('Legacy iframe should not replace the live Ionic interface');
     });
-    await waitFor(()=>tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      const inside=frame?.contentDocument;
-      return !!inside?.querySelector('ion-app')&&inside.body.innerText.includes('SAMPLE DATA ONLY')
-        &&!!inside.querySelector('ion-action-sheet');
-    }),'embedded Ionic preview with local sample-only account/action-sheet UI',18000);
-    const ionicSample=await tab.invoke(function(){
-      const doc=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]')?.contentDocument;
-      return {
-        accounts:doc?.querySelectorAll('ion-list ion-item').length??0,
-        noVaultStrings:!doc?.body.innerText.includes('Your real account data')
-      };
-    });
-    assert.ok(ionicSample.accounts>=3,'Ionic preview must contain interactive account entries');
-    await tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      frame?.contentDocument?.querySelector('ion-list ion-item')?.click();
-    });
-    await waitFor(()=>tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      return frame?.contentDocument?.querySelector('ion-modal')?.isOpen===true;
-    }),'Ionic account modal opened from account row');
-    await tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      const close=[...frame.contentDocument.querySelectorAll('ion-modal ion-button')].find(x=>x.textContent?.includes('Close'));
-      close?.click();
-    });
-    await waitFor(()=>tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      return frame?.contentDocument?.querySelector('ion-modal')?.isOpen===false;
-    }),'Ionic account modal closed');
-    await sleep(400);
-    await tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      const button=[...frame?.contentDocument?.querySelectorAll('ion-button')??[]]
-        .find(x=>x.textContent?.includes('☰'));
-      if(!button)throw Error('Ionic menu button not found');
-      button.click();
-    });
-    await waitFor(()=>tab.invoke(function(){
-      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
-      return frame?.contentDocument?.querySelector('ion-action-sheet')?.isOpen===true;
-    }),'Ionic action sheet opened');
-    console.log('PASS: isolated Ionic React sample account modal and action sheet are interactive');
-    await tab.invoke(function(){
-      [...document.querySelectorAll('button')].find(x=>x.textContent?.includes('Close Ionic preview'))?.click();
-    });
-    await tab.invoke(function(){[...document.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent?.includes('Activity'))?.click();});
+    console.log('PASS: Ionic-first shell uses header, footer and existing vault');
+    await tab.invoke(function(){[...document.querySelectorAll('ion-segment-button[aria-pressed], button[aria-pressed]')].find(x=>x.textContent?.includes('Activity'))?.click();});
     await expectText(tab,'Where your income goes','salary-cycle allocation panel');
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Spend and income allocation"]');}),true,'salary allocation is visible in Spend activity');
     await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();});
@@ -600,7 +556,7 @@ async function main(){
     });
     await expectText(tab,'Import & review','return to Spend from review inbox');
     await tab.invoke(function(){
-      const button=[...document.querySelectorAll('nav[aria-label="Spend sections"] button')]
+      const button=[...document.querySelectorAll('nav[aria-label="Spend sections"] ion-segment-button')]
         .find(element=>element.textContent.includes('Documents'));
       if(!button)throw Error('Spend Documents navigation missing');
       button.click();
@@ -663,7 +619,7 @@ async function main(){
       return false;
     }),'Spend route after unlocking the encrypted vault');
     await tab.invoke(function(){
-      const tab=[...document.querySelectorAll('nav[aria-label="Spend sections"] button')]
+      const tab=[...document.querySelectorAll('nav[aria-label="Spend sections"] ion-segment-button')]
         .find(button=>button.textContent.includes('Documents'));
       if(!tab)throw Error('Documents view missing after unlock');tab.click();
     });
@@ -692,7 +648,7 @@ async function main(){
       link.click();
     });
     await waitFor(()=>tab.invoke(function(){
-      const button=[...document.querySelectorAll('nav[aria-label="Spend sections"] button')]
+      const button=[...document.querySelectorAll('nav[aria-label="Spend sections"] ion-segment-button')]
         .find(x=>x.textContent.includes('Documents'));
       if(!button)return false;button.click();return true;
     }),'Documents view available on restored origin');
