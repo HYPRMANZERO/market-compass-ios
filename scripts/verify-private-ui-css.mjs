@@ -4,7 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('../artifacts/market-compass/dist/public/', import.meta.url)));
+const root = resolve(process.env.MC_PWA_OUT_DIR || fileURLToPath(new URL('../artifacts/market-compass/dist/public/', import.meta.url)));
 const html = await readFile(join(root, 'index.html'), 'utf8');
 const assetPaths = Array.from(html.matchAll(/(?:href|src)=["'](\/market-compass-ios\/assets\/[^"']+\.(?:css|js))["']/g), m => m[1]);
 const cssPaths = assetPaths.filter(p => p.endsWith('.css'));
