@@ -302,6 +302,52 @@ async function main(){
     assert.equal(ui.nav,true,'mobile tab navigation must remain');
     assert.equal(ui.navTabs,6,'all six existing PWA routes must remain accessible');
     assert.equal(ui.privacyText,true,'clear offline, manual-entry boundary must remain');
+    const pulseUi=await tab.invoke(function(){
+      const review=document.querySelector('.mc-financial-pulse');
+      const buttons=[...review?.querySelectorAll('button[aria-pressed]')||[]];
+      return {
+        present:!!review,
+        buttons:buttons.map(x=>x.textContent.trim()),
+        source:review?.textContent.includes('Not connected · No automatic sync'),
+        missing:review?.textContent.includes('Not recorded'),
+        width:review?.getBoundingClientRect().width??0,
+        noOverflow:document.documentElement.scrollWidth<=innerWidth+1
+      };
+    });
+    assert.equal(pulseUi.present,true,'monthly finance review must render');
+    assert.deepEqual(pulseUi.buttons,['Current','Previous','Earlier']);
+    assert.equal(pulseUi.source,true,'bank source not connected must be clear');
+    assert.equal(pulseUi.missing,true,'missing ledger evidence must not be shown as zero');
+    assert.ok(pulseUi.width>200&&pulseUi.width<=390);
+    assert.equal(pulseUi.noOverflow,true,'monthly review must not overflow iPhone');
+    await tab.invoke(function(){
+      const review=document.querySelector('.mc-financial-pulse');
+      [...review.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent.trim()==='Previous')?.click();
+    });
+    await waitFor(async()=>tab.invoke(function(){
+      return [...document.querySelectorAll('.mc-financial-pulse button[aria-pressed]')]
+        .some(x=>x.textContent.trim()==='Previous'&&x.getAttribute('aria-pressed')==='true');
+    }),'previous salary cycle selected');
+    console.log('PASS: monthly review, evidence status, missing-data guard and salary-cycle selector');
+    if(process.env.MC_TEST_PULSE_SCREENSHOT){
+      await tab.invoke(function(){
+        const review=document.querySelector('.mc-financial-pulse');
+        [...review.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent.trim()==='Current')?.click();
+        review.scrollIntoView({block:'start',behavior:'instant'});
+      });
+      await waitFor(async()=>tab.invoke(function(){
+        const review=document.querySelector('.mc-financial-pulse');
+        return [...review.querySelectorAll('button[aria-pressed]')].some(x=>
+          x.textContent.trim()==='Current'&&x.getAttribute('aria-pressed')==='true');
+      }),'current cycle restored for synthetic preview');
+      await tab.invoke(function(){
+        return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))));
+      });
+      const frame=await tab.command('Page.captureScreenshot',{
+        format:'png',captureBeyondViewport:false,fromSurface:true
+      });
+      await writeFile(process.env.MC_TEST_PULSE_SCREENSHOT,Buffer.from(frame.data,'base64'));
+    }
     console.log('PASS: Bootstrap mobile grid, finance card, quick actions, privacy and six-tab shell');
     if(process.env.MC_TEST_SCREENSHOT){
       // Captures only the fabricated, isolated test vault; never capture owner data.

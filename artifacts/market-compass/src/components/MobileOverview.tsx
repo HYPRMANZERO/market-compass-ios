@@ -7,6 +7,9 @@ import { Link } from 'wouter';
 import type { MarketSeries } from '@workspace/api-client-react';
 import { approximateLocalValue, type FxReference } from '@/lib/fxRates';
 import { maskDocumentPII } from '@/lib/documentIntelligence';
+import FinancialPulse from '@/components/FinancialPulse';
+import type {ExpenseEntry,ExpenseSettings} from '@/lib/monthlyExpenses';
+import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 
 type AccountPreview = {
   id: string;
@@ -22,6 +25,9 @@ type Props = {
   accounts?: AccountPreview[];
   documentsCount?: number;
   approvedEntryCount?: number;
+  entries?:ExpenseEntry[];
+  documents?:LocalFinanceDocument[];
+  expenseSettings?:ExpenseSettings;
   pendingDrafts: number;
   market: MarketSeries | null;
   fxQuote?: FxReference | null;
@@ -51,7 +57,7 @@ const entered = (value: string) => {
 
 export default function MobileOverview({
   currency,totalDebt,accountsCount,accounts=[],documentsCount=0,
-  approvedEntryCount=0,pendingDrafts,market,fxQuote
+  approvedEntryCount=0,entries=[],documents=[],expenseSettings,pendingDrafts,market,fxQuote
 }: Props) {
   const nativeClose = market?.candles?.at(-1)?.close;
   const localClose = typeof nativeClose === 'number' && market
@@ -141,6 +147,8 @@ export default function MobileOverview({
         </div>
       </div>
     </section>
+
+    <FinancialPulse entries={entries} documents={documents} currency={currency} settings={expenseSettings}/>
 
     <section className="mc-app-section" aria-label="Your saved accounts">
       <div className="mc-app-section-heading">
