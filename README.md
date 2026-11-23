@@ -22,7 +22,7 @@ This is a living project, **not** a ZIP-install template, Expo application, nati
 
 A separately authenticated private PWA can reach a gateway on an authorized desktop through an outbound-established HTTPS tunnel; authorized management devices may also use Tailscale. These are separate transport paths, not separate AI models. The model is local to the private desktop and must never be exposed directly to the internet.
 
-The standalone **llama.cpp + existing Qwen 4B GGUF** provider has been tested as a **canary**, but its production cutover is a separate gated release. The currently live private gateway may still use its earlier inference service until full compatibility and rollback validation pass. No cloud-model fallback is permitted to impersonate Compass.
+The **private authenticated AI backend** was switched to standalone **llama.cpp with the existing Qwen 3.5 4B GGUF weights** on 23 November 2026. It passed private gateway authentication, encrypted memory and read-only agent/synthetic debt-advice tests. The **original public GitHub Pages PWA remains a separate origin** and does not automatically connect to this private gateway. Physical iPhone Safari and reboot acceptance remain open. No cloud-model fallback is permitted to impersonate Compass.
 
 Encrypted vaults on different browser origins/devices **do not silently synchronize**. Back up each origin separately and use intentional encrypted restore when appropriate. Do not share vault passwords, PII or API keys via issues or Git.
 
