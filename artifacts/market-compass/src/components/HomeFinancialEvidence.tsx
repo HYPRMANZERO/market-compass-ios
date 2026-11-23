@@ -186,6 +186,25 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
               <dt>Debt accounts saved</dt><dd className="font-semibold">{accounts.length}</dd>
             </div>
           </dl>
+          {accounts.length>0&&<div className="mt-3 space-y-2" aria-label="Saved debt accounts">
+            <p className="text-[11px] font-semibold">Accounts · owner-entered planning data</p>
+            {accounts.map((account,index)=><div key={index} className="rounded-xl border border-border bg-card px-3 py-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-[12px] font-semibold">{maskDocumentPII(account.name||'Unnamed account')}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Debt planning · not bank-connected</p>
+                </div>
+                <div className="text-right tabular-nums">
+                  <p className="text-[13px] font-bold">{hasAmount(account.balance)?money(Number(account.balance),currency):'Balance needed'}</p>
+                  <p className="text-[10px] text-muted-foreground">{hasAmount(account.balance)?'Entered balance':'Not verified'}</p>
+                </div>
+              </div>
+              {(hasAmount(account.apr)||hasAmount(account.minimumPayment))&&<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                {hasAmount(account.apr)&&<span>APR <strong className="text-foreground">{Number(account.apr)}%</strong></span>}
+                {hasAmount(account.minimumPayment)&&<span>Minimum <strong className="text-foreground">{money(Number(account.minimumPayment),currency)}</strong></span>}
+              </div>}
+            </div>)}
+          </div>}
           {incompleteAccounts>0&&<p className="mt-2 text-[10px] text-muted-foreground">
             {incompleteAccounts} account(s) have missing balances.
           </p>}
