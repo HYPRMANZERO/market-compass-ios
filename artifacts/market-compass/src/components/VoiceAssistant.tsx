@@ -806,17 +806,17 @@ export default function VoiceAssistant({
         </section>
       )}
       <div className="border-t border-border p-3">
-        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_44px_44px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_48px_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
             <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder="Ask about debt or your budget…" onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
               aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[64px] w-full resize-y rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
-          <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'}
-            className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
+          <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'} style={{minWidth:48,minHeight:48}}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
             {listening ? <MicOff size={22}/> : <Mic size={23}/>}
           </button>
-          <button type="submit" disabled={!query.trim() || busy} aria-label="Send question"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
+          <button type="submit" disabled={!query.trim() || busy} aria-label="Send question" style={{minWidth:48,minHeight:48}}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
         </form>
         <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
         {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use the iPhone keyboard microphone to dictate.</p>}
