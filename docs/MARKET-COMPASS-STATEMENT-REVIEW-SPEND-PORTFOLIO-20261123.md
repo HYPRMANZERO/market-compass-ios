@@ -44,3 +44,11 @@ On iPhone, a historical bank statement with 300 extracted lines showed source da
 - Protected loopback gateway confirmed HTTP 200 with expected HTML, JavaScript, CSS and PDF worker MIME types after promotion. Public HTTPS ngrok on physical iPhone and native Safari file-picker/vault validation remain outstanding.
 - Public GitHub Pages not deployed by this private static promotion; proposed changes tracked in draft PR #70 pending a separate review.
 
+
+## Historical salary-cycle portfolio navigation (23 November 2026)
+- Spend > Activity > Spending portfolio now displays the six most recent approved ZAR salary cycles as tap-to-filter summary bars.
+- 26th–25th cycle totals aggregate recorded expenses and debt repayments. Income is shown separately; transfers are not counted as spending.
+- Account/source selection restricts the same historical summary data before grouping.
+- Extracted but unapproved PDF/CSV evidence never enters this view.
+- Regression coverage: `tests/spending-portfolio-history.test.mjs` includes historical cycle dates, distinct transaction types, unsupported currency, invalid dates, and filter behavior.
+- Official bank connections, actual bank balances, email ingestion, native iOS packaging, and scanning all device files remain separate consented integrations and are **not** enabled by this portfolio UI.
