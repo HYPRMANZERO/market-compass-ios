@@ -26,3 +26,17 @@
 - Original public PWA: Spend > Activity > Spending portfolio, expand purchases by category, select salary-cycle history; Try Ionic design (sample-only) and Try Ionic (approved local ledger).
 - Private PWA: compact uploader and editable statement identity, approved historical Spend handoff and cross-source repetition review, original account popup and Ionic comparison.
 - All financial figures remain owner-reviewed and potentially incomplete, not verified bank balances.
+
+## Final Ionic-first PWA verification — 23 November 2026
+
+**Private HYPRBOX PWA:** Ionic-first candidate `MarketCompass/ReleaseCandidates/ionic-first-final-20261123/private` promoted using the protected static deployment script. Active index SHA-256 matches the tested candidate, offline service-worker placeholders are resolved, and Ionic preview assets exist. Private Ionic-first source commit `1a16c74` plus follow-up `93c0fc6` contain the redesigned shell, safe-area regression checks and truthful missing-spending empty state. Keep the pre-promotion rollback in the private dist and the user's encrypted browser vault intact.
+
+**Original GitHub Pages PWA:** Public Ionic-first shell landed in `main` commit `0f27a02`; final missing-data and safe-area follow-up landed as `fdda673e94906789fc8f269b5259397f3d2f1a05`. Pages workflow run `45165190869` completed successfully. Live public index and service worker return HTTP 200. Live main JS includes the Ionic app shell; its separately cached Ionic Spend chunk includes `Not recorded`; public CSS contains iPhone safe-area rules; generated service worker has no unexpanded tokens.
+
+**Tests:** Private `232/232` and public `224/224` automated Node tests passed; both TypeScript checks, isolated production builds and synthetic Chromium browser-release gates passed. These do not constitute physical iPhone Safari certification.
+
+**Android project:** Capacitor `native:sync:android` subsequently succeeded, copying the refreshed Ionic-first web bundle into the Android project. No signed APK/AAB or iOS IPA has been created.
+
+**GitHub PR housekeeping:** Earlier redundant public redesign PR `#73` and final delta PR `#75` were closed, as their content already exists on current `main`; no duplicated merge applied. Draft `#70` remains gated for advanced statement classification and cross-source duplicate handling. Do not bypass protected financial-core parity.
+
+**User acceptance:** Physically test Safari standalone status-bar/header safe area, menu/action sheets, all six tabs, Spend real-data filters and the document picker on both installed PWAs. PWA origins keep independent encrypted vaults; do not clear site data, uninstall, or expect automatic transfer of documents/approved transactions between origins.
