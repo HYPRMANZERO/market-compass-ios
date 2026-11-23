@@ -6,7 +6,8 @@ import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {classifyDocument,maskDocumentPII} from '@/lib/documentIntelligence';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
-import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
+import {documentAppliedIndices,applyReviewedDocumentToLedger,separateRepeatedDocumentChoices,type ReviewedLedgerDecision} from '@/lib/reviewedDocumentLedger';
+import {preparedDocumentReview} from '@/lib/reviewSuggestions';
 import {importFinanceBatch} from '@/lib/batchFinanceImport';
 import {buildPayrollHistory} from '@/lib/earningsHistory';
 import {
@@ -29,8 +30,9 @@ const lineDateLabel=(line:{date:string|null;semanticRole?:string})=>
   (line.date??'Transaction date not confirmed');
 type Props={
   documents:LocalFinanceDocument[];
-  onAdd:(value:LocalFinanceDocument)=>void;
+  onAdd:(value:LocalFinanceDocument,approved:ReviewedLedgerDecision[])=>void;
   onRemove:(id:string)=>void;
+  onUpdate:(value:LocalFinanceDocument)=>void;
   ledgerEntries:ExpenseEntry[];
   currency:string;
   currencyReviewRequired:boolean;
@@ -41,9 +43,10 @@ type Props={
  * No API fetch or File upload: parsing stays on the device.
  * Only owner-approved, bounded excerpts enter the existing encrypted vault.
  */
-export default function LocalFinanceFiles({documents,onAdd,onRemove,
+export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
   ledgerEntries,currency,currencyReviewRequired,onApplyEntries}:Props){
   const [label,setLabel]=useState('');
+  const [identityEdits,setIdentityEdits]=useState<Record<string,{label?:string;institution?:string;accountType?:string}>>({});
   const passwordInput=useRef<HTMLInputElement>(null);
   const [reading,setReading]=useState(false);
   const [progress,setProgress]=useState<{page:number;total:number;stage:string}>({page:0,total:0,stage:'reading'});
@@ -56,6 +59,16 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const [error,setError]=useState('');
   const safe=documents.map(validateLocalFinanceDocument)
     .filter((x):x is LocalFinanceDocument=>x!==null);
+  // One explicit document approval can also post only source-dated, unambiguous
+  // entries. Uncertain credits, reference balances and undated rows stay evidence.
+  const preparedPreview:ReviewedLedgerDecision[]=preview&&currency==='ZAR'&&!currencyReviewRequired
+    ?preview.lines.flatMap((_,i)=>{
+      const suggestion=preparedDocumentReview(preview,i);
+      return suggestion?[{lineIndex:i,date:suggestion.date,kind:suggestion.kind,category:suggestion.category}]:[];
+    }):[];
+  const previewSplit=preview?separateRepeatedDocumentChoices(preview,ledgerEntries,preparedPreview):
+    {accepted:[] as ReviewedLedgerDecision[],needsReview:[] as ReviewedLedgerDecision[]};
+  const previewDecisions=previewSplit.accepted;
   const [batchProgress,setBatchProgress]=useState({file:0,total:0});
   function nextReview(){
     setPreview(remaining[0]??null);
@@ -111,14 +124,56 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   function save(){
     if(!preview)return;
     try{
-      onAdd(preview);
+      const checked=validateLocalFinanceDocument({...preview,label:maskDocumentPII(preview.label.trim())});
+      if(!checked)throw Error('Enter a valid document title and issuing bank before approval.');
+      if(previewDecisions.length)applyReviewedDocumentToLedger(checked,ledgerEntries,previewDecisions,currency);
+      onAdd(checked,previewDecisions);
       nextReview();
       if(!remaining.length)setLabel('');
       setError('');
-      setFeedback('One reviewed document saved to the encrypted workspace. '+
+      setFeedback('Document approved with '+previewDecisions.length+' source-dated entries recorded in Spend. '+
         (remaining.length?remaining.length+' more awaiting review.':
           'Export an encrypted backup after the vault save completes.'));
     }catch(e){setError(e instanceof Error?e.message:'Document could not be saved.');}
+  }
+  const pendingSaved=safe.flatMap(document=>{
+    const applied=documentAppliedIndices(document,ledgerEntries);
+    const decisions:ReviewedLedgerDecision[]=document.lines.flatMap((_,index)=>{
+      if(applied.has(index))return [];
+      const proposal=preparedDocumentReview(document,index);
+      return proposal?[{lineIndex:index,date:proposal.date,kind:proposal.kind,category:proposal.category}]:[];
+    });
+    const split=separateRepeatedDocumentChoices(document,ledgerEntries,decisions);
+    return split.accepted.length||split.needsReview.length?
+      [{document,decisions:split.accepted,needsReview:split.needsReview.length}]:[];
+  });
+  function updateSavedIdentity(document:LocalFinanceDocument){
+    try{
+      const edits=identityEdits[document.id];
+      if(!edits)return;
+      const label=maskDocumentPII((edits.label??document.label).trim()).slice(0,70);
+      const account=document.accountProfile;
+      const institution=maskDocumentPII((edits.institution??account?.institution??'Unidentified provider').trim()).slice(0,40);
+      const accountType=edits.accountType??account?.accountType??'unspecified';
+      const changedBank=account&&(institution!==account.institution||accountType!==(account.accountType??'unspecified'));
+      const updated=validateLocalFinanceDocument({...document,label,
+        ...(changedBank&&account?{accountProfile:{...account,institution,accountType,
+          name:(institution+' '+(accountType==='unspecified'?'':accountType+' ')+'account').slice(0,80),
+          confidence:'uncertain' as const}}:{})});
+      if(!updated)throw Error('Use a short title and provider name without account numbers or private identifiers.');
+      onUpdate(updated);
+      setIdentityEdits(old=>{const next={...old};delete next[document.id];return next;});
+      setError('');setFeedback('Document title and account identity updated. Source dates, amounts and posted entries are unchanged.');
+    }catch(e){setError(e instanceof Error?e.message:'Could not update saved document details.');}
+  }
+  function recordSaved(document:LocalFinanceDocument,decisions:ReviewedLedgerDecision[]){
+    try{
+      if(currency!=='ZAR'||currencyReviewRequired)throw Error('Confirm ZAR workspace currency before adding transactions.');
+      const approved=applyReviewedDocumentToLedger(document,ledgerEntries,decisions,currency);
+      onApplyEntries(approved);
+      setError('');
+      setFeedback(decisions.length+' dated transactions from '+document.label+' recorded in Spend. Open Activity to view the category portfolio.');
+    }catch(e){setError(e instanceof Error?e.message:'Could not record this saved document.');}
   }
   return <section id="mc-financial-files" className="mb-5 scroll-mt-28 rounded-[24px] border border-border bg-card p-4 shadow-sm sm:p-6" aria-label="Import selected financial files privately">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -186,13 +241,44 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       onImport={selected}/>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
       Next: review each document in the queue, then save its masked excerpts. To
-      update Spend, also approve the individual rows in the saved document.
+      record Spend in the same approval when clearly dated transactions are recognised.
     </p>
     {preview && <section className="mt-3 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
       <p className="text-[11px] font-semibold">Review {reviewIndex+1} of {batchCount} · {remaining.length} remaining</p>
       <p className="text-[12px] font-semibold">
         Review {preview.lines.length} extracted lines · {maskDocumentPII(preview.label)}
       </p>
+      <label className="block text-[12px] font-semibold">Document title (editable before approval)
+        <input type="text" autoComplete="off" maxLength={70} value={preview.label}
+          onChange={event=>setPreview(current=>current?{...current,label:event.target.value}:current)}
+          className="mt-1 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
+      </label>
+      {preview.accountProfile&&['bank-statement','credit-card'].includes(preview.accountProfile.category)&&<div className="grid gap-2 sm:grid-cols-2">
+        <label className="block text-[11px] font-semibold">Issuing bank / provider (correct if wrong)
+          <input type="text" autoComplete="off" maxLength={40} value={preview.accountProfile.institution}
+            onChange={event=>setPreview(current=>{
+              if(!current?.accountProfile)return current;
+              const institution=maskDocumentPII(event.target.value).slice(0,40);
+              const accountType=current.accountProfile.accountType;
+              return {...current,accountProfile:{...current.accountProfile,institution,
+                name:(institution+' '+(accountType&&accountType!=='unspecified'?accountType+' ':'')+'account').trim().slice(0,80),confidence:'uncertain'}};
+            })}
+            className="mt-1 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
+        </label>
+        <label className="block text-[11px] font-semibold">Account type on statement
+          <select value={preview.accountProfile.accountType??'unspecified'}
+            onChange={event=>setPreview(current=>{
+              if(!current?.accountProfile)return current;
+              const accountType=event.target.value;
+              return {...current,accountProfile:{...current.accountProfile,accountType,
+                name:(current.accountProfile.institution+' '+(accountType==='unspecified'?'':accountType+' ')+'account').slice(0,80),confidence:'uncertain'}};
+            })}
+            className="mt-1 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-[13px]">
+            {['unspecified','cheque','current','savings','transmission','transactional','credit card','business'].map(type=><option key={type} value={type}>{type==='unspecified'?'Not identified':type}</option>)}
+          </select>
+        </label>
+      </div>}
+      <p className="text-[11px] leading-5 text-muted-foreground">The bank name comes from the document heading, not payee names or the filename. Correct it here if the PDF header is unclear; this remains owner-confirmed, not bank-verified.</p>
       <div className="rounded-lg border border-primary/20 bg-background px-3 py-2 text-[12px]">
         <strong>Source-dated history</strong>
         <p className="mt-1 text-muted-foreground">{timeContextLabel(sourceTimeContext(preview))} · {sourceTimeContext(preview)?.basis==='explicit-period'?'Explicit reporting period':sourceTimeContext(preview)?.basis==='dated-rows'?'Range of dated lines':sourceTimeContext(preview)?.basis==='explicit-as-of'?'As-of date only':'No confirmed period'}</p>
@@ -232,12 +318,17 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
           </p>}
         </div>)}
       </div>
+      {previewDecisions.length>0&&<p className="rounded-xl border border-primary/20 bg-background p-3 text-[11px] leading-5 text-muted-foreground">Approval will record {previewDecisions.length} source-dated, classified transaction(s) in Spend. {preview.lines.length-previewDecisions.length} other extracted line(s) remain document evidence only. Check for duplicate or overlapping statements before approval.</p>}
+      {previewSplit.needsReview.length>0&&<p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-5">
+        {previewSplit.needsReview.length} potential cross-source duplicate(s) will stay as document evidence, not be posted automatically.
+        After saving, expand this document to review any distinct genuine transactions individually.
+      </p>}
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
         The saved excerpt is partial. The original remains in iPhone Files; review further source entries separately.
       </p>}
       <button type="button" onClick={save}
         className="min-h-12 w-full rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
-        Save these reviewed excerpts to encrypted workspace
+        {previewDecisions.length?`Approve document and record ${previewDecisions.length} dated transaction(s) in Spend`:'Approve document as historical evidence only'}
       </button>
       <button type="button" onClick={()=>{nextReview();setFeedback('Document skipped without saving.');}}
         className="min-h-11 w-full rounded-xl border border-border px-4 text-[12px] font-medium">
@@ -252,12 +343,55 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     {safe.length>0&&<section className="mt-5 space-y-3 border-t border-border pt-5">
       <div>
         <h3 className="text-[14px] font-bold">Saved documents</h3>
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Open a document to review its extracted information and add approved rows to your Spend ledger.</p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Source-dated entries can be approved once per document; you do not need to enter transaction dates or review 300 rows individually.</p>
       </div>
+      {pendingSaved.length>0&&<div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+        <p className="text-[12px] font-bold">Ready to update Spend from saved statements</p>
+        <p className="text-[11px] leading-5 text-muted-foreground">These documents are already in your encrypted vault. Approve eligible dated entries below once per document. Unclear, undated and reference figures remain evidence. Check for overlapping statements before approval.</p>
+        {pendingSaved.map(({document,decisions,needsReview})=><div key={document.id} className="space-y-2">
+          {decisions.length>0&&<button type="button"
+            disabled={currency!=='ZAR'||currencyReviewRequired}
+            onClick={()=>recordSaved(document,decisions)}
+            className="min-h-12 w-full rounded-xl bg-primary px-3 py-2 text-left text-[12px] font-bold text-primary-foreground disabled:opacity-40">
+            Approve {decisions.length} dated entries from {maskDocumentPII(document.label)}
+          </button>}
+          {needsReview>0&&<p role="status" className="text-[11px] leading-5 text-muted-foreground">
+            {needsReview} potentially repeated transaction(s) in {maskDocumentPII(document.label)} are not included in one-tap approval.
+            Open this document's individual row review if they are separate genuine payments.
+          </p>}
+        </div>)}
+      </div>}
       {safe.map(document=><details key={document.id} className="rounded-xl border border-border bg-background p-3">
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">
           {maskDocumentPII(document.label)} · {document.lines.length} lines
         </summary>
+        <details className="mt-2 rounded-xl border border-border bg-muted/25 p-3">
+          <summary className="cursor-pointer text-[12px] font-semibold">Edit saved document title or account identity</summary>
+          <label className="mt-3 block text-[11px] font-semibold">Document title
+            <input type="text" maxLength={70} autoComplete="off"
+              value={identityEdits[document.id]?.label??document.label}
+              onChange={e=>setIdentityEdits(old=>({...old,[document.id]:{...old[document.id],label:e.target.value}}))}
+              className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-3 text-[16px]"/>
+          </label>
+          {document.accountProfile&&['bank-statement','credit-card'].includes(document.accountProfile.category)&&<>
+            <label className="mt-2 block text-[11px] font-semibold">Issuing bank / provider
+              <input type="text" maxLength={40} autoComplete="off"
+                value={identityEdits[document.id]?.institution??document.accountProfile.institution}
+                onChange={e=>setIdentityEdits(old=>({...old,[document.id]:{...old[document.id],institution:e.target.value}}))}
+                className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-3 text-[16px]"/>
+            </label>
+            <label className="mt-2 block text-[11px] font-semibold">Account type
+              <select value={identityEdits[document.id]?.accountType??document.accountProfile.accountType??'unspecified'}
+                onChange={e=>setIdentityEdits(old=>({...old,[document.id]:{...old[document.id],accountType:e.target.value}}))}
+                className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[13px]">
+                {['unspecified','cheque','current','savings','transmission','transactional','credit card','business'].map(type=><option key={type} value={type}>{type==='unspecified'?'Not identified':type}</option>)}
+              </select>
+            </label>
+          </>}
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Correcting identity does not change transaction dates, amounts or historical totals. Existing ledger IDs stay linked to this document.</p>
+          <button type="button" onClick={()=>updateSavedIdentity(document)}
+            className="mt-3 min-h-11 w-full rounded-xl border border-primary/30 bg-background px-3 text-[12px] font-bold">Save corrected document identity</button>
+        </details>
         {document.format==='pdf'&&document.accountProfile?.category==='bank-statement'&&
           document.lines.some(l=>l.date===null&&l.semanticRole!=='balance-reference')&&
           <p role="alert" className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] leading-5">

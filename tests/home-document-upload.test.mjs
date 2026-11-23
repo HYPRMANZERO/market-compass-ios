@@ -25,7 +25,7 @@ test('Home upload uses the SAME saved encrypted documents and approved ledger as
     assert.match(view,/<LocalFinanceFiles/);
     assert.match(view,/addLocalFinanceDocument/);
     assert.match(view,/removeLocalFinanceDocument/);
-    assert.match(view,/onApplyEntries=\{approved=>setData\(old=>\(\{\.\.\.old,expenseEntries:approved\}\)\)\}/);
+    assert.match(view,/expenseEntries:mergeReviewedDocumentEntries/);
   }
   assert.match(home,/localFinanceDocuments\?\?\[\]/);
   assert.match(home,/expenseEntries\?\?\[\]/);
@@ -35,6 +35,6 @@ test('Home upload uses the SAME saved encrypted documents and approved ledger as
 test('original private importer still supports temporary PDF password and review before saving',async()=>{
   const importer=await read('components/LocalFinanceFiles.tsx');
   assert.match(importer,/Temporary PDF password/);
-  assert.match(importer,/Save these reviewed excerpts to encrypted workspace/);
+  assert.match(importer,/Approve document and record|Approve document as historical evidence only/);
   assert.match(importer,/<ReviewedDocumentLedger/);
 });

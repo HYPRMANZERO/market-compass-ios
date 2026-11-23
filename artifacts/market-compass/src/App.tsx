@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
@@ -18,6 +18,7 @@ import {
   type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
 import { summarizeOwnerBudgetDraft, type OwnerBudgetDraft } from '@/lib/ownerBudgetDraft';
+import {applyReviewedDocumentToLedger,mergeReviewedDocumentEntries} from '@/lib/reviewedDocumentLedger';
 import { enqueueOfflineQuestion, removeOfflineQuestion, type QueuedReadOnlyQuestion } from '@/lib/offlineAgentQueue';
 import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import type { CompassCommandContext } from '@/lib/compassCommands';
@@ -27,6 +28,8 @@ import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
+import SpendingPortfolio from '@/components/SpendingPortfolio';
+const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -498,16 +501,18 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
           Only approved transaction rows update your salary-cycle ledger.
         </p>
         <LocalFinanceFiles documents={docs}
-          onAdd={document=>setData(old=>({
-            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          onAdd={(document,approvals)=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+            expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])
           }))}
           onRemove={id=>setData(old=>({
             ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
           }))}
+          onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
           ledgerEntries={entries}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
-          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
         />
       </div>
     </details>
@@ -982,7 +987,9 @@ type SpendSection='documents'|'activity'|'plan';
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
-  const [section,setSection]=useState<SpendSection>('documents');
+  const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
+  const [ionicPreview,setIonicPreview]=useState(false);
+  const [ionicPreviewOpen,setIonicPreviewOpen]=useState(false);
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   const options=[
@@ -1020,6 +1027,41 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         </button>)}
       </nav>
     </section>
+    <section aria-label="Ionic native-style design preview" className="mb-5 rounded-[20px] border border-border bg-card p-3 shadow-sm sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><p className="text-[12px] font-bold">Ionic UI Preview</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+            Try Ionic account cards, spending categories and action sheets with clearly labelled sample data. Your encrypted records remain untouched.
+          </p>
+        </div>
+        <button type="button" aria-expanded={ionicPreviewOpen}
+          onClick={()=>setIonicPreviewOpen(value=>!value)}
+          className="min-h-11 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
+          {ionicPreviewOpen?'Close Ionic preview':'Try Ionic design'}
+        </button>
+      </div>
+      {ionicPreviewOpen&&<div className="mt-4 overflow-hidden rounded-[20px] border border-border bg-background">
+        <iframe title="Interactive Market Compass Ionic React preview using only sample data"
+          src={import.meta.env.BASE_URL+'ionic-preview.html'}
+          className="block h-[min(72dvh,680px)] min-h-[420px] w-full border-0"
+          loading="lazy"/>
+      </div>}
+    </section>
+    {section==='documents'&&ledger.length>0&&<button type="button"
+      onClick={()=>setSection('activity')}
+      className="mb-5 flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[.065] px-4 py-3 text-left text-[12px] font-semibold">
+      <span>{ledger.length} approved or manually recorded transaction(s) are ready in your spending portfolio. View purchases and history by category.</span>
+      <ArrowRight size={19} className="shrink-0" aria-hidden="true"/>
+    </button>}
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+      <div><p className="text-[12px] font-bold">Compare Ionic components</p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Preview native-style cards and transaction controls without changing your saved data.</p>
+      </div>
+      <button type="button" aria-pressed={ionicPreview} onClick={()=>{setIonicPreview(value=>!value);setSection('activity');}}
+        className={`min-h-11 shrink-0 rounded-xl border px-3 text-[12px] font-bold ${ionicPreview?'border-primary bg-primary text-primary-foreground':'border-border bg-background'}`}>
+        {ionicPreview?'Original UI':'Try Ionic'}
+      </button>
+    </div>
     <div aria-label={section==='documents'?'Document importer and reviewed files':
       section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
       className="min-w-0 space-y-5">
@@ -1027,22 +1069,23 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         <div className="rounded-2xl border border-primary/15 bg-primary/[.045] px-4 py-3">
           <p className="text-[12px] font-semibold">1. Import · 2. Review · 3. Add approved lines to Spend</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            Saving an excerpt alone does not alter your ledger. Open a saved document
-            and choose Review and add to Spend to classify real entries.
+            Approving a document also records safely classified, source-dated transactions in Spend. Older saved statements can be approved below without re-uploading or entering dates.
           </p>
         </div>
         <LocalFinanceFiles
           documents={docs}
-          onAdd={document=>setData(old=>({
-            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          onAdd={(document,approvals)=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+            expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])
           }))}
           onRemove={id=>setData(old=>({
             ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
           }))}
+          onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
           ledgerEntries={ledger}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
-          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
         />
         <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
           currency={data.currency}
@@ -1051,6 +1094,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
+        {ionicPreview?<Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Opening Ionic Spend components…</p>}>
+          <IonicSpendPreview entries={ledger} currency={data.currency}
+            onOpenDocuments={()=>{setIonicPreview(false);setSection('documents');}}/>
+        </Suspense>:
+          <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>}
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
@@ -1274,8 +1322,8 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
-    {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-2 pt-4 pb-[calc(10px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
-      <section role="dialog" aria-modal="true" aria-label="Import and review financial documents" className="flex max-h-[90dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-[24px] border border-border bg-card shadow-2xl" onClick={event=>event.stopPropagation()}>
+    {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 px-3 py-[max(20px,env(safe-area-inset-top))]" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
+      <section role="dialog" aria-modal="true" aria-label="Import and review financial documents" className="flex max-h-[78dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-[24px] border border-border bg-card shadow-2xl sm:max-h-[82dvh]" onClick={event=>event.stopPropagation()}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div><h2 className="text-[16px] font-bold">Import financial documents</h2><p className="text-[11px] text-muted-foreground">Select files · review locally · approve explicitly</p></div>
           <button type="button" aria-label="Close document importer" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border"><X size={19}/></button>
@@ -1283,12 +1331,15 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
         <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
           <LocalFinanceFiles
             documents={data.localFinanceDocuments??[]}
-            onAdd={document=>setData(old=>({...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)}))}
+            onAdd={(document,approvals)=>setData(old=>({...old,
+              localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+              expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])}))}
             onRemove={id=>setData(old=>({...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)}))}
+            onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
             ledgerEntries={data.expenseEntries??[]}
             currency={data.currency}
             currencyReviewRequired={data.currencyReviewRequired}
-            onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+            onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
           />
         </div>
       </section>

@@ -1,0 +1,7 @@
+{
+  "name": "Market Compass",
+  "type": "react",
+  "integrations": {
+    "capacitor": {}
+  }
+}

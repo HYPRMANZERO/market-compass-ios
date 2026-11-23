@@ -37,7 +37,7 @@ test('financial statement picker needs no label before choosing, with explicit r
   assert.match(statements,/const selectedFiles=Array\.from\(event\.currentTarget\.files/);
   assert.match(statements,/importFinanceBatch\(files,\{/);
   assert.match(statements,/void selected\(selectedFiles,oneTimePassword\)/);
-  assert.match(statements,/onAdd\(preview\)/);
+  assert.match(statements,/onAdd\(checked,previewDecisions\)/);
   assert.match(statements,/not uploaded to HYPRBOX, GitHub or an AI provider/);
   assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
 });
