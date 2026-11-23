@@ -32,3 +32,11 @@
 ## Rollback
 GitHub Pages: deploy an earlier proven commit through the existing pages.yml workflow.
 Private static gateway: preserve a copy of the full previous static tree outside the active public directory before promotion. Publish new hashed assets before index.html and service worker, keep older hashed assets for already open tabs and do not mutate the gateway settings, protected ports, tokens or user browser storage.
+
+## Private HYPRBOX static deployment — 23 November 2026
+- Commit `9f5420b` pushed to `feature/consented-batch-documents-and-crypto-refresh-20261122` after 208/208 tests in each of three full suites, three isolated Chromium browser release-gate passes and TypeScript validation.
+- Published prepared candidate `dist/candidate-source-approval-20261123` to the authenticated private gateway using `scripts/promote-private-pwa.ps1`, with index/SW written last and prior hashed assets retained.
+- Rollback bundle: `artifacts/market-compass/dist/public-before-finance-ux-20261123-102926`. Static candidate and active index SHA-256 matched after promotion (`FE6979D57773A9B595BA07662743C21F0A1DB2C7180C03CF23168EB9579CBE72`).
+- Read-only private gateway audit: HTML/CSS/JS/PDF worker 200 and correct MIME. Correct host without edge proof returned HTTP 403; ngrok HTTPS and physical Safari use remain separately unverified.
+- Original public GitHub Pages PWA was NOT updated: `origin/main` differs substantially in finance components, so a wholesale merge is unsafe without targeted parity review. Its real iPhone encrypted vault restore is also not confirmed.
+- No bank connection, brokerage order, LLM proxy, original browser vault, key, token or HYPRBOX gateway setting was changed by this static deployment.
