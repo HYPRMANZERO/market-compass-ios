@@ -37,3 +37,9 @@ The private Bootstrap layout is already incorporated in `feature/consented-batch
 ## Product roadmap beyond UI
 
 Consent-based official bank integrations, email OAuth access, locally permissioned high-volume document/receipt/OCR scanning, correct source-level reconciliation, unified ledger, source freshness and real-device launch evidence are separate functional workstreams. Do not describe public GitHub Pages as connected to the private ngrok gateway; its approved AI origin is independently restricted.
+
+## CI finding: pre-existing financial-core parity gate
+
+The existing `validate-owner-document-parity.yml` workflow compares **eight financial source-core files** from public `main` with the older `feature/ios-safari-launch-2026-11-26` branch. That source-level test currently reports a difference in `documentIntelligence.ts`. This UI-only PR **does not modify any of the eight source-core files**; the mismatch is a pre-existing branch-divergence issue. Do not bypass the gate or assert that the two versions have matching document semantics until they are explicitly reconciled and retested. The new `validate-public-bootstrap.yml` validates the public visual changes separately.
+
+The private Bootstrap build has been compiled, offline-shell validated and staged under HYPRBOX's local per-user `MarketCompass/ReleaseCandidates` directory with a SHA-256 manifest, **outside the authenticated gateway's active PWA folder**. Staging is not deployment and cannot be reached from the live iPhone origin.

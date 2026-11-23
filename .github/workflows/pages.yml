@@ -70,7 +70,7 @@ jobs:
       - name: Require compiled Bootstrap offline banking UI
         run: |
           grep -q 'mc-wallet-hero' artifacts/market-compass/dist/public/assets/*.css
-          grep -q 'bootstrap' artifacts/market-compass/src/vendor/bootstrap/LICENSE
+          grep -qi 'bootstrap' artifacts/market-compass/src/vendor/bootstrap/LICENSE
           test -f artifacts/market-compass/dist/public/sw.js
 
       - name: Add SPA fallback for GitHub Pages

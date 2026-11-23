@@ -42,7 +42,7 @@ jobs:
           test -f artifacts/market-compass/dist/public/sw.js
           test -f artifacts/market-compass/dist/public/manifest.webmanifest
           grep -q 'mc-wallet-hero' artifacts/market-compass/dist/public/assets/*.css
-          grep -q 'bootstrap' artifacts/market-compass/src/vendor/bootstrap/LICENSE
+          grep -qi 'bootstrap' artifacts/market-compass/src/vendor/bootstrap/LICENSE
 
   public-edge-smoke:
     runs-on: windows-latest
