@@ -53,8 +53,10 @@ test('prepared review UX does not demand date input for source-dated rows',async
  const source=await readFile(new URL('../artifacts/market-compass/src/components/ReviewedDocumentLedger.tsx',import.meta.url),'utf8');
  assert.match(source,/Prepare \{prepared\.length\} dated, source-labelled transaction/);
  assert.match(source,/Transaction date extracted from file/);
- assert.match(source,/line\.date\?<div/);
- assert.match(source,/Missing transaction date/);
+ assert.match(source,/Source payment date/);
+ assert.match(source,/No individual transaction date extracted/);
+ assert.match(source,/Review and approve \{prepared.length\} extracted transaction/);
+ assert.doesNotMatch(source,/type="date"/);
  assert.match(source,/window\.confirm/);
  assert.doesNotMatch(source,/fetch\(|sendBeacon\(/);
 });

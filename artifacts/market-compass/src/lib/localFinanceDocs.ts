@@ -134,7 +134,16 @@ function parseCsv(text:string):LocalFinanceLine[]{
   // Keep the row parser strict to one delimiter, not mixing column separators.
   const rows=splitCsv(text,delimiter);
   if(rows.length<2)throw Error('CSV must contain a header and at least one row.');
-  const header=rows[0].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
+  // Bank exports often prepend a statement period or account heading before
+  // the actual transaction table. Find the first explicit supported header,
+  // never interpret a heading or balance summary as a transaction row.
+  const headerIndex=rows.slice(0,20).findIndex(row=>{
+    const h=row.map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
+    return h.some(x=>['description','details','transaction description','narrative','reference','item','particulars','name','pay item'].includes(x))&&
+      h.some(x=>['amount','transaction amount','value','total','net amount','net pay','gross pay','debit','debits','withdrawal','money out','paid out','credit','credits','deposit','money in','paid in'].includes(x));
+  });
+  if(headerIndex<0)throw Error('No supported transaction table headings were found in this CSV.');
+  const header=rows[headerIndex].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
   const find=(choices:string[])=>header.findIndex(x=>choices.includes(x));
   const labelIdx=find(['description','details','transaction description','narrative','reference','item','particulars','name','pay item']);
   const dateIdx=find(['date','transaction date','posting date','value date','pay date','period']);
@@ -144,7 +153,7 @@ function parseCsv(text:string):LocalFinanceLine[]{
   if(labelIdx<0 || (amountIdx<0&&(debitIdx<0&&creditIdx<0)))
     throw Error('Unsupported CSV columns. Export a table with Description and Amount (or Debit/Credit), optionally Date.');
   const out:LocalFinanceLine[]=[];
-  for(const row of rows.slice(1)){
+  for(const row of rows.slice(headerIndex+1)){
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const description=maskText(row[labelIdx],130);
     if(!description)continue;
@@ -212,10 +221,18 @@ function parseJson(text:string):LocalFinanceLine[]{
   for(const row of source.slice(0,MAX_FINANCE_LINES+1)){
     if(!asObject(row))continue;
     const label=maskText(row.description??row.label??row.details??row.name,130);
-    const amount=moneyOf(row.amount??row.value??row.total);
-    if(!label||amount===null)continue;
-    out.push({label,amount,date:dateOf(row.date??row.transactionDate),
-      direction:row.direction==='incoming'||row.direction==='outgoing'?row.direction:'unclassified'});
+    const debit=moneyOf(row.debit??row.withdrawal??row.moneyOut);
+    const credit=moneyOf(row.credit??row.deposit??row.moneyIn);
+    if(debit!==null&&debit!==0&&credit!==null&&credit!==0)continue;
+    const direction:LocalFinanceLine['direction']=
+      row.direction==='incoming'||row.direction==='credit'?'incoming':
+      row.direction==='outgoing'||row.direction==='debit'?'outgoing':
+      debit!==null&&debit!==0?'outgoing':credit!==null&&credit!==0?'incoming':'unclassified';
+    const amount=debit!==null&&debit!==0?Math.abs(debit):
+      credit!==null&&credit!==0?Math.abs(credit):moneyOf(row.amount??row.value??row.total);
+    if(!label||amount===null||amount===0)continue;
+    const sourceDate=row.transactionDate??row.postingDate??row.valueDate??row.paymentDate??row.date;
+    out.push({label,amount,date:dateOf(sourceDate),direction});
   }
   return out;
 }

@@ -24,7 +24,7 @@ export function documentTimeContext(
  let explicit:{from:string;to:string}|null=null;
  let asOf:string|null=null;
  const headerLines=String(text).split(/\r?\n/).slice(0,180);
- const period=new RegExp(String.raw`\b(?:statement period|reporting period|billing period|period covered|pay period|period from)\s*[:\-]?\s*(`+DT+String.raw`)\s*(?:to|through|until|–|—|\s+-\s+)\s*(`+DT+String.raw`)`,'i');
+ const period=new RegExp(String.raw`\b(?:statement period|reporting period|billing period|period covered|pay period|period from)\s*[:,\-]?\s*(`+DT+String.raw`)\s*(?:to|through|until|–|—|\s+-\s+)\s*(`+DT+String.raw`)`,'i');
  const asOfPattern=new RegExp(String.raw`\b(?:statement date|report date|as at|as of|balance as at|closing date|payment date|pay date|issue date)\s*[:\-]?\s*(`+DT+String.raw`)`,'i');
  for(const line of headerLines){
    if(!explicit){

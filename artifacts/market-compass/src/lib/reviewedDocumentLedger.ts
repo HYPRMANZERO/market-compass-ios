@@ -72,6 +72,7 @@ export function applyReviewedDocumentToLedger(
       throw Error('This older bank-statement excerpt lacks a verified parsed transaction date or amount. Re-import the original PDF with the updated statement parser before posting.');
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
+    if(!line.date)throw Error('No source transaction date was extracted. This amount remains reporting-period evidence, not a dated payment. Re-import a clearer document; do not invent a date.');
     // Once a real transaction date was extracted, it must remain the source
     // date. A reporting-period or an import timestamp can never replace it.
     if(line.date && choice.date!==line.date)

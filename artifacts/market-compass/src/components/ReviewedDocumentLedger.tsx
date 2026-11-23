@@ -37,6 +37,7 @@ export default function ReviewedDocumentLedger({
   const available=document.lines.length-applied.size;
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
+  const undatedCount=document.lines.filter((line,index)=>!line.date&&!applied.has(index)&&isReviewableLine(document,line)).length;
   const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
       item.proposal!==null&&!applied.has(item.index));
@@ -62,17 +63,19 @@ export default function ReviewedDocumentLedger({
     });
     setError('');setFeedback('');
   };
-  function submit(){
+  function submit(automatic=false){
     setError('');setFeedback('');
     if(!canApply){
       setError('Review the workspace currency first. This importer labels all extracted R amounts as ZAR and does not convert other currencies.');
       return;
     }
-    const decisions:ReviewedLedgerDecision[]=selected.map(i=>({
-      lineIndex:i,date:draft[i].date,
-      kind:draft[i].kind as ExpenseKind,
-      category:draft[i].category as ExpenseCategory
-    }));
+    const decisions:ReviewedLedgerDecision[]=automatic?
+      prepared.map(({index,proposal})=>({lineIndex:index,date:proposal.date,kind:proposal.kind,category:proposal.category})):
+      selected.map(i=>({
+        lineIndex:i,date:draft[i].date,
+        kind:draft[i].kind as ExpenseKind,
+        category:draft[i].category as ExpenseCategory
+      }));
     try{
       const revised=applyReviewedDocumentToLedger(document,entries,decisions,currency);
       if(!window.confirm(
@@ -115,10 +118,19 @@ export default function ReviewedDocumentLedger({
       {document.timeContext?.asOf&&<p className="mt-1 text-muted-foreground">As of {document.timeContext.asOf} · historical source reference, not a current balance</p>}
       <p className="mt-1 text-muted-foreground">A document period does not establish the payment date of an undated line. No unapproved amount is counted in Spend.</p>
     </div>
-    {prepared.length>0&&<button type="button" disabled={!canApply} onClick={selectPrepared}
-      className="mt-3 min-h-11 w-full rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-[12px] font-semibold disabled:opacity-40">
-      Prepare {prepared.length} dated, source-labelled transaction(s) for one approval
-    </button>}
+    {prepared.length>0&&<div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3">
+      <p className="text-[12px] font-bold">{prepared.length} source-dated transaction(s) ready to confirm</p>
+      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Dates, debit/credit direction, amounts and suggested categories are extracted. Confirm once to record these matching rows; you can still expand individual rows to correct categories before using manual review.</p>
+      <button type="button" disabled={!canApply} onClick={()=>submit(true)}
+        className="mt-3 min-h-12 w-full rounded-xl bg-primary px-3 text-[12px] font-bold text-primary-foreground disabled:opacity-40">
+        Review and approve {prepared.length} extracted transaction(s)
+      </button>
+      <button type="button" disabled={!canApply} onClick={selectPrepared}
+        className="mt-2 min-h-11 w-full rounded-xl border border-primary/30 bg-background px-3 py-2 text-[12px] font-semibold disabled:opacity-40">
+        Prepare {prepared.length} dated, source-labelled transaction(s) for one approval · edit classifications
+      </button>
+    </div>}
+    {undatedCount>0&&<p role="status" className="mt-3 rounded-xl bg-muted/35 p-3 text-[11px] leading-5 text-muted-foreground">{undatedCount} amount(s) lack an explicit transaction date. They remain document evidence for their identified reporting period, but are not posted to a particular salary day. Re-import a clearer statement/export if available. You do not need to invent a date.</p>}
     <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
@@ -128,7 +140,7 @@ export default function ReviewedDocumentLedger({
         const oldBankRow=document.format==='pdf'&&
           document.accountProfile?.category==='bank-statement'&&
           (line.semanticRole!=='transaction'||line.date===null);
-        const unusable=line.amount===null||line.amount===0||Boolean(referenceOnly)||oldBankRow;
+        const unusable=line.amount===null||line.amount===0||!line.date||Boolean(referenceOnly)||oldBankRow;
         const proposal=preparedDocumentReview(document,index);
         const row=draft[index]??{
           checked:false,date:line.date??'',kind:proposal?.kind??'',category:proposal?.category??''
@@ -148,17 +160,10 @@ export default function ReviewedDocumentLedger({
             </span>
           </label>
           {line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">Transaction date extracted from file: <strong className="text-foreground">{line.date}</strong> · no date entry needed</p>}
-          {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No transaction date extracted from this row. The document period is not a substitute.</p>}
+          {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No individual transaction date extracted. Kept as document-period evidence; no date entry required or allowed for posting.</p>}
           {proposal&&!already&&!unusable&&<p className="mt-1 pl-6 text-[10px] text-muted-foreground">Prepared classification: {proposal.kind} · {proposal.category}. {proposal.explanation}. Confirm before recording.</p>}
           {!already&&!unusable&&row.checked&&<div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {line.date?<div className="text-[11px] font-semibold">Source payment date<p className="mt-1 rounded-lg border border-border bg-muted/35 px-3 py-3 text-[12px]">{line.date}</p></div>:
-            <label className="text-[11px] font-semibold">
-              Missing transaction date · enter only if source proves it
-              <input aria-label={'Date for imported line '+(index+1)}
-                type="date" value={row.date}
-                onChange={e=>change(index,{date:e.target.value})}
-                className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[16px]"/>
-            </label>}
+            <div className="text-[11px] font-semibold">Source payment date<p className="mt-1 rounded-lg border border-border bg-muted/35 px-3 py-3 text-[12px]">{line.date}</p></div>
             <label className="text-[11px] font-semibold">
               Confirm transaction type
               <select aria-label={'Type for imported line '+(index+1)}
@@ -190,7 +195,7 @@ export default function ReviewedDocumentLedger({
       balances, current cash or the private desktop's document inventory.
     </p>
     <button type="button" disabled={selected.length===0||!canApply}
-      onClick={submit}
+      onClick={()=>submit(false)}
       className="mt-2 min-h-12 w-full rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
       Approve and record {selected.length} selected source transaction(s)
     </button>

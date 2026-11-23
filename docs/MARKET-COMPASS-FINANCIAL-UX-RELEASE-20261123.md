@@ -8,13 +8,14 @@
 - Consented multi-document review grouped by import month, and recurring outflow observations only after approval across multiple salary cycles.
 - CSV debit/credit column precedence with fail-closed ambiguous rows, signed generic amounts unclassified.
 - Explicit source reporting date range, as-of date, DD MMM YY bank date recognition, source date locked into ledger entries. Reporting periods do not create payment dates.
-- Prepared classification of source-labelled dated debits and explicit income credits, with a single owner approval to record the selected batch. Refunds and unclear source directions remain manual, reference balances cannot be posted.
+- Prepared classification of source-labelled dated debits and explicit income credits, with a direct approve-extracted button and confirmation to record the selected batch. Refunds and unclear source directions remain unposted. No manual date-entry field is offered: undated rows remain document-period evidence and cannot be assigned a guessed day. Reference balances cannot be posted.
+- CSVs with up to 20 leading bank-report metadata rows can locate their real transaction header; JSON transaction exports accept explicit posting/value/payment date fields and debit/credit columns. Unsupported image-only scans still need an offline extractor.
 - Cleaner Ollama prerequisite explanation, separate desktop source inventory notice and manual order-draft readiness status.
 - Existing encryption boundaries unchanged: local browser vaults stay origin-scoped, no automatic vault sync, no new AI provider, no trade execution or direct bank feed.
 
 ## Automated quality evidence
 - TypeScript project typecheck passed.
-- 205 tests passed in each of three full Node test runs.
+- 208 tests passed in each of three full Node test runs after enhanced document-source approval and parsing changes.
 - An isolated release-candidate GitHub Pages build and offline service worker were produced at BASE_PATH=/market-compass-ios/.
 - Three actual Chromium mobile-emulation release-gate passes on each release candidate; synthetic vault creation, encrypted document import, local proof of lock/unlock, wrong-password rejection, export fallback and cross-origin synthetic encrypted-vault restore tested.
 - Tests use fabricated documents and temporary loopback origins; no customer's original PWA, real encrypted backup, trusted Safari gesture or HYPRBOX gateway credentials are exercised by those release tests.

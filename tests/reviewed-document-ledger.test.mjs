@@ -62,7 +62,7 @@ test('retry, duplicate selection and unreviewed rows fail closed',()=>{
  assert.throws(()=>applyReviewedDocumentToLedger(doc,[],decisions,'USD',now),/owner-confirmed ZAR/);
 });
 
-test('PDF salary rows require a human date and type; no inferred document balance',()=>{
+test('Undated PDF salary rows remain evidence without fabricated transaction day',()=>{
  const pdf=extractLocalFinanceDocument(
   'synthetic.pdf','Net pay R7,200.00\nInsurance R450.50',
   'Synthetic payslip',{now,id:'f4b94a34-cc81-4aa2-a5da-b8fb1f0da3f6'}
@@ -71,14 +71,10 @@ test('PDF salary rows require a human date and type; no inferred document balanc
  assert.equal(pdf.lines[0].direction,'unclassified');
  assert.throws(()=>applyReviewedDocumentToLedger(pdf,[],[{
    lineIndex:0,date:'',kind:'income',category:'salary'
- }],'ZAR',now),/payment date/i);
- const entered=applyReviewedDocumentToLedger(pdf,[],[{
+ }],'ZAR',now),/No source transaction date/i);
+ assert.throws(()=>applyReviewedDocumentToLedger(pdf,[],[{
    lineIndex:0,date:'2026-11-20',kind:'income',category:'salary'
- }],'ZAR',now);
- assert.equal(entered.length,1);
- assert.equal(entered[0].amount,7200);
- assert.equal(entered[0].kind,'income');
- assert.equal(entered[0].note.includes('not a verified bank balance'),true);
+ }],'ZAR',now),/No source transaction date/i);
 });
 test('the iPhone interface offers explicit consent, saved excerpt and Spend integration',async()=>{
  const root=new URL('../artifacts/market-compass/src/',import.meta.url);
