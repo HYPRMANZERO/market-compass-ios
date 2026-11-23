@@ -66,3 +66,26 @@ test('saved debt linked entries do not lose outstanding balance evidence',()=>{
  const entry={...make('debt-a','Internal transfer from savings','debt-payment','credit-card'),remainingBalance:26000,debtAccountId:'account'};
  assert.deepEqual(suggestSavedCategoryChanges([entry]),[]);
 });
+
+
+test('Capfin DebiCheck suggests a personal loan, but does not silently change history',()=>{
+ const old=[make('capfin-one','Capfin Debit Check'),make('other-one','Generic debit order')];
+ const proposals=suggestSavedCategoryChanges(old);
+ assert.equal(proposals.length,1);
+ assert.equal(proposals[0].category,'personal-loan');
+ assert.equal(proposals[0].kind,'debt-payment');
+ assert.match(proposals[0].reason,/posted|mandate/);
+ assert.equal(old[0].kind,'expense');
+ assert.equal(old[0].category,'other');
+ const updated=applySavedCategoryChanges(old,proposals);
+ assert.equal(updated[0].kind,'debt-payment');
+ assert.equal(updated[0].category,'personal-loan');
+ assert.equal(updated[0].date,old[0].date);
+ assert.equal(updated[0].amount,old[0].amount);
+ assert.equal(updated[1].category,'other');
+ assert.deepEqual(suggestSavedCategoryChanges(updated),[]);
+});
+
+test('Capfin mandate with no posted debit keyword is not a confirmed repayment',()=>{
+ assert.deepEqual(suggestSavedCategoryChanges([make('capfin-mandate','Capfin mandate approved')]),[]);
+});

@@ -41,10 +41,11 @@ test('financial statement picker needs no label before choosing, with explicit r
   assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
 });
 
-test('local finance and owner budget replies remain local even with Agent mode enabled',()=>{
-  assert.match(assistant,/result\.source === 'local-finance-documents'/);
-  assert.match(assistant,/result\.source === 'local-owner-budget'/);
-  const check=assistant.indexOf("result.source === 'local-finance-documents'");
-  const send=assistant.indexOf('void askDesktop(question, id);');
-  assert.ok(check>0&&send>check,'Local replies must be handled before remote inference');
+test('private Ollama is mandatory for explanation; offline does not impersonate AI',()=>{
+  assert.match(assistant,/const agentMode = true/);
+  assert.match(assistant,/void askDesktop\(question, id\)/);
+  assert.match(assistant,/if \(!connected\)/);
+  assert.match(assistant,/onQueueReadOnlyQuestion\(question\)/);
+  assert.doesNotMatch(assistant,/if \(result\.source === 'local-finance-documents'\)/);
+  assert.doesNotMatch(assistant,/if \(result\.source === 'local-owner-budget'\)/);
 });

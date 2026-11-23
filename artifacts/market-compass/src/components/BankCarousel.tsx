@@ -16,6 +16,15 @@ const banks: Bank[] = [
   { id: 'investec', name: 'Investec', monogram: 'I', color: '#263c52' },
 ];
 
+function BankMark({bank}:{bank:Bank}){
+  const [failed,setFailed]=useState(false);
+  const ext=bank.id==='absa'?'svg':['standard-bank','bank-zero'].includes(bank.id)?'jpg':'png';
+  return <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white text-[13px] font-extrabold shadow-sm" style={{color:bank.color}}>
+    {failed?<Landmark size={25} aria-hidden="true"/>:<img src={`${import.meta.env.BASE_URL}bank-logos/${bank.id}.${ext}`} alt="" loading="eager" decoding="async"
+      className="h-full w-full object-contain p-1.5" onError={()=>setFailed(true)}/>}
+  </span>;
+}
+
 export default function BankCarousel({
   compact = false, onImportDocuments, onAddAccount,
 }: {
@@ -37,10 +46,7 @@ export default function BankCarousel({
       {banks.map(bank => <div role="listitem" key={bank.id} className="w-[116px] min-w-[116px] snap-start sm:w-[132px] sm:min-w-[132px]">
         <button type="button" aria-label={`Select ${bank.name}`} aria-pressed={selected === bank.id} data-testid={`bank-option-${bank.id}`}
           onClick={() => setSelected(bank.id)} className={`flex min-h-[122px] w-full flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3 text-center transition-colors ${selected === bank.id ? 'border-primary bg-primary/10 ring-2 ring-primary/20' : 'border-border bg-background active:bg-muted'}`}>
-          <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white text-[13px] font-extrabold shadow-sm" style={{color:bank.color}}>
-            <Landmark size={25} aria-hidden="true"/>
-            <img src={`${import.meta.env.BASE_URL}bank-logos/${bank.id}.${bank.id==='absa'?'svg':['standard-bank','bank-zero'].includes(bank.id)?'jpg':'png'}`} alt="" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-contain p-1.5" onError={e => {e.currentTarget.style.display = 'none';}}/>
-          </span>
+          <BankMark bank={bank}/>
           <span className="line-clamp-2 min-h-[30px] text-[11px] font-semibold leading-[15px]">{bank.name}</span>
         </button>
       </div>)}

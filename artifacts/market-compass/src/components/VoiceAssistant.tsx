@@ -104,6 +104,9 @@ export default function VoiceAssistant({
     /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
+  // Explicit, reversible owner-only trial; the default private agent remains unchanged.
+  const ownerPreviewModel = Boolean(protectedSameOrigin) && typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('compassAI') === 'qwen35-4b';
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
@@ -111,7 +114,7 @@ export default function VoiceAssistant({
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [agentMode, setAgentMode] = useState(false);
+  const agentMode = true; // Model-backed read-only agent always active.
   const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
   const [ownerBudget, setOwnerBudget] = useState<OwnerBudgetView | null>(null);
@@ -174,12 +177,17 @@ export default function VoiceAssistant({
   // Reconnect after every vault unlock, and on visibility/network changes.
   // A failed connection does not discard or disable the encrypted settings.
   useEffect(() => {
+    if (publicPagesEdition) {
+      setConnection('paused');
+      setConnectionMessage('Private Ollama is not available on the unauthenticated public edition.');
+      return;
+    }
     if (!settings.enabled) {
       setConnection(settings.url ? 'paused' : 'not-configured');
       setConnectionMessage('');
       return;
     }
-    const url = privateTailnetOrigin(settings.url);
+    const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!url || settings.token.length < 48) {
       setConnection('offline');
       setConnectionMessage('Saved desktop details are incomplete. Edit and save the connection below.');
@@ -208,8 +216,8 @@ export default function VoiceAssistant({
       // requests in Firefox (NS_BINDING_ABORTED).
       setConnection(previous => previous === 'connected' ? previous : 'checking');
       try {
-        const response = await fetch(url + '/api/session', {
-          method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+        const response = await fetch(url + (ownerPreviewModel ? '/api/session/preview' : '/api/session'), {
+          method: 'GET', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
           signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` },
         });
@@ -262,7 +270,7 @@ export default function VoiceAssistant({
       window.removeEventListener('offline', whenOffline);
       document.removeEventListener('visibilitychange', whenVisible);
     };
-  }, [settings.enabled, settings.url, settings.token, reconnectNonce]);
+  }, [settings.enabled, settings.url, settings.token, reconnectNonce, protectedSameOrigin, publicPagesEdition, ownerPreviewModel]);
 
   // Sensitive source data stays on the private desktop. The UI fetches only
   // a brief inventory and a GET-only Luno balance, never raw emails or statements.
@@ -275,7 +283,7 @@ export default function VoiceAssistant({
       setOwnerBudgetAvailable(false);
       return;
     }
-    const origin = privateTailnetOrigin(settings.url);
+    const origin = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!origin) return;
     // Avoid showing a private snapshot from a previously connected host/token.
     setOwnerBudget(null);
@@ -289,7 +297,7 @@ export default function VoiceAssistant({
       const timer = window.setTimeout(() => controller.abort(), 15000);
       try {
         const response = await fetch(origin + path, {
-          mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', signal: controller.signal,
+          mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` }
         });
         if (!response.ok) throw Error('The desktop source service returned HTTP ' + response.status);
@@ -366,16 +374,16 @@ export default function VoiceAssistant({
       active=false; controllers.forEach(x=>x.abort()); window.clearInterval(interval);
       document.removeEventListener('visibilitychange',resume);
     };
-  }, [connected, settings.url, settings.token, sourceRefresh]);
+  }, [connected, settings.url, settings.token, sourceRefresh, protectedSameOrigin]);
 
   async function readCompactMemory(loadHistory = false) {
     if (!connected) return;
-    const origin = privateTailnetOrigin(settings.url);
+    const origin = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!origin) return;
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + '/api/memory', {
-        method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+        method: 'GET', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory returned HTTP ' + response.status);
@@ -403,12 +411,12 @@ export default function VoiceAssistant({
     if (method === 'DELETE' && !window.confirm(
       'Permanently clear the encrypted desktop conversation history AND archived documents? Your original financial source files will not be deleted.'
     )) return;
-    const origin = privateTailnetOrigin(settings.url);
+    const origin = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!origin) return;
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + (method === 'POST' ? '/api/memory/archive' : '/api/memory'), {
-        method, mode:'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache:'no-store',
+        method, mode:'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache:'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory operation returned HTTP ' + response.status);
@@ -507,7 +515,7 @@ export default function VoiceAssistant({
   }
 
   async function askDesktop(prompt: string, id: number, queuedId?:string) {
-    const url = privateTailnetOrigin(settings.url);
+    const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!url || !settings.token || !connected) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 65000);
@@ -538,10 +546,9 @@ export default function VoiceAssistant({
         expenseSummary: context.expenseSummary,
         documentFacts,
       } : undefined;
-      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
-      const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
-      const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
-        method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+      const useAgent = agentMode; // Every AI reply comes from HYPRBOX Ollama, with read-only agent safety.
+      const response = await fetch(url + (useAgent ? (ownerPreviewModel ? '/api/agent/preview' : '/api/agent/run') : '/api/chat'), {
+        method: 'POST', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
@@ -586,7 +593,7 @@ export default function VoiceAssistant({
       if (messageSerial.current !== id) return;
       setConnection('offline');
       setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
-      add('local', 'The desktop AI is temporarily unavailable. Offline questions about your saved debt plan and markets still work.');
+      add('local', 'Desktop Ollama is unavailable. Read-only questions can be saved locally for your approval and sent when the private gateway reconnects.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
 
@@ -600,23 +607,15 @@ export default function VoiceAssistant({
     const result = interpretCompassCommand(question, context);
     // Safeguards and navigation remain local, but a private Luno balance must
     // not be confused with a historical cryptocurrency market candle.
-    const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
-      /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
-    const asksPublicResearch = /^(?:search public (?:reference|information|info)|research (?:public )?(?:topic|information)|search wikipedia for)\b/i.test(question);
     // Navigation and non-negotiable payment/trading refusals remain local even
     // with Agent mode enabled: a model must never override these guards.
     const localSafetyRefusal = result.type === 'answer' &&
       result.reply.startsWith('I cannot transfer money');
-    if (result.type === 'navigate' || localSafetyRefusal ||
-      // Already derived from the encrypted iPhone workspace: do not send these
-      // device-local excerpts to HYPRBOX just because Agent mode is enabled.
-      result.source === 'local-finance-documents' ||
-      result.source === 'local-owner-budget' ||
-      ((!agentMode || !connected) && result.type !== 'unknown' &&
-      !(!connected && result.needsHistoricalSources) &&
-      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
-      add('local', result.reply); speak(result.reply);
-      if (result.destination) onNavigate(result.destination);
+    // Device-local navigation and fixed safety refusals do not need model inference.
+    // Any financial explanation must come from HYPRBOX Ollama, not a local AI substitute.
+    if (result.type === 'navigate' || localSafetyRefusal) {
+      add('local',result.reply);
+      if(result.destination)onNavigate(result.destination);
       return;
     }
     if (!connected) {
@@ -691,15 +690,15 @@ export default function VoiceAssistant({
   }
 
   return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
-    <section className="flex min-h-[56px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3 py-2 text-white" aria-label="Compass AI model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[12px] font-bold"><BrainCircuit size={18} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
+    <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass AI model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private HYPRBOX Ollama status"}>
         <span className={connected?"h-2 w-2 shrink-0 rounded-full bg-emerald-400":connection==="checking"?"h-2 w-2 shrink-0 rounded-full bg-amber-300":"h-2 w-2 shrink-0 rounded-full bg-white/50"} aria-hidden="true"/>
-        {connected?"Ollama connected":connection==="checking"?"Checking Ollama":settings.enabled?"Ollama offline":"Ollama not set"}
+        {connected?(ownerPreviewModel?"4B preview connected":"Ollama connected"):connection==="checking"?"Checking Ollama":settings.enabled?(ownerPreviewModel?"4B preview offline":"Ollama offline"):"Ollama not set"}
       </span>
       <button type="button" aria-label={settings.speakReplies?"Turn off spoken replies":"Turn on spoken replies"} aria-pressed={settings.speakReplies}
         onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
-        disabled={!speakingSupported} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 disabled:opacity-40">
+        disabled={!speakingSupported} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-transparent disabled:opacity-40">
         {settings.speakReplies?<Speaker size={18}/>:<VolumeX size={18}/>}</button>
     </section>
 
@@ -711,10 +710,10 @@ export default function VoiceAssistant({
         }}><X size={14} className="mr-1 inline"/>Clear</button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <label className="flex min-h-8 items-center gap-2 text-[12px] font-semibold">
-          <input type="checkbox" checked={agentMode} disabled={busy} onChange={event=>{setAgentMode(event.target.checked);setLastAgent(null);}} aria-label="Enable read-only agent mode"/>
-          Agent mode <span className="text-[10px] font-normal text-muted-foreground">3 read-only tools max</span>
-        </label>
+        <span className="flex min-h-8 items-center gap-2 text-[12px] font-semibold" aria-label="Read-only agent mode always active">
+          <ShieldCheck size={15} className="text-primary" aria-hidden="true"/> Agent mode on
+          <span className="text-[10px] font-normal text-muted-foreground">Ollama · 3 read-only tools max</span>
+        </span>
         <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer">Safety</summary>
           <p className="max-w-[330px] py-2 leading-5">Tools only review sources. No trading, banking or payment changes. Sharing iPhone vault entries requires separate permission in settings.</p>
         </details>
@@ -1026,7 +1025,7 @@ export default function VoiceAssistant({
       {protectedSameOrigin && (
         <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
           You are on the protected website: <strong>{window.location.hostname}</strong>.
-          {' '}For private AI, use the exact same HTTPS origin (not a GitHub Pages or Tailscale URL).
+          {' '}Your iPhone uses this authenticated gateway for HYPRBOX Ollama even when a Tailscale host is saved for separately authorised desktop devices.
           {privateTailnetOrigin(host) !== protectedSameOrigin && ' Tap “Use this protected website for AI” below to save the correct address without changing your token.'}
         </p>
       )}

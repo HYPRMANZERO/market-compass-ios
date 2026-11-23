@@ -451,7 +451,7 @@ async function main(){
       link.click();
     });
     await expectText(tab,'Debt payoff','debt account editor');
-    await click(tab,'Add an account');
+    // New accounts are drafts until explicitly saved: no blank vault records.
     async function fillDebtField(label,value){
       const result=await tab.invoke(function(label,value){
         const matches=[...document.querySelectorAll('label')].filter(item=>item.textContent?.trim().startsWith(label));
@@ -467,6 +467,7 @@ async function main(){
     await fillDebtField('Balance','1840');
     await fillDebtField('APR (%)','18.5');
     await fillDebtField('Minimum / month','120');
+    await click(tab,'Save account');
     await tab.invoke(function(){
       const link=document.querySelector('a[aria-label="Go to Market Compass home"]');
       if(!link)throw Error('Home link unavailable');

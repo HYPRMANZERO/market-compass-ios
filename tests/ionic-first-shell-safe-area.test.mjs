@@ -56,7 +56,8 @@ test('account list and category details use Ionic components but keep their fina
   ]);
   assert.match(home,/<IonCard className="mc-wallet-hero"/);
   assert.match(home,/<IonList className="mc-account-list">/);
-  assert.match(home,/<IonModal isOpen=\{accountActionsOpen\}/);
+  assert.match(home,/accountActionsOpen && createPortal\(/);
+  assert.match(home,/aria-label="Account actions"/);
   assert.match(spend,/<IonAccordionGroup multiple=\{true\}/);
   assert.match(spend,/spendingCycleSummaries\(/);
   assert.match(activity,/const valid=entries\.filter/);

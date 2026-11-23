@@ -14,6 +14,12 @@ function classify(entry:ExpenseEntry):{kind:ExpenseKind;category:ExpenseCategory
  if(!s)return null;
  const matches=(pattern:RegExp)=>pattern.test(s);
  const result=(kind:ExpenseKind,category:ExpenseCategory,reason:string)=>({kind,category,reason});
+ // Capfin collects instalments by debit order. DebiCheck alone can also mean
+ // a mandate, not a settled payment. Suggest only; never auto-adjust balances.
+ if(entry.kind!=='income' && entry.kind!=='transfer' && matches(/\bcapfin\b/) &&
+    matches(/\b(?:debi\s*check|debit\s*check|debi\s*order|debit\s*order|repayment|instalment|payment)\b/))
+   return result('debt-payment','personal-loan','Capfin loan debit: confirm it was posted, not only a DebiCheck mandate');
+
  // An incoming credit is not automatically a salary: only explicit wording.
  if(entry.kind==='income'){
    if(matches(/\b(?:salary|payroll|wages|net pay)\b/))return result('income','salary','Explicit salary narration');

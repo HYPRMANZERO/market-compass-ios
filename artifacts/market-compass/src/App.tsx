@@ -23,6 +23,7 @@ import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import BankCarousel from '@/components/BankCarousel';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
 import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
 import FinancialPulse from '@/components/FinancialPulse';
@@ -902,7 +903,24 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
   const [errorMessage, setErrorMessage] = useState('');
   const accounts = data.accounts;
   const update = (id: string, key: keyof Omit<DebtAccount, 'id'>, value: string) => setData((old) => ({ ...old, accounts: old.accounts.map((account) => account.id === id ? { ...account, [key]: value } : account) }));
-  const addAccount = () => setData((old) => ({ ...old, accounts: [...old.accounts, { id: crypto.randomUUID(), name: '', balance: '', apr: '', minimumPayment: '' }] }));
+  // The add form is a temporary draft. Opening it never creates an empty
+  // persisted account; saved accounts appear in a separate collapsed list.
+  const blankAccount=()=>({name:'',balance:'',apr:'',minimumPayment:''});
+  const [newAccount,setNewAccount]=useState(blankAccount);
+  const [accountError,setAccountError]=useState('');
+  const addAccount=()=>{
+    const next=newAccount;
+    const fields=[next.balance,next.apr,next.minimumPayment];
+    if(!next.name.trim() || fields.some(value=>value.trim()==='' || !Number.isFinite(Number(value)) || Number(value)<0) ||
+       Number(next.apr)>200){
+      setAccountError('Enter an account name, balance, APR (0–200), and minimum monthly payment before saving.');
+      return;
+    }
+    if(accounts.length>=50){setAccountError('The maximum of 50 saved accounts has been reached.');return;}
+    setData(old=>({...old,accounts:[...old.accounts,{id:crypto.randomUUID(),...next,name:next.name.trim()}]}));
+    setNewAccount(blankAccount());
+    setAccountError('');
+  };
   const removeAccount = (id: string) => setData((old) => ({ ...old, accounts: old.accounts.filter((account) => account.id !== id) }));
   const hasMoneyEntered = accounts.some(a => Number(a.balance) > 0 || Number(a.minimumPayment) > 0) || Number(data.monthlyExtra) > 0 || Number(data.emergencyReserve) > 0;
   const changeCurrency = (next: string, nextRegion?: string) => {
@@ -938,11 +956,46 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
     <FinancialReadinessChecklist data={data} />
     <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
       <div className="space-y-4">
-        <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50</span>}>
-          {accounts.length ? <div className="divide-y divide-border">
-            {accounts.map((account, index) => <div key={account.id} className="p-4 sm:p-5"><div className="mb-4 flex items-center justify-between"><span className="mono text-[10px] text-muted-foreground">ACCOUNT {String(index + 1).padStart(2, '0')}</span><button type="button" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label={`Remove ${account.name || 'account'}`} onClick={() => removeAccount(account.id)}><Trash2 size={15} /></button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="Account name" value={account.name} onChange={(v) => update(account.id, 'name', v)} placeholder="e.g. Card" /><Field label="Balance" value={account.balance} onChange={(v) => update(account.id, 'balance', v)} type="number" min="0" step="0.01" placeholder="0.00" /><Field label="APR (%)" value={account.apr} onChange={(v) => update(account.id, 'apr', v)} type="number" min="0" step="0.01" placeholder="0.00" /><Field label="Minimum / month" value={account.minimumPayment} onChange={(v) => update(account.id, 'minimumPayment', v)} type="number" min="0" step="0.01" placeholder="0.00" /></div></div>)}
-          </div> : <EmptyState icon={WalletCards} title="No debt accounts yet" description="Start with the balances, rates, and minimum payments you know. You can adjust these at any time." />}
-          <div className="border-t border-border p-4"><button type="button" disabled={accounts.length >= 50} onClick={addAccount} className="inline-flex items-center gap-2 text-[11px] font-semibold text-primary disabled:opacity-40"><Plus size={15} /> Add an account</button></div>
+        <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50 saved</span>}>
+          {accounts.length ? <div className="divide-y divide-border" aria-label="Saved debt accounts">
+            {accounts.map((account,index)=><details key={account.id} className="group">
+              <summary className="flex min-h-14 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-[13px]">
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate">{maskDocumentPII(account.name.trim())||`Incomplete saved account ${index+1}`}</strong>
+                  <small className="text-[10px] text-muted-foreground">Saved account · Tap to edit</small>
+                </span>
+                <strong className="shrink-0 tabular-nums">{account.balance.trim()?money(Number(account.balance)||0,data.currency):'Balance missing'}</strong>
+                <ChevronDown size={17} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true"/>
+              </summary>
+              <div className="border-t border-border bg-muted/20 px-4 py-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="Account name" value={account.name} onChange={v=>update(account.id,'name',v)} placeholder="e.g. Personal loan"/>
+                  <Field label="Balance" value={account.balance} onChange={v=>update(account.id,'balance',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                  <Field label="APR (%)" value={account.apr} onChange={v=>update(account.id,'apr',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                  <Field label="Minimum / month" value={account.minimumPayment} onChange={v=>update(account.id,'minimumPayment',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                </div>
+                <button type="button" onClick={()=>{if(window.confirm('Remove this saved account from the encrypted workspace? This does not delete historic transactions.'))removeAccount(account.id);}}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-destructive/30 px-3 text-[11px] font-semibold text-destructive">
+                  <Trash2 size={14}/> Remove saved account
+                </button>
+              </div>
+            </details>)}
+          </div>:<EmptyState icon={WalletCards} title="No debt accounts yet" description="Add a debt account below. Nothing is saved until you tap Save account."/>}
+          <div id="mc-add-debt-account" className="scroll-mt-24 border-t border-border p-4 sm:p-5" aria-label="Add a new debt account">
+            <h3 className="text-[14px] font-bold">Add an account</h3>
+            <p className="mb-3 mt-1 text-[11px] text-muted-foreground">This form stays blank after saving. Existing accounts stay collapsed above.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Account name" value={newAccount.name} onChange={v=>setNewAccount(old=>({...old,name:v}))} placeholder="e.g. Capfin loan"/>
+              <Field label="Balance" value={newAccount.balance} onChange={v=>setNewAccount(old=>({...old,balance:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+              <Field label="APR (%)" value={newAccount.apr} onChange={v=>setNewAccount(old=>({...old,apr:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+              <Field label="Minimum / month" value={newAccount.minimumPayment} onChange={v=>setNewAccount(old=>({...old,minimumPayment:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+            </div>
+            <button type="button" disabled={accounts.length>=50} onClick={addAccount}
+              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+              <Plus size={16}/> Save account
+            </button>
+            {accountError&&<p role="alert" className="mt-2 text-[11px] text-destructive">{accountError}</p>}
+          </div>
         </Panel>
         <Panel title="Monthly guardrails">
           <div className="grid gap-4 p-5 sm:grid-cols-2">
@@ -1343,9 +1396,11 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
   const { data, setData } = vault;
   const [,navigate]=useLocation();
   const addAccount=()=>{
-    if(data.accounts.length>=50)return;
-    setData(old=>({...old,accounts:[...old.accounts,{id:crypto.randomUUID(),name:'',balance:'',apr:'',minimumPayment:''}]}));
+    // Navigate to the blank draft form; never create an empty vault account.
     navigate('/debt');
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>
+      document.getElementById('mc-add-debt-account')?.scrollIntoView({behavior:'smooth',block:'start'})
+    ));
   };
   const [importOpen,setImportOpen]=useState(false);
   const [recoveryOpen,setRecoveryOpen]=useState(false);

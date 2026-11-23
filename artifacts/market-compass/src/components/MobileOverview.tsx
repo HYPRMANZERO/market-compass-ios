@@ -1,5 +1,7 @@
 import {useState} from 'react';
-import {IonCard,IonList,IonRippleEffect,IonModal} from '@ionic/react';
+import {IonCard,IonList,IonRippleEffect} from '@ionic/react';
+import {createPortal} from 'react-dom';
+import {useEffect} from 'react';
 import {
   Activity, ArrowRight, ArrowUpRight, ChevronDown, FileClock,
   FileText, Landmark, LockKeyhole, Plus, ReceiptText, ShieldCheck,
@@ -71,6 +73,12 @@ export default function MobileOverview({
   onImportDocuments,onRecoverVault,onAddAccount
 }: Props) {
   const [accountActionsOpen,setAccountActionsOpen]=useState(false);
+  useEffect(()=>{
+    if(!accountActionsOpen)return;
+    const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape')setAccountActionsOpen(false);};
+    document.addEventListener('keydown',onKey);
+    return ()=>document.removeEventListener('keydown',onKey);
+  },[accountActionsOpen]);
   const emptyFinancialWorkspace=accountsCount===0&&documentsCount===0&&approvedEntryCount===0;
   const recurringOutflows=recurringPatterns(entries,currency,localDate())
     .filter(p=>p.kind==='expense'||p.kind==='debt-payment');
@@ -273,16 +281,20 @@ export default function MobileOverview({
       <Link href="/markets" className="mc-app-market-link">Open markets <ArrowRight size={16} aria-hidden="true"/></Link>
     </section>
 
-    <IonModal isOpen={accountActionsOpen} onDidDismiss={()=>setAccountActionsOpen(false)} initialBreakpoint={0.43} breakpoints={[0,0.43,0.8]} className="mc-ionic-menu mc-ionic-account-sheet" aria-label="Account actions">
-      <section role="dialog" aria-modal="true" aria-label="Account actions" className="w-full max-w-sm rounded-[24px] border border-border bg-card p-4 shadow-2xl" onClick={event=>event.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Your accounts</h2><button type="button" aria-label="Close account actions" onClick={()=>setAccountActionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={18}/></button></div>
-        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Choose what to do. Account figures are saved locally, not bank-connected.</p>
-        <div className="mt-4 grid gap-2">
-          <Link href="/debt" onClick={()=>setAccountActionsOpen(false)} className="flex min-h-12 items-center justify-between rounded-xl border border-border px-4 text-[13px] font-semibold">View accounts and balances <ArrowRight size={17}/></Link>
-          <button type="button" onClick={()=>{setAccountActionsOpen(false);onAddAccount?.();}} className="flex min-h-12 items-center justify-between rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground">Add a new account <Plus size={17}/></button>
-        </div>
-      </section>
-    </IonModal>
+    {accountActionsOpen && createPortal(
+      <div className="mc-quick-menu-layer fixed inset-0 z-[120] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setAccountActionsOpen(false)}>
+        <section role="dialog" aria-modal="true" aria-label="Account actions"
+          className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl"
+          onClick={event=>event.stopPropagation()}>
+          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted-foreground/25" aria-hidden="true"/>
+          <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Your accounts</h2><button type="button" aria-label="Close account actions" onClick={()=>setAccountActionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={18}/></button></div>
+          <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Review saved accounts or open a blank form to add another. No account is created until you save it.</p>
+          <div className="mt-4 grid gap-2">
+            <Link href="/debt" onClick={()=>setAccountActionsOpen(false)} className="flex min-h-12 items-center justify-between rounded-xl border border-border px-4 text-[13px] font-semibold">View saved accounts and balances <ArrowRight size={17}/></Link>
+            <button type="button" onClick={()=>{setAccountActionsOpen(false);onAddAccount?.();}} className="flex min-h-12 items-center justify-between rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground">Add an account <Plus size={17}/></button>
+          </div>
+        </section>
+      </div>,document.body)}
 
     <div className="mc-app-privacy"><ShieldCheck size={17} aria-hidden="true"/>
       <p>Only reviewed, manually entered financial information is shown. No bank connection, automatic payments or trade execution.</p>
