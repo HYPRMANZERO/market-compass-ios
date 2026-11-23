@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
 import {existsSync} from 'node:fs';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createServer} from 'node:net';
@@ -231,12 +231,99 @@ async function main(){
       return pages.find(item=>item.type==='page'&&item.url.startsWith(first));
     },'disposable browser tab');
     tab=await BrowserTab.connect(target.webSocketDebuggerUrl);
+    // Test a real mobile viewport, not merely Edge's desktop minimum window width.
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:844,deviceScaleFactor:3,mobile:true
+    });
     await expectText(tab,'Create encrypted workspace','initial synthetic vault screen');
     const pass='synthetic-browser-gate-'+randomUUID();
     await input(tab,'#vault-password',pass);
     await click(tab,'Create encrypted workspace');
     await expectText(tab,'Encrypted vault & settings','synthetic vault created');
     console.log('PASS: isolated AES-GCM vault creation in actual browser');
+
+    const ui=await tab.invoke(function(){
+      const hero=document.querySelector('.mc-wallet-hero');
+      const actions=document.querySelector('.mc-bs-quick-actions');
+      const columns=actions?[...actions.querySelectorAll('.col-4')]:[];
+      const nav=document.querySelector('[aria-label="Mobile app tabs"]');
+      return {
+        hero:!!hero,
+        accountDisclaimer:hero?.innerText.includes('Not a live or bank-verified balance')||
+          hero?.innerText.includes('private picture'),
+        actionCount:columns.length,
+        bootstrapDisplay:actions?getComputedStyle(actions).display:null,
+        columnWidth:columns.length?columns[0].getBoundingClientRect().width:0,
+        rowWidth:actions?.getBoundingClientRect().width??0,
+        nav:!!nav,navTabs:nav?.querySelectorAll('.mc-tab-link').length??0,
+        privacyText:document.body.innerText.includes('No bank connection')
+      };
+    });
+    assert.equal(ui.hero,true,'mobile banking overview card must render');
+    assert.equal(ui.accountDisclaimer,true,'manual account figures must not appear bank-verified');
+    assert.equal(ui.actionCount,3,'quick actions must expose three mobile routes');
+    assert.equal(ui.bootstrapDisplay,'flex','locally bundled Bootstrap grid must control quick actions');
+    assert.ok(ui.rowWidth>0 && Math.abs(ui.columnWidth/ui.rowWidth-1/3)<0.025,
+      'Bootstrap col-4 quick action must occupy one third of the row');
+    assert.equal(ui.nav,true,'mobile tab navigation must remain');
+    assert.equal(ui.navTabs,6,'all six existing PWA routes must remain accessible');
+    assert.equal(ui.privacyText,true,'clear offline, manual-entry boundary must remain');
+    console.log('PASS: Bootstrap mobile grid, finance card, quick actions, privacy and six-tab shell');
+    if(process.env.MC_TEST_SCREENSHOT){
+      // Captures only the fabricated, isolated test vault; never capture owner data.
+      const frame=await tab.command('Page.captureScreenshot',{
+        format:'png',captureBeyondViewport:false,fromSurface:true
+      });
+      await writeFile(process.env.MC_TEST_SCREENSHOT,Buffer.from(frame.data,'base64'));
+      console.log('Synthetic mobile screenshot captured for local visual review');
+    }
+
+    await tab.invoke(function(){
+      const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/debt'));
+      if(!link)throw Error('Debt route unavailable');
+      link.click();
+    });
+    await expectText(tab,'Debt payoff','debt account editor');
+    await click(tab,'Add an account');
+    async function fillDebtField(label,value){
+      const result=await tab.invoke(function(label,value){
+        const matches=[...document.querySelectorAll('label')].filter(item=>item.textContent?.trim().startsWith(label));
+        const field=matches.map(item=>item.querySelector('input')).find(Boolean);
+        if(!field)return 'missing';
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,value);
+        field.dispatchEvent(new Event('input',{bubbles:true}));
+        return 'filled';
+      },label,value);
+      assert.equal(result,'filled','Debt field '+label+' must be editable');
+    }
+    await fillDebtField('Account name','SYNTHETIC CREDIT CARD');
+    await fillDebtField('Balance','1840');
+    await fillDebtField('APR (%)','18.5');
+    await fillDebtField('Minimum / month','120');
+    await tab.invoke(function(){
+      const link=document.querySelector('a[aria-label="Go to Market Compass home"]');
+      if(!link)throw Error('Home link unavailable');
+      link.click();
+    });
+    await expectText(tab,'SYNTHETIC CREDIT CARD','owner-entered account row on Home');
+    const accountUi=await tab.invoke(function(){
+      const account=[...document.querySelectorAll('.mc-account-row')].find(x=>x.textContent.includes('SYNTHETIC CREDIT CARD'));
+      if(!account)return null;
+      account.querySelector('summary')?.click();
+      return {
+        balance:account.querySelector('.mc-account-right')?.textContent,
+        expanded:account.open,
+        details:account.querySelector('.mc-account-details')?.textContent,
+        source:account.querySelector('.mc-account-label small')?.textContent
+      };
+    });
+    assert.ok(accountUi?.balance?.includes('1')&&accountUi?.balance?.includes('840'),
+      'entered account balance should be visible in banking row');
+    assert.equal(accountUi?.expanded,true,'per-account details must expand');
+    assert.ok(accountUi?.details?.includes('18.5%'),
+      'account details must preserve owner-entered APR');
+    assert.match(accountUi?.source??'',/Not bank connected/);
+    console.log('PASS: vertical per-account banking row, saved balance, APR and source status');
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));

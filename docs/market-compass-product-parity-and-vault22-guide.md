@@ -51,3 +51,11 @@ Crypto price panels display provider, timestamp, ZAR/USD and limitations. The de
 ## Deferred scope
 
 Real bank/credit-card aggregation, external email/OAuth grants, iOS background file scanning, robust cross-source bank-statement reconciliation, unbounded streaming PDF extraction and OCR, cross-origin vault sync, Tailscale live original PWA, and automated trading/payment execution are **not** implemented or authorized by this document. See `docs/CONSENTED-DOCUMENT-INTAKE-20261122.md` and `docs/IMPORT-HARDENING-ACCEPTANCE-20261122.md` for the current permissions and acceptance matrix.
+
+## 23 November 2026 — Bootstrap-assisted banking-style UI (development)
+
+The staged shared PWA now uses a **locally bundled Bootstrap 5.3.9 grid only**, underneath existing Tailwind styling, to improve mobile composition without external scripts or CDN dependencies. The home page opens directly on a deep-green finance overview, Quick actions, saved Spend/Document counts, and **vertical expandable account cards** with manually entered balances, APR and minimum payments. The six-tab navigation has more rounded active treatment and Vault & Settings remains accessible from the header shield, moved below page content to keep the first screen focused on finances.
+
+Account amounts remain explicitly unverified/manual; source-labelled documents and historical market prices are not presented as live bank holdings or current bank balances. These UI improvements implement the Vault22/22seven comparison's easier account-by-account navigation and immediate access to documents. The shared code is designed for parity between both PWA variants, but **neither production origin has been deployed or verified as part of this staging work**.
+
+Automated coverage includes a real headless mobile-size Chromium layout check of Bootstrap columns and six tabs, synthetic manual debt account expansion, password-protected PDF import, and encrypted backup/restore across two isolated localhost origins. See `docs/BOOTSTRAP-MOBILE-UX-20261123.md`. Full official bank aggregation, read-only email consent integrations, OCR for scanned files and physical iPhone Safari native backup acceptance remain later gates.
