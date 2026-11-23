@@ -73,6 +73,12 @@ export default defineConfig({
   build: {
     outDir,
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname,'index.html'),
+        ionicPreview: path.resolve(import.meta.dirname,'ionic-preview.html'),
+      },
+    },
   },
   server: {
     port,

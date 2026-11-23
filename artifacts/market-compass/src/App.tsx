@@ -987,6 +987,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
   const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
+  const [ionicPreviewOpen,setIonicPreviewOpen]=useState(false);
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   const options=[
@@ -1023,6 +1024,26 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           </span>
         </button>)}
       </nav>
+    </section>
+    <section aria-label="Ionic native-style design preview" className="mb-5 rounded-[20px] border border-border bg-card p-3 shadow-sm sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><p className="text-[12px] font-bold">Ionic UI Preview</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+            Try Ionic account cards, spending categories and action sheets with clearly labelled sample data. Your encrypted records remain untouched.
+          </p>
+        </div>
+        <button type="button" aria-expanded={ionicPreviewOpen}
+          onClick={()=>setIonicPreviewOpen(value=>!value)}
+          className="min-h-11 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
+          {ionicPreviewOpen?'Close Ionic preview':'Try Ionic design'}
+        </button>
+      </div>
+      {ionicPreviewOpen&&<div className="mt-4 overflow-hidden rounded-[20px] border border-border bg-background">
+        <iframe title="Interactive Market Compass Ionic React preview using only sample data"
+          src={import.meta.env.BASE_URL+'ionic-preview.html'}
+          className="block h-[min(72dvh,680px)] min-h-[420px] w-full border-0"
+          loading="lazy"/>
+      </div>}
     </section>
     {section==='documents'&&ledger.length>0&&<button type="button"
       onClick={()=>setSection('activity')}
