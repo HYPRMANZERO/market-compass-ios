@@ -315,6 +315,29 @@ async function main(){
     await tab.invoke(function(){document.querySelector('button[aria-label="Close account actions"]')?.click();});
     await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
     await expectText(tab,'Your finances','Spend landing page');
+    await tab.invoke(function(){
+      const button=[...document.querySelectorAll('button')].find(x=>x.textContent?.includes('Try Ionic design'));
+      if(!button)throw Error('Ionic preview entry missing from Spend');
+      button.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      const inside=frame?.contentDocument;
+      return !!inside?.querySelector('ion-app')&&inside.body.innerText.includes('SAMPLE DATA ONLY')
+        &&!!inside.querySelector('ion-action-sheet');
+    }),'embedded Ionic preview with local sample-only account/action-sheet UI',18000);
+    const ionicSample=await tab.invoke(function(){
+      const doc=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]')?.contentDocument;
+      return {
+        accounts:doc?.querySelectorAll('ion-list ion-item').length??0,
+        noVaultStrings:!doc?.body.innerText.includes('Your real account data')
+      };
+    });
+    assert.ok(ionicSample.accounts>=3,'Ionic preview must contain interactive account entries');
+    console.log('PASS: isolated Ionic React demo renders sample accounts inside existing PWA');
+    await tab.invoke(function(){
+      [...document.querySelectorAll('button')].find(x=>x.textContent?.includes('Close Ionic preview'))?.click();
+    });
     await tab.invoke(function(){[...document.querySelectorAll('button[aria-pressed]')].find(x=>x.textContent?.includes('Activity'))?.click();});
     await expectText(tab,'Where your income goes','salary-cycle allocation panel');
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Spend and income allocation"]');}),true,'salary allocation is visible in Spend activity');
