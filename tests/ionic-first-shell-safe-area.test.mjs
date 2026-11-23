@@ -24,9 +24,17 @@ test('safe area has one opaque status-bar backing and no fixed blur layer',async
   assert.match(css,/\.mc-mobile-header::before,\s*\.mc-mobile-header::after \{ display: none !important; \}/);
   assert.match(css,/--ion-safe-area-top: 0px;/);
   assert.match(css,/@media\(display-mode:standalone\) and \(max-width:1023px\)/);
-  assert.match(css,/padding-top: max\(env\(safe-area-inset-top,0px\),20px\) !important;/);
+  assert.match(css,/padding-top: calc\(max\(env\(safe-area-inset-top,0px\),20px\) \+ 12px\) !important;/);
+  assert.match(css,/\.mc-vault-entry \{[\s\S]*?padding-top: calc\(32px \+ env\(safe-area-inset-top,0px\)\) !important;/);
   assert.match(css,/-webkit-backdrop-filter: none !important;/);
   assert.match(css,/\.mc-mobile-content \{ padding-bottom: calc\(88px \+ env\(safe-area-inset-bottom,0px\)\) !important;/);
+});
+
+test('Ionic document flow restores vertical touch scrolling to the login and all Wouter routes',async()=>{
+  const css=await file('ionic-shell.css');
+  assert.match(css,/html\.plt-pwa \{[\s\S]*?overflow-y: auto !important;/);
+  assert.match(css,/body \{[\s\S]*?position: relative !important;[\s\S]*?max-height: none !important;[\s\S]*?overflow-y: visible !important;[\s\S]*?touch-action: auto !important;/);
+  assert.match(css,/ion-app\.mc-ionic-app \{[\s\S]*?overflow: visible !important;[\s\S]*?contain: none !important;/);
 });
 
 test('account list and category details use Ionic components but keep their finance sources',async()=>{

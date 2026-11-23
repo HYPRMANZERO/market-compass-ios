@@ -1,6 +1,31 @@
 /* Market Compass Ionic-first app shell.
  * Shared by private Safari/ngrok and original public Pages PWA.
  * Visual only: never touches vault data, financial processing or network permissions. */
+/* Ionic structure.css assumes an IonPage/IonContent scroll host. This app deliberately
+ * preserves its existing Wouter document-scrolling layout, so undo Ionic's fixed,
+ * overflow-hidden BODY and touch-action lock for both the login and every route. */
+html,
+html.plt-pwa {
+  height: auto !important;
+  min-height: 100%;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+body {
+  position: relative !important;
+  height: auto !important;
+  min-height: 100dvh;
+  max-height: none !important;
+  /* clip blocks sideways paint without creating a body scroll container;
+     overflow-x:hidden would prevent the Ionic header from sticking. */
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+  touch-action: auto !important;
+  overscroll-behavior-y: auto !important;
+  transform: none !important;
+}
+#root { min-height: 100dvh; overflow: visible; }
 ion-app.mc-ionic-app {
   position: relative !important;
   inset: auto !important;
@@ -9,6 +34,9 @@ ion-app.mc-ionic-app {
   min-height: 100dvh;
   height: auto !important;
   overflow: visible !important;
+  /* ion-app is automatically given Ionic's .ion-page class; its contain:size
+     prevents the retained Wouter pages from increasing document height. */
+  contain: none !important;
   color: #22352f;
   background: hsl(42 30% 96%);
   --ion-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "DM Sans", sans-serif;
@@ -325,8 +353,13 @@ ion-app.mc-ionic-app {
   .mc-mobile-content {position:relative; z-index:1;}
 }
 @media(display-mode:standalone) and (max-width:1023px){
-  .mc-mobile-header {padding-top: max(env(safe-area-inset-top,0px),20px) !important;}
+  /* Keep branding clear of the translucent iPhone status-bar glass. */
+  .mc-mobile-header {padding-top: calc(max(env(safe-area-inset-top,0px),20px) + 12px) !important;}
   .mc-mobile-header .mc-ionic-toolbar {--ion-safe-area-top:0px;}
+  .mc-vault-entry {
+    padding-top: calc(32px + env(safe-area-inset-top,0px)) !important;
+    background-color: #253c36 !important;
+  }
 }
 
 /* Native Ionic category accordions, retaining verified spending calculations. */
