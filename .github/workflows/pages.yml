@@ -48,6 +48,9 @@ jobs:
       - name: Validate financial document extraction, review, and mobile planning
         run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/mobile-spend-workspace.test.mjs tests/financial-readiness.test.mjs tests/local-launch-guideline.test.mjs
 
+      - name: Validate public mobile banking UI, offline grid and document access
+        run: node --test tests/bootstrap-app-shell.test.mjs tests/iphone-finance-import-access.test.mjs
+
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
 
@@ -63,6 +66,12 @@ jobs:
 
       - name: Package offline application shell for iPhone, laptop and desktop
         run: node scripts/prepare-offline-shell.mjs
+
+      - name: Require compiled Bootstrap offline banking UI
+        run: |
+          grep -q 'mc-wallet-hero' artifacts/market-compass/dist/public/assets/*.css
+          grep -q 'bootstrap' artifacts/market-compass/src/vendor/bootstrap/LICENSE
+          test -f artifacts/market-compass/dist/public/sw.js
 
       - name: Add SPA fallback for GitHub Pages
         run: |
