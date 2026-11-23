@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
@@ -27,6 +27,8 @@ import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
+import SpendingPortfolio from '@/components/SpendingPortfolio';
+const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -258,7 +260,7 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
         {vault.initializing ? <p className="mt-4 text-[12px]">Opening your encrypted storage…</p> : <>
           <label className="mt-4 block text-[12px] font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Choose a password (12+ characters)'}</label>
           <input id="vault-password" type="password" autoComplete="off" value={entered} onChange={e => setEntered(e.target.value)}
-            className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3.5 text-[16px]" placeholder="Enter your private password" />
+            className="mt-2 h-12 min-h-12 w-full rounded-xl border border-input bg-background px-3.5 text-[16px]" style={{minHeight:48}} placeholder="Enter your private password" />
           <button type="button" disabled={busy || !entered} onClick={() => { void run(() => vault.hasVault ? vault.unlock(entered) : vault.create(entered)); }}
             className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-[13px] font-bold text-primary-foreground disabled:opacity-40">
             <ShieldCheck size={17}/>{busy ? 'Opening…' : vault.hasVault ? 'Unlock Market Compass' : 'Create encrypted workspace'}
@@ -982,7 +984,9 @@ type SpendSection='documents'|'activity'|'plan';
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
-  const [section,setSection]=useState<SpendSection>('documents');
+  const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
+  const [ionicPreview,setIonicPreview]=useState(false);
+  const [ionicPreviewOpen,setIonicPreviewOpen]=useState(false);
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   const options=[
@@ -1020,6 +1024,38 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         </button>)}
       </nav>
     </section>
+    <section aria-label="Ionic native-style design preview" className="mb-5 rounded-[20px] border border-border bg-card p-3 shadow-sm sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><p className="text-[12px] font-bold">Ionic UI Preview</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+            Try account cards, category drilldowns and action sheets with sample data. Your encrypted records remain untouched.
+          </p>
+        </div>
+        <button type="button" aria-expanded={ionicPreviewOpen} onClick={()=>setIonicPreviewOpen(v=>!v)}
+          className="min-h-11 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground">
+          {ionicPreviewOpen?'Close Ionic preview':'Try Ionic design'}
+        </button>
+      </div>
+      {ionicPreviewOpen&&<div className="mt-4 overflow-hidden rounded-[20px] border border-border bg-background">
+        <iframe title="Interactive Market Compass Ionic React preview using only sample data"
+          src={import.meta.env.BASE_URL+'ionic-preview.html'}
+          className="block h-[min(72dvh,680px)] min-h-[420px] w-full border-0" loading="lazy"/>
+      </div>}
+    </section>
+    {section==='documents'&&ledger.length>0&&<button type="button" onClick={()=>setSection('activity')}
+      className="mb-5 flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[.065] px-4 py-3 text-left text-[12px] font-semibold">
+      <span>{ledger.length} approved or manually recorded transaction(s) are ready in your spending portfolio.</span>
+      <ArrowRight size={19} className="shrink-0" aria-hidden="true"/>
+    </button>}
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+      <div><p className="text-[12px] font-bold">Compare Ionic components</p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Try native-style spending cards and transaction filters using the same approved local ledger.</p>
+      </div>
+      <button type="button" aria-pressed={ionicPreview} onClick={()=>{setIonicPreview(v=>!v);setSection('activity');}}
+        className={`min-h-11 shrink-0 rounded-xl border px-3 text-[12px] font-bold ${ionicPreview?'border-primary bg-primary text-primary-foreground':'border-border bg-background'}`}>
+        {ionicPreview?'Original UI':'Try Ionic'}
+      </button>
+    </div>
     <div aria-label={section==='documents'?'Document importer and reviewed files':
       section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
       className="min-w-0 space-y-5">
@@ -1051,6 +1087,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
+        {ionicPreview?<Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Opening Ionic Spend components…</p>}>
+          <IonicSpendPreview entries={ledger} currency={data.currency}
+            onOpenDocuments={()=>{setIonicPreview(false);setSection('documents');}}/>
+        </Suspense>:
+          <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>}
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
