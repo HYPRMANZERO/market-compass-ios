@@ -22,6 +22,7 @@ import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSetti
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import BankCarousel from '@/components/BankCarousel';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
@@ -431,6 +432,13 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             {label === 'Drafts' && pending > 0 && <span className="mono rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] text-sidebar-primary-foreground">{pending}</span>}
           </Link>)}
         </nav>
+        <button type="button" data-testid="desktop-nav-menu" aria-label="Open Market Compass menu"
+          aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+          className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-3 text-left text-[13px] font-semibold text-sidebar-foreground hover:bg-sidebar-accent">
+          <Menu size={17} strokeWidth={1.8}/><span className="flex-1">Menu</span>
+          {pending>0&&<span className="mono rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] text-sidebar-primary-foreground">{pending}</span>}
+        </button>
+
         <div className="mt-auto rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-4">
           <div className="flex items-center gap-2 text-[11px] font-semibold"><ShieldCheck size={15} className="text-sidebar-primary"/> Deliberate by design</div>
           <p className="mt-2 text-[11px] leading-[1.65] text-sidebar-foreground/55">Your workspace stays on this device. Payments and trades always require separate approval.</p>
@@ -456,7 +464,14 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       </IonHeader>
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
         <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
+        <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
+          <button type="button" data-testid="desktop-header-menu" aria-label="Open Market Compass menu"
+            aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-[12px] font-semibold text-foreground hover:bg-muted">
+            <Menu size={17}/>Menu
+          </button>
+        </div>
       </header>
       <InstallHelp/>
       {menuOpen && createPortal(
@@ -547,6 +562,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
   data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>>;
   onImportDocuments:()=>void; onRecoverVault:()=>void; onAddAccount:()=>void;
 }) {
+  const [,navigate] = useLocation();
   const openDrafts = data.drafts.filter((draft) => draft.status === 'pending').length;
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
@@ -562,6 +578,10 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
         pendingDrafts={openDrafts} market={feed}
         onImportDocuments={onImportDocuments} onRecoverVault={onRecoverVault} onAddAccount={onAddAccount}
         fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
+    </div>
+    <div className="mb-5 hidden lg:block" data-testid="desktop-financial-overview">
+      <FinancialSpaceHero currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
+        onViewAccounts={()=>navigate('/debt')}/>
     </div>
     <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">

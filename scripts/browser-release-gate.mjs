@@ -499,6 +499,64 @@ async function main(){
     assert.ok(privateLabels.every(label=>!label?.includes('123456789012')),
       'the full synthetic account identifier must never be displayed as a label');
     console.log('PASS: vertical account row, privacy-masked identifier, saved balance and APR');
+    // Layout parity is tested in the SAME disposable encrypted browser vault:
+    // synthetic mobile debt must equal desktop debt, with no data migration.
+    const mobileDebt=await tab.invoke(function(){
+      const hero=document.querySelector('[data-testid="financial-space-hero"]');
+      return hero?.querySelector('[data-testid="financial-space-debt-total"]')?.textContent?.trim()??null;
+    });
+    assert.ok(mobileDebt?.includes('1')&&mobileDebt.includes('840'),'Synthetic saved debt visible on mobile');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:1366,height:850,deviceScaleFactor:1,mobile:false
+    });
+    const desktop=await waitFor(async()=>tab.invoke(function(){
+      const area=document.querySelector('[data-testid="desktop-financial-overview"]');
+      const hero=area?.querySelector('[data-testid="financial-space-hero"]');
+      const total=area?.querySelector('[data-testid="financial-space-debt-total"]');
+      const nav=document.querySelector('[data-testid="desktop-nav-menu"]');
+      const top=document.querySelector('[data-testid="desktop-header-menu"]');
+      const bounds=hero?.getBoundingClientRect();
+      return bounds?.height>150&&nav?.getBoundingClientRect().height>=40&&top?.getBoundingClientRect().height>=36
+        ? {debt:total?.textContent?.trim(),visible:true,wide:bounds?.width,nav:true,top:true}
+        : null;
+    }),'desktop debt hero and desktop menu controls');
+    assert.equal(desktop.debt,mobileDebt,'Desktop must use the same unlocked synthetic debt value as mobile');
+    assert.ok(desktop.wide>350,'Desktop card should use the available desktop content width');
+    await tab.invoke(function(){document.querySelector('[data-testid="desktop-nav-menu"]')?.click();});
+    const desktopMenu=await waitFor(async()=>tab.invoke(function(){
+      const dialog=document.querySelector('[aria-label="Market Compass quick menu"]');
+      return dialog&&dialog.getBoundingClientRect().height>100 ? dialog.textContent : null;
+    }),'desktop shared quick action menu');
+    for(const action of ['Add account','Import document','Ask Compass','Vault & backup']){
+      assert.ok(desktopMenu.includes(action),'Desktop menu missing '+action);
+    }
+    await tab.invoke(function(){
+      document.querySelector('button[aria-label="Close Market Compass menu"]')?.click();
+    });
+    assert.equal(await tab.invoke(function(){
+      return document.querySelector('[aria-label="Market Compass quick menu"]')===null;
+    }),true,'Desktop menu must close cleanly');
+    await tab.invoke(function(){
+      const action=document.querySelector('[data-testid="desktop-financial-overview"] [aria-label="View saved accounts"]');
+      if(!action)throw Error('Desktop View accounts action unavailable');
+      action.click();
+    });
+    await expectText(tab,'Debt payoff','desktop View accounts opens debt planner');
+    await tab.invoke(function(){
+      const home=document.querySelector('[data-testid="link-nav-overview"]');
+      if(!home)throw Error('Desktop Home navigation missing');
+      home.click();
+    });
+    await expectText(tab,'YOUR FINANCIAL SPACE','desktop Home reopened');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:844,deviceScaleFactor:3,mobile:true
+    });
+    await waitFor(async()=>tab.invoke(function(){
+      const card=document.querySelector('.mc-app-overview [data-testid="financial-space-hero"]');
+      return card?.getBoundingClientRect().height>100;
+    }),'iPhone hero restored after desktop layout');
+    console.log('PASS: shared debt hero matches mobile/desktop, desktop nav and header menu open, View accounts routes correctly');
+
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/assistant'));

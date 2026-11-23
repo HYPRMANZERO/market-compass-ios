@@ -1,10 +1,10 @@
 import {useState} from 'react';
-import {IonCard,IonList,IonRippleEffect} from '@ionic/react';
+import {IonCard,IonList} from '@ionic/react';
 import {createPortal} from 'react-dom';
 import {useEffect} from 'react';
 import {
   Activity, ArrowRight, ArrowUpRight, ChevronDown, FileClock,
-  FileText, Landmark, LockKeyhole, Plus, ReceiptText, ShieldCheck,
+  FileText, Landmark, Plus, ReceiptText, ShieldCheck,
   Sparkles, WalletCards, X
 } from 'lucide-react';
 import { Link } from 'wouter';
@@ -13,6 +13,7 @@ import { approximateLocalValue, type FxReference } from '@/lib/fxRates';
 import { maskDocumentPII } from '@/lib/documentIntelligence';
 import FinancialPulse from '@/components/FinancialPulse';
 import BankCarousel from '@/components/BankCarousel';
+import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import EvidenceReviewInbox from '@/components/EvidenceReviewInbox';
 import {recurringPatterns} from '@/lib/historicalRecurring';
 import {localDate} from '@/lib/dailyBackup';
@@ -86,33 +87,12 @@ export default function MobileOverview({
   const localClose = typeof nativeClose === 'number' && market
     ? approximateLocalValue(nativeClose, market.currency, currency, fxQuote) : null;
   return <div className="mc-app-overview space-y-4 pb-3" data-testid="mobile-home">
-    <IonCard className="mc-wallet-hero" role="region" aria-label="Private financial overview">
-      <div className="mc-wallet-orbit mc-wallet-orbit-first" aria-hidden="true"/>
-      <div className="mc-wallet-orbit mc-wallet-orbit-second" aria-hidden="true"/>
-      <div className="mc-wallet-content">
-        <div className="flex items-center justify-between gap-2">
-          <span className="mc-wallet-eyebrow">YOUR FINANCIAL SPACE</span>
-          <span className="mc-wallet-lock"><LockKeyhole size={12} aria-hidden="true"/> Private workspace</span>
-        </div>
-        <p className="mt-7 text-[12px] font-medium text-white/75">
-          {accountsCount ? 'Total entered debt balances' : 'Your financial overview'}
-        </p>
-        <h1 className="mc-wallet-number">
-          {accountsCount ? money(totalDebt,currency) : 'Start with clarity'}
-        </h1>
-        <p className="mt-3 max-w-[300px] text-[12px] leading-5 text-white/75">
-          {accountsCount
-            ? 'Based on amounts you entered. Not a live or bank-verified balance.'
-            : 'Add an account or import a statement to begin building your private picture.'}
-        </p>
-        <div className="mt-6 flex items-center justify-between gap-3">
-          <span className="mc-wallet-footnote"><ShieldCheck size={14} aria-hidden="true"/> Encrypted on your device</span>
-          <button type="button" onClick={()=>setAccountActionsOpen(true)} className="mc-wallet-cta ion-activatable"><IonRippleEffect/>
-            {accountsCount ? 'View accounts' : 'Add account'} <ArrowUpRight size={15} aria-hidden="true"/>
-          </button>
-        </div>
-      </div>
-    </IonCard>
+    <FinancialSpaceHero
+      currency={currency}
+      totalDebt={totalDebt}
+      accountsCount={accountsCount}
+      onViewAccounts={()=>setAccountActionsOpen(true)}
+    />
 
     {emptyFinancialWorkspace&&<section aria-label="Empty workspace and backup recovery" className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <p className="text-[13px] font-semibold">No financial records saved in this workspace</p>

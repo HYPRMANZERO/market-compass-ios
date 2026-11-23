@@ -38,13 +38,16 @@ test('mobile overview uses Bootstrap columns for meaningful, consented account d
     /className="col-6"/,
     /className="mc-account-list"/,
     /className="mc-account-row"/,
-    /className="mc-wallet-hero"/,
     /aria-label="Quick actions"/,
     /href="\/assistant"/
   ])assert.match(ui,expected);
   assert.match(ui,/Manual entry · Not bank connected/);
   assert.match(ui,/maskDocumentPII\(account\.name\.trim\(\)\)/);
-  assert.match(ui,/Not a live or bank-verified balance/);
+  assert.match(ui,/<FinancialSpaceHero/);
+  const hero=await source('components/FinancialSpaceHero.tsx');
+  assert.match(hero,/className="mc-wallet-hero"/);
+  assert.match(hero,/Not a live or bank-verified balance/);
+  assert.match(hero,/data-testid="financial-space-debt-total"/);
   assert.match(ui,/Not entered/);
   assert.match(app,/documentsCount=\{docs\.length\} approvedEntryCount=\{entries\.length\}/);
   assert.match(app,/accounts=\{data\.accounts\}/);
