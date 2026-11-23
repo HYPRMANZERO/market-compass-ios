@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
@@ -29,6 +29,7 @@ import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import SpendingPortfolio from '@/components/SpendingPortfolio';
+const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -987,6 +988,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
   const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
+  const [ionicPreview,setIonicPreview]=useState(false);
   const [ionicPreviewOpen,setIonicPreviewOpen]=useState(false);
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
@@ -1051,6 +1053,15 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
       <span>{ledger.length} approved or manually recorded transaction(s) are ready in your spending portfolio. View purchases and history by category.</span>
       <ArrowRight size={19} className="shrink-0" aria-hidden="true"/>
     </button>}
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+      <div><p className="text-[12px] font-bold">Compare Ionic components</p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Preview native-style cards and transaction controls without changing your saved data.</p>
+      </div>
+      <button type="button" aria-pressed={ionicPreview} onClick={()=>{setIonicPreview(value=>!value);setSection('activity');}}
+        className={`min-h-11 shrink-0 rounded-xl border px-3 text-[12px] font-bold ${ionicPreview?'border-primary bg-primary text-primary-foreground':'border-border bg-background'}`}>
+        {ionicPreview?'Original UI':'Try Ionic'}
+      </button>
+    </div>
     <div aria-label={section==='documents'?'Document importer and reviewed files':
       section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
       className="min-w-0 space-y-5">
@@ -1083,7 +1094,11 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
-        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
+        {ionicPreview?<Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Opening Ionic Spend components…</p>}>
+          <IonicSpendPreview entries={ledger} currency={data.currency}
+            onOpenDocuments={()=>{setIonicPreview(false);setSection('documents');}}/>
+        </Suspense>:
+          <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>}
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
