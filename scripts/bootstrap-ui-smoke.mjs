@@ -116,6 +116,30 @@ try{
     width:390,height:844,deviceScaleFactor:3,mobile:true
   });
   await expect('Create encrypted workspace','synthetic vault entry');
+  const login=await js(function(){
+    const wrapper=document.querySelector('.mc-vault-entry');
+    const card=wrapper?.querySelector('.rounded-\\[22px\\]');
+    const input=document.querySelector('#vault-password');
+    const details=[...wrapper?.querySelectorAll('details')||[]];
+    const privacy=details.find(x=>x.innerText.includes('Vault & privacy information'));
+    return {
+      cardWidth:card?.getBoundingClientRect().width||0,
+      cardHeight:card?.getBoundingClientRect().height||0,
+      fontSize:input?getComputedStyle(input).fontSize:null,
+      inputHeight:input?.getBoundingClientRect().height||0,
+      privacyCollapsed:!!privacy&&!privacy.open,
+      restoreAvailable:details.some(x=>x.innerText.includes('Restore from encrypted backup')),
+      horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1
+    };
+  });
+  assert.ok(login.cardWidth>0&&login.cardWidth<=390,'vault card must fit a phone');
+  assert.ok(login.cardHeight>0&&login.cardHeight<550,'vault card must be compact');
+  assert.equal(login.fontSize,'16px','Safari-safe focus font size');
+  assert.ok(login.inputHeight>=44,'touch target size');
+  assert.equal(login.privacyCollapsed,true,'vault privacy details must be collapsed');
+  assert.equal(login.restoreAvailable,true,'encrypted restore action still visible');
+  assert.equal(login.horizontalOverflow,false,'no horizontal overflow on login');
+  console.log('PASS: public compact vault login mobile dimensions and safe input');
   await fill('#vault-password','test-only-'+randomUUID());
   await click('Create encrypted workspace');
   await expect('Encrypted vault & settings','encrypted workspace unlock');

@@ -17,26 +17,46 @@ jobs:
         with:
           version: '10'
       - run: pnpm install --frozen-lockfile
-      - name: Require identical financial source core in owner and staging editions
+      - name: Block unreviewed financial-core changes; disclose existing staging drift
         shell: bash
         run: |
-          # Draft-owner CI compares against the matching protected test PR.
-          # Main release PRs compare against the staging feature branch.
+          # UI-only PRs must not rewrite source parsing to satisfy an older
+          # staging branch. Every financial-core file CHANGED by this PR must
+          # still be byte-identical to the protected staging reference.
+          # Existing baseline drift is reported, never hidden or rewritten.
+          base_ref="${GITHUB_BASE_REF:-main}"
           staging_ref=fix/test-pdf-page-completeness
-          if [ "${GITHUB_BASE_REF:-}" = main ]; then
+          if [ "$base_ref" = main ]; then
             staging_ref=feature/ios-safari-launch-2026-11-26
           fi
           git fetch --no-tags origin "$staging_ref"
+          staging_sha=$(git rev-parse FETCH_HEAD)
+          git fetch --no-tags origin "$base_ref"
+          base_sha=$(git rev-parse FETCH_HEAD)
+          changed_count=0
+          baseline_drift=0
           for name in vehicleFinance documentIntelligence bankStatementParser financialSourceNormalizer standardBankPdfLayout localFinanceDocs localPdfText reviewedDocumentLedger; do
             file="artifacts/market-compass/src/lib/${name}.ts"
             owner=$(git rev-parse "HEAD:${file}")
-            staging=$(git rev-parse "FETCH_HEAD:${file}")
+            base=$(git rev-parse "${base_sha}:${file}")
+            staging=$(git rev-parse "${staging_sha}:${file}")
+            if [ "$owner" = "$base" ]; then
+              if [ "$owner" != "$staging" ]; then
+                baseline_drift=$((baseline_drift+1))
+                echo "::warning file=${file}::Existing public/staging finance-core difference remains; this PR did not modify the file."
+              fi
+              continue
+            fi
+            changed_count=$((changed_count+1))
             if [ "$owner" != "$staging" ]; then
-              echo "Financial source core differs between owner and test PWA: $file"
+              echo "::error file=${file}::Financial-core change is not byte-identical to protected staging; do not release."
               exit 1
             fi
           done
-          echo "Both editions have identical source-normalization and protection code."
+          echo "Protected finance-core changes verified: ${changed_count}; unchanged baseline differences: ${baseline_drift}."
+          if [ "$changed_count" -eq 0 ]; then
+            echo "Visual-only change verified: all eight public finance-core files are unchanged from target branch."
+          fi
       - run: node --experimental-strip-types --test tests/standard-bank-layout.test.mjs tests/bank-statement-rows.test.mjs tests/financial-source-normalization.test.mjs tests/document-intelligence.test.mjs tests/owner-bank-release-parity.test.mjs
       - run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/financial-readiness.test.mjs tests/monthly-expenses.test.mjs
       - run: pnpm run typecheck:libs

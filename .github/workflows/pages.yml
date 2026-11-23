@@ -49,7 +49,7 @@ jobs:
         run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/reviewed-document-ledger.test.mjs tests/mobile-spend-workspace.test.mjs tests/financial-readiness.test.mjs tests/local-launch-guideline.test.mjs
 
       - name: Validate public mobile banking UI, offline grid and document access
-        run: node --test tests/bootstrap-app-shell.test.mjs tests/iphone-finance-import-access.test.mjs tests/protected-dist-build.test.mjs
+        run: node --test tests/bootstrap-app-shell.test.mjs tests/iphone-finance-import-access.test.mjs tests/protected-dist-build.test.mjs tests/compact-vault-login.test.mjs
 
       - name: Build shared TypeScript libraries
         run: pnpm run typecheck:libs
