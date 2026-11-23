@@ -691,64 +691,52 @@ export default function VoiceAssistant({
   }
 
   return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
-    <section className="overflow-hidden rounded-[22px] bg-[hsl(165,24%,20%)] px-4 py-4 text-white sm:px-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[hsl(43,65%,74%)]"><BrainCircuit size={15}/> Compass AI</div>
-          <h1 className="serif mt-2 text-[26px] leading-[1.12]">Just ask.</h1>
-          <p className="mt-2 max-w-[330px] text-[13px] leading-5 text-white/75">Your private finance companion on every device.</p>
-        </div>
-        <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
-          onClick={() => {
-            if (!speakingSupported) return;
-            if (settings.speakReplies) window.speechSynthesis.cancel();
-            onSettingsChange({ ...settings, speakReplies: !settings.speakReplies });
-          }} disabled={!speakingSupported}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 disabled:opacity-40">
-          {settings.speakReplies ? <Speaker size={20}/> : <VolumeX size={20}/>}
-        </button>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px] text-white/75">
-        <span className="flex min-w-0 items-center gap-2"><WifiOff size={15} className="shrink-0"/> Offline calculations + queued questions</span>
-        <span className="max-w-full rounded-full bg-white/10 px-3 py-1 text-[10px] leading-4">
-          {connected ? 'Ollama connected' : connection === 'checking' ? 'Connecting…' : settings.enabled ? 'Auto reconnect on' : 'Local mode'}
-        </span>
-      </div>
+    <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass</span>
+      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage || 'Compass private HYPRBOX connection status'}>
+        <span className={connected ? 'h-2 w-2 shrink-0 rounded-full bg-emerald-400' : connection === 'checking' ? 'h-2 w-2 shrink-0 rounded-full bg-amber-300' : 'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
+        {connected ? 'Compass connected' : connection === 'checking' ? 'Connecting' : settings.enabled ? 'Offline · auto reconnect' : 'Local commands'}
+      </span>
+      <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
+        onClick={() => {
+          if (!speakingSupported) return;
+          if (settings.speakReplies) window.speechSynthesis.cancel();
+          onSettingsChange({ ...settings, speakReplies: !settings.speakReplies });
+        }} disabled={!speakingSupported}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 disabled:opacity-40">
+        {settings.speakReplies ? <Speaker size={18}/> : <VolumeX size={18}/>}
+      </button>
     </section>
 
-    <section className="overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
+    <section className="flex min-h-[min(64dvh,650px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
           setMessages([]); setLastAgent(null); setStatus('Conversation cleared from page memory.');
         }}><X size={14} className="mr-1 inline"/>Clear</button>
       </div>
-      <div className="border-b border-border px-4 py-3">
-        <label className="flex min-h-9 items-center gap-3 text-[12px] font-semibold">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <label className="flex min-h-8 items-center gap-2 text-[12px] font-semibold">
           <input type="checkbox" checked={agentMode} disabled={busy}
             onChange={event => { setAgentMode(event.target.checked); setLastAgent(null); }}
             aria-label="Enable read-only agent mode"/>
-          <span>Agent mode <span className="font-normal text-muted-foreground">· max 3 read-only tools</span></span>
+          <span>Agent mode <span className="font-normal text-muted-foreground">· up to 3 read-only tools</span></span>
         </label>
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-          Financial records and sources can be reviewed, not edited. Reminders and expense entries are drafts only; banking and trading are disabled.
-        </p>
-        {agentMode && !settings.shareFinancialContext && (
-          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-            Your unlocked iPhone vault entries are not automatically shared with HYPRBOX. To analyse those entries, enable financial-context sharing below. The shared HYPRBOX owner budget is read-only and does not synchronize separate browser vaults.
-          </p>
-        )}
+        <details className="max-w-full text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer">Safety and permissions</summary>
+          <p className="max-w-[340px] py-2 leading-5">Financial sources can be reviewed, not edited. Reminders and expense entries remain drafts; trading and payments are disabled. Your unlocked vault is not shared with HYPRBOX unless you separately enable sharing below.</p>
+        </details>
       </div>
-      <div className="mc-chat-log max-h-[min(42dvh,340px)] space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-[min(40dvh,340px)] max-h-[min(62dvh,650px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
-            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
-            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama · Read-only agent</span>}
+            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Private desktop</span>}
+            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Private desktop · Read-only agent</span>}
             {message.text}
           </div>
         </div>)}
-        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}
+        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for Compass…'}</div>}
         <div ref={bottom}/>
       </div>
       {reviewedQueue.length>0 && <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/40 p-3" aria-label="Encrypted offline agent questions">
