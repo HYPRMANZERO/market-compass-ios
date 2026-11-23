@@ -322,20 +322,36 @@ async function main(){
     assert.ok(ui.rowWidth>0 && Math.abs(ui.columnWidth/ui.rowWidth-1/3)<0.025,
       'Bootstrap col-4 quick action must occupy one third of the row');
     assert.equal(ui.nav,true,'mobile tab navigation must remain');
-    assert.equal(ui.navTabs,6,'all six existing PWA routes must remain accessible');
+    assert.equal(ui.navTabs,4,'mobile tab bar should show Home, Markets, AI and Menu');
     assert.equal(ui.privacyText,true,'clear offline, manual-entry boundary must remain');
     await assertDocumentScrolling(tab,'Home on a 390px iPhone-sized viewport');
-    console.log('PASS: unlocked Ionic Home supports real vertical page scrolling with sticky header');
+    const carousel=await tab.invoke(function(){const root=document.querySelector('[data-testid="bank-carousel"]');const scroller=root?.querySelector('[role="list"]');return {found:!!root,scrollable:!!scroller&&scroller.scrollWidth>scroller.clientWidth,options:root?.querySelectorAll('[data-testid^="bank-option-"]').length??0};});
+    assert.equal(carousel.found,true,'Bank carousel must appear on Home');
+    assert.equal(carousel.scrollable,true,'Bank cards must be horizontally swipeable on iPhone-sized viewports');
+    assert.ok(carousel.options>=10,'Bank carousel should include South African provider choices');
+    await tab.invoke(function(){document.querySelector('[data-testid="bank-option-standard-bank"]')?.click();});
+    assert.equal(await tab.invoke(function(){return !!document.querySelector('[data-testid="selected-bank-options"]')?.textContent?.includes('Import');}),true,'selected bank must expose a local statement-import option');
+    console.log('PASS: unlocked Ionic Home scrolls and bank carousel shows real selection options');
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Market Compass menu"]')?.click();});
-    const menu=await tab.invoke(function(){const root=document.querySelector('[aria-label="Market Compass quick menu"]');return {visible:!!root,labels:root?.innerText||''};});
-    assert.equal(menu.visible,true,'iPhone menu must open an in-app action sheet');
-    for(const text of ['View accounts','Add account','Import document','Ask Compass','Markets','Orders & drafts','Spend history','Vault & backup'])
+    const menu=await waitFor(async()=>{
+      const state=await tab.invoke(function(){
+        const root=document.querySelector('section[role="dialog"][aria-label="Market Compass quick menu"]');
+        const rect=root?.getBoundingClientRect();
+        const tiles=[...root?.querySelectorAll('button')||[]].filter(b=>b.getBoundingClientRect().height>=36);
+        const trigger=document.querySelector('[data-testid="mobile-nav-menu"]');
+        return {visible:!!rect&&rect.width>220&&rect.height>120&&getComputedStyle(root).visibility!=='hidden',expanded:trigger?.getAttribute('aria-expanded')==='true',actionTiles:tiles.length,labels:root?.innerText||''};
+      });
+      return state.visible&&state.expanded&&state.actionTiles>=5?state:false;
+    },'visible Ionic quick menu action tiles');
+    assert.equal(menu.visible,true,'iPhone menu must display visible action tiles');
+    for(const text of ['View accounts','Add account','Import document','Ask Compass','Markets','Orders & drafts','Spend history','Link a bank','Vault & backup'])
       assert.ok(menu.labels.includes(text),'quick menu missing '+text);
     await tab.invoke(function(){document.querySelector('button[aria-label="Close Market Compass menu"]')?.click();});
     await tab.invoke(function(){document.querySelector('.mc-bs-quick-actions button.mc-quick-action')?.click();});
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Account actions"]');}),true,'account options must open directly from Home');
     await tab.invoke(function(){document.querySelector('button[aria-label="Close account actions"]')?.click();});
-    await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
+    await tab.invoke(function(){document.querySelector('[data-testid="mobile-nav-menu"]')?.click();});
+    await tab.invoke(function(){const choices=[...document.querySelectorAll('[aria-label="Market Compass quick menu"] button')];const spend=choices.find(x=>x.textContent?.includes('Spend history'));if(!spend)throw Error('Spend history unavailable in Menu');spend.click();});
     await expectText(tab,'Your finances','Spend landing page');
     await assertDocumentScrolling(tab,'Spend on a 390px iPhone-sized viewport');
     console.log('PASS: Ionic Spend can scroll through transaction history and page sections');
@@ -399,7 +415,7 @@ async function main(){
       });
       await writeFile(process.env.MC_TEST_PULSE_SCREENSHOT,Buffer.from(frame.data,'base64'));
     }
-    console.log('PASS: Bootstrap mobile grid, finance card, quick actions, privacy and six-tab shell');
+    console.log('PASS: Bootstrap mobile grid, finance card, quick actions, privacy and four-tab shell');
     if(process.env.MC_TEST_SCREENSHOT){
       // Captures only the fabricated, isolated test vault; never capture owner data.
       const frame=await tab.command('Page.captureScreenshot',{
