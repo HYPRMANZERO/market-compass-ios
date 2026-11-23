@@ -86,3 +86,11 @@ jobs:
           node scripts/verify-private-ui-css.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Windows production CSS missing Tailwind layout utilities' }
           if (-not (Test-Path 'artifacts/market-compass/dist/public/index.html')) { throw 'No built index.html' }
+      - name: Synthetic Edge browser release gate
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          NODE_ENV: production
+        run: |
+          node scripts/browser-release-gate.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic Edge browser release gate failed' }
