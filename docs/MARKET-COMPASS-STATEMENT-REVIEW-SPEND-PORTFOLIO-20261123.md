@@ -34,3 +34,13 @@ On iPhone, a historical bank statement with 300 extracted lines showed source da
 2. Open a saved historical statement in Spend > Documents. Correct its title/issuer/type if needed, and approve the eligible source-dated rows once; do not re-upload the same statement merely to reflect Spend.
 3. Go to Spend > Activity > Your spending portfolio. Choose the relevant 26th–25th salary cycle and expand a category; confirm purchases by their original statement dates.
 4. Verify account menu behavior and reopen import popup in iPhone Safari. Confirm the Close button stays below the blurred top header, and check the distinct vaults are still present.
+
+## Verified private gateway promotion (23 November 2026)
+- Private source commit `423a456` pushed to `feature/consented-batch-documents-and-crypto-refresh-20261122`.
+- Authenticated HYPRBOX static promotion completed from isolated candidate `MarketCompass/ReleaseCandidates/finance-ux-20261123/private` using `scripts/promote-private-pwa.ps1` with static rollback.
+- Previous static bundle SHA-256: `FE6979D57773A9B595BA07662743C21F0A1DB2C7180C03CF23168EB9579CBE72`.
+- New index SHA-256 matched candidate: `DC4ADDA00C65F4836EC3725567089C3F56DD8E34FB765C8A9A9A974D41552D07`.
+- Saved static rollback: `artifacts/market-compass/dist/public-before-finance-ux-20261123-111735`.
+- Protected loopback gateway confirmed HTTP 200 with expected HTML, JavaScript, CSS and PDF worker MIME types after promotion. Public HTTPS ngrok on physical iPhone and native Safari file-picker/vault validation remain outstanding.
+- Public GitHub Pages not deployed by this private static promotion; proposed changes tracked in draft PR #70 pending a separate review.
+
