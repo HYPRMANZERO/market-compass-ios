@@ -19,6 +19,7 @@ import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSetti
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import FinancialPulse from '@/components/FinancialPulse';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
@@ -508,6 +509,7 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
       <MobileOverview currency={data.currency} totalDebt={debtTotal}
         accountsCount={data.accounts.length} accounts={data.accounts}
         documentsCount={docs.length} approvedEntryCount={entries.length}
+        entries={entries} documents={docs} expenseSettings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
         pendingDrafts={openDrafts} market={feed}
         fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
     </div>
@@ -543,6 +545,8 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
         />
       </div>
     </details>
+    <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
+      currency={data.currency} settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}/></div>
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
