@@ -334,7 +334,36 @@ async function main(){
       };
     });
     assert.ok(ionicSample.accounts>=3,'Ionic preview must contain interactive account entries');
-    console.log('PASS: isolated Ionic React demo renders sample accounts inside existing PWA');
+    await tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      frame?.contentDocument?.querySelector('ion-list ion-item')?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      return frame?.contentDocument?.querySelector('ion-modal')?.isOpen===true;
+    }),'Ionic account modal opened from account row');
+    await tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      const close=[...frame.contentDocument.querySelectorAll('ion-modal ion-button')].find(x=>x.textContent?.includes('Close'));
+      close?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      return frame?.contentDocument?.querySelector('ion-modal')?.isOpen===false;
+    }),'Ionic account modal closed');
+    await sleep(400);
+    await tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      const button=[...frame?.contentDocument?.querySelectorAll('ion-button')??[]]
+        .find(x=>x.textContent?.includes('☰'));
+      if(!button)throw Error('Ionic menu button not found');
+      button.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      const frame=document.querySelector('iframe[title^="Interactive Market Compass Ionic React preview"]');
+      return frame?.contentDocument?.querySelector('ion-action-sheet')?.isOpen===true;
+    }),'Ionic action sheet opened');
+    console.log('PASS: isolated Ionic React sample account modal and action sheet are interactive');
     await tab.invoke(function(){
       [...document.querySelectorAll('button')].find(x=>x.textContent?.includes('Close Ionic preview'))?.click();
     });
