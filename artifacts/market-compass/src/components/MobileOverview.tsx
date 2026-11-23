@@ -8,6 +8,7 @@ import type { MarketSeries } from '@workspace/api-client-react';
 import { approximateLocalValue, type FxReference } from '@/lib/fxRates';
 import { maskDocumentPII } from '@/lib/documentIntelligence';
 import FinancialPulse from '@/components/FinancialPulse';
+import EvidenceReviewInbox from '@/components/EvidenceReviewInbox';
 import type {ExpenseEntry,ExpenseSettings} from '@/lib/monthlyExpenses';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 
@@ -28,6 +29,7 @@ type Props = {
   entries?:ExpenseEntry[];
   documents?:LocalFinanceDocument[];
   expenseSettings?:ExpenseSettings;
+  currencyReviewRequired?:boolean;
   pendingDrafts: number;
   market: MarketSeries | null;
   fxQuote?: FxReference | null;
@@ -57,7 +59,7 @@ const entered = (value: string) => {
 
 export default function MobileOverview({
   currency,totalDebt,accountsCount,accounts=[],documentsCount=0,
-  approvedEntryCount=0,entries=[],documents=[],expenseSettings,pendingDrafts,market,fxQuote
+  approvedEntryCount=0,entries=[],documents=[],expenseSettings,currencyReviewRequired=false,pendingDrafts,market,fxQuote
 }: Props) {
   const nativeClose = market?.candles?.at(-1)?.close;
   const localClose = typeof nativeClose === 'number' && market
@@ -147,6 +149,9 @@ export default function MobileOverview({
         </div>
       </div>
     </section>
+
+    <EvidenceReviewInbox documents={documents} entries={entries} currency={currency}
+      currencyReviewRequired={currencyReviewRequired}/>
 
     <FinancialPulse entries={entries} documents={documents} currency={currency} settings={expenseSettings}/>
 

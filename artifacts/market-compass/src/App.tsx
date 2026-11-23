@@ -510,6 +510,7 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
         accountsCount={data.accounts.length} accounts={data.accounts}
         documentsCount={docs.length} approvedEntryCount={entries.length}
         entries={entries} documents={docs} expenseSettings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+        currencyReviewRequired={data.currencyReviewRequired}
         pendingDrafts={openDrafts} market={feed}
         fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
     </div>
