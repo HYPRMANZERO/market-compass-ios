@@ -4,6 +4,7 @@ import DocumentHistorySummary from './DocumentHistorySummary';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {classifyDocument,maskDocumentPII} from '@/lib/documentIntelligence';
+import {reviewDocumentClassification} from '@/lib/documentChallenger';
 import {timeContextLabel} from '@/lib/documentTimeContext';
 import {documentAppliedIndices,applyReviewedDocumentToLedger,separateRepeatedDocumentChoices,type ReviewedLedgerDecision} from '@/lib/reviewedDocumentLedger';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
@@ -526,6 +527,15 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
           {preview.accountProfile?.confidence==='matched-terms'?' Matched document terms':' Needs owner verification'}
         </span>
       </p>
+      {(()=>{
+        const check=reviewDocumentClassification(preview);
+        return <p role="status" className="rounded-lg border border-border bg-background p-3 text-[11px] leading-5 text-muted-foreground">
+          <strong>Independent document classification review:</strong> {check.explanation}
+          {(check.status==='disagrees'||check.status==='proposal')&&check.suggested&&
+            <span className="block font-semibold">Alternative to verify: {check.suggested.replaceAll('-',' ')} (synthetic-model suggestion, not applied).</span>}
+          <span className="mt-1 block">This check cannot change document dates, amounts, debit/credit directions or the owner approval requirement. It uses only locally extracted labels and synthetic training.</span>
+        </p>;
+      })()}
       {preview.documentKind&&preview.documentKind!=='unclassified'&&
         <p className="text-[11px] leading-5 text-muted-foreground">
           The importer recognises contractual instalments, residuals, financing principals,

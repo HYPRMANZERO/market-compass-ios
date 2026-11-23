@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
+import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
@@ -27,7 +28,7 @@ type RecognitionWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserRecognition;
   SpeechRecognition?: new () => BrowserRecognition;
 };
-type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string };
+type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string; link?:{label:string;url:string} };
 type AgentRunResult = {
   ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
   answer: string; answerSource:'private-desktop-model'; workspaceWritten: false; approvalExecutionEnabled: false;
@@ -136,8 +137,8 @@ export default function VoiceAssistant({
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
   const connected = settings.enabled && connection === 'connected';
-  const add = (source: Message['source'], text: string) => setMessages(old => [...old, {
-    id: crypto.randomUUID(), source, text,
+  const add = (source: Message['source'], text: string, link?:Message['link']) => setMessages(old => [...old, {
+    id: crypto.randomUUID(), source, text, ...(link?{link}:{}),
   }].slice(-35));
 
   // The encrypted vault is the ONLY persistence layer. Never use localStorage,
@@ -607,7 +608,16 @@ export default function VoiceAssistant({
     setQuery(''); setStatus('');
     add('owner', question);
     setLastAgent(null);
-    const result = interpretCompassCommand(question, context);
+    // Jarvis's browser-safe shortcuts are deterministic and never invoke
+    // server-side desktop actions. The user must explicitly tap an external link.
+    const personal = interpretJarvisPersonalCommand(question);
+    if(personal){
+      add('local', personal.text,personal.kind==='link'?{url:personal.url,label:personal.label}:undefined);
+      speak(personal.text);
+      return;
+    }
+    const cleanQuestion=stripCompassWakeWord(question);
+    const result = interpretCompassCommand(cleanQuestion, context);
     // Safeguards and navigation remain local, but a private Luno balance must
     // not be confused with a historical cryptocurrency market candle.
     // Navigation and non-negotiable payment/trading refusals remain local even
@@ -728,6 +738,9 @@ export default function VoiceAssistant({
             {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
             {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama · Read-only agent</span>}
             {message.text}
+            {message.link && <a href={message.link.url} target="_blank" rel="noopener noreferrer"
+              className="mt-2 inline-flex min-h-10 items-center rounded-xl border border-primary/35 bg-background px-3 py-2 text-[12px] font-semibold text-primary underline-offset-4 hover:underline"
+              aria-label={message.link.label}>{message.link.label}</a>}
           </div>
         </div>)}
         {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}

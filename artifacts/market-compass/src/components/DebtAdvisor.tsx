@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BrainCircuit, CircleAlert, FileUp, ShieldCheck, WifiOff } from 'lucide-react';
 import type { DebtPlan } from '@workspace/api-client-react';
 import { auditDebtDecision } from '@/lib/debtAudit';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
+import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
+import {scoreIndependentDebtStress} from '@/lib/independentDebtStress';
 
 export type FinancialBaseline = {
   schema: 'market-compass-financial-baseline-v1';
@@ -73,13 +75,21 @@ const serverUrl = privateTailnetOrigin;
 type Props = {
   accounts: Account[]; currency: string; baseline: FinancialBaseline | null; budget: PrivateBudget;
   onBudgetChange: (v: PrivateBudget) => void; onImport: (v: FinancialBaseline) => void;
-  monthlyExtra: string; plan: DebtPlan | null;
+  monthlyExtra: string; plan: DebtPlan | null; savedAi: DesktopAiSettings;
 };
-export default function DebtAdvisor({ accounts, currency, baseline, budget, onBudgetChange, onImport, monthlyExtra, plan }: Props) {
+export default function DebtAdvisor({ accounts, currency, baseline, budget, onBudgetChange, onImport, monthlyExtra, plan, savedAi }: Props) {
   const [notice, setNotice] = useState('');
   const [confirmedFingerprint, setConfirmedFingerprint] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState('');
   const [token, setToken] = useState('');
+  const [useSavedConnection,setUseSavedConnection] = useState(false);
+  // Reuse only the authenticated same-origin private connection from the
+  // encrypted vault. Never relay a token from a GitHub Pages public edition.
+  const savedSameOrigin = typeof window !== 'undefined' && window.location.protocol === 'https:' &&
+    !window.location.hostname.endsWith('.github.io') && savedAi.enabled && savedAi.token.length >= 48 &&
+    privateTailnetOrigin(savedAi.url) === window.location.origin;
+  const effectiveEndpoint = useSavedConnection && savedSameOrigin ? window.location.origin : endpoint;
+  const effectiveToken = useSavedConnection && savedSameOrigin ? savedAi.token : token;
   const [answer, setAnswer] = useState<Advisory | null>(null);
   const [stress, setStress] = useState<SyntheticStress | null>(null);
   const [running, setRunning] = useState(false);
@@ -90,6 +100,9 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
   // when debts, income, currency or the reserve are changed anywhere in the PWA.
   const fingerprint = JSON.stringify({ accounts, currency, monthlyExtra, budget, baselineDate: baseline?.sourceDate });
   const confirmed = confirmedFingerprint === fingerprint;
+  const currentFingerprint = useRef(fingerprint);
+  currentFingerprint.current = fingerprint;
+  useEffect(() => { setStress(null);setAnswer(null); },[fingerprint]);
   const audit = ready ? auditDebtDecision({
     accounts: accounts.map(a=>({name:a.name,balance:Number(a.balance),apr:Number(a.apr),minimumPayment:Number(a.minimumPayment)})),
     monthlyIncome:Number(budget.monthlyIncome), monthlyEssentials:Number(budget.monthlyEssentials),
@@ -111,21 +124,27 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
   </label>;
   function prepareOffline() {
     if (!ready || !confirmed) { setNotice('Confirm current debt balances and enter income, essentials, liquid funds, and reserve first.'); return; }
-    setStress(null);
+    setStress(scoreIndependentDebtStress({
+      accounts:accounts.map(a=>({balance:Number(a.balance),apr:Number(a.apr),minimumPayment:Number(a.minimumPayment)})),
+      monthlyIncome:Number(budget.monthlyIncome),monthlyEssentials:Number(budget.monthlyEssentials),
+      liquidFunds:Number(budget.liquidFunds),reserveTarget:Number(budget.reserveTarget),
+      proposedExtra:Number(monthlyExtra||0)
+    }));
     setAnswer(offlineAdvice(accounts, budget, Number(monthlyExtra || 0), plan));
-    setNotice('This offline output uses deterministic rules, not Ollama or a trained prediction model.');
+    setNotice('Offline guidance uses deterministic safety rules; the independent synthetic-only scikit-learn challengers provide a separate, non-binding stress check. Qwen AI did not generate this answer.');
   }
   async function askOllama() {
-    if (!ready || !confirmed || !serverUrl(endpoint) || token.length < 48 || running) {
+    if (!ready || !confirmed || !serverUrl(effectiveEndpoint) || effectiveToken.length < 48 || running) {
       setNotice('Confirm current amounts and enter a private Tailscale HTTPS server and 48+ character AI token.'); return;
     }
     setRunning(true); setNotice('');
+    const requestedFingerprint=fingerprint;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 125000);
     try {
-      const response = await fetch(serverUrl(endpoint)! + '/api/advice', {
-        method: 'POST', cache: 'no-store', credentials: serverUrl(endpoint) === window.location.origin ? 'same-origin' : 'omit', signal: controller.signal,
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      const response = await fetch(serverUrl(effectiveEndpoint)! + '/api/advice', {
+        method: 'POST', cache: 'no-store', credentials: serverUrl(effectiveEndpoint) === window.location.origin ? 'same-origin' : 'omit', signal: controller.signal,
+        headers: { Authorization: `Bearer ${effectiveToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           intent: 'debt_advice', currency: 'ZAR', confirmedCurrent: true,
           accounts: accounts.map(a => ({ name: a.name, balance: Number(a.balance), apr: Number(a.apr), minimumPayment: Number(a.minimumPayment) })),
@@ -138,6 +157,10 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
       if (!response.ok) throw Error(`Private Ollama server returned ${response.status}.`);
       const payload = await response.json() as { ok: boolean; narrative?: Omit<Advisory, 'mode'>; stress?: SyntheticStress };
       if (!payload.ok || !payload.narrative || !Array.isArray(payload.narrative.actions)) throw Error('Private AI returned an invalid response.');
+      if(requestedFingerprint!==currentFingerprint.current){
+        setNotice('Your figures changed while the analysis was running. The previous response was discarded; reconfirm your inputs.');
+        return;
+      }
       setAnswer({ ...payload.narrative, mode: 'ollama' });
       setStress(payload.stress ?? { available: false, reason: 'No desktop stress model result returned' });
       setNotice('Ollama advisory received. This is narrative advice, not a payment authorization or verified forecast.');
@@ -190,20 +213,27 @@ export default function DebtAdvisor({ accounts, currency, baseline, budget, onBu
         <span>I checked the current account balances, minimum payments, interest estimates and available cash. These are my own confirmed inputs, not the old Financial Advisor snapshot.</span>
       </label>
       <button type="button" className="rounded-lg bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-40" onClick={prepareOffline} disabled={!ready || !confirmed}>Generate offline debt guidance</button>
-      <details className="border-t border-border pt-4"><summary className="cursor-pointer text-[12px] font-semibold">Use desktop/laptop Ollama securely (optional)</summary>
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Only connect using an authorized private HTTPS endpoint. A public GitHub Pages PWA cannot send its AI token to a different ngrok origin. This optional tool does not reuse the Assistant's saved connection; it sends only the reviewed debt inputs when you press Ask.</p>
-        <label className="mt-3 block text-[11px]">Private HTTPS server URL <input type="url" className="mt-1 h-10 w-full rounded border border-input bg-background px-3 text-[12px]" value={endpoint} placeholder="https://your-desktop.your-tailnet.ts.net/" onChange={e => setEndpoint(e.target.value)}/></label>
-        <label className="mt-3 block text-[11px]">Separate AI access token (48+ characters) <input type="password" autoComplete="off" className="mt-1 h-10 w-full rounded border border-input bg-background px-3 text-[12px]" value={token} onChange={e => setToken(e.target.value)}/></label>
+      <details className="border-t border-border pt-4"><summary className="cursor-pointer text-[12px] font-semibold">Private Qwen AI + scikit-learn cash-flow challenger</summary>
+        {savedSameOrigin && <div className="mt-3 rounded-xl border border-border bg-muted/40 p-3">
+          <p className="text-[11px] leading-5">Reuse the authenticated Compass AI connection in your encrypted workspace. Confirm current financial figures before pressing Ask. No automatic training, account edits or payments.</p>
+          <button type="button" onClick={()=>setUseSavedConnection(true)} disabled={useSavedConnection}
+            className="mt-2 rounded-lg border border-border bg-background px-3 py-2 text-[11px] font-semibold disabled:opacity-60">
+            {useSavedConnection?'Saved private connection selected':'Use saved private Compass connection'}
+          </button>
+        </div>}
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Only connect using an authorized private HTTPS endpoint. A public GitHub Pages PWA cannot send its AI token to a different ngrok origin. Select the saved connection on this protected PWA, or enter a separately authorized private endpoint. Only the explicitly reviewed debt inputs are sent when you press Ask.</p>
+        <label className="mt-3 block text-[11px]">Private HTTPS server URL <input type="url" className="mt-1 h-10 w-full rounded border border-input bg-background px-3 text-[12px]" value={endpoint} placeholder="https://your-desktop.your-tailnet.ts.net/" onChange={e => {setEndpoint(e.target.value);setUseSavedConnection(false);}}/></label>
+        <label className="mt-3 block text-[11px]">Separate AI access token (48+ characters) <input type="password" autoComplete="off" className="mt-1 h-10 w-full rounded border border-input bg-background px-3 text-[12px]" value={token} onChange={e => {setToken(e.target.value);setUseSavedConnection(false);}}/></label>
         <p role="status" className="mt-3 rounded-lg bg-muted/50 p-3 text-[11px] leading-5 text-muted-foreground">
           {!ready?'Step 1: Complete every debt account and all four current cash-flow inputs in ZAR.':
             !confirmed?'Step 2: Tick the confirmation above after checking your current figures.':
-            !serverUrl(endpoint)?'Step 3: Enter an allowed private HTTPS origin. Use the existing protected app origin when on ngrok; the public edition cannot connect cross-origin.':
-            token.length<48?'Step 4: Enter the separate, valid 48+ character AI access token.':
+            !serverUrl(effectiveEndpoint)?'Step 3: Enter an allowed private HTTPS origin. Use the existing protected app origin when on ngrok; the public edition cannot connect cross-origin.':
+            effectiveToken.length<48?'Step 4: Enter the separate, valid 48+ character AI access token.':
             running?'Request in progress; private model confirmation is pending.':
             'All local prerequisites are met. The private server connection will be checked only when you press Ask.'}
         </p>
-        <button type="button" onClick={() => { void askOllama(); }} disabled={!ready || !confirmed || !serverUrl(endpoint) || token.length < 48 || running} className="mt-3 rounded-lg border border-border bg-background px-4 py-2.5 text-[12px] font-semibold disabled:opacity-40">{running ? 'Awaiting private Ollama…' : 'Ask self-hosted Ollama'}</button>
-        {(endpoint||token)&&<button type="button" className="ml-2 mt-3 rounded-lg border border-border px-3 py-2 text-[11px]" onClick={() => {setToken('');setEndpoint('');}}>Clear connection fields</button>}
+        <button type="button" onClick={() => { void askOllama(); }} disabled={!ready || !confirmed || !serverUrl(effectiveEndpoint) || effectiveToken.length < 48 || running} className="mt-3 rounded-lg border border-border bg-background px-4 py-2.5 text-[12px] font-semibold disabled:opacity-40">{running ? 'Awaiting private Ollama…' : 'Ask self-hosted Ollama'}</button>
+        {(endpoint||token)&&<button type="button" className="ml-2 mt-3 rounded-lg border border-border px-3 py-2 text-[11px]" onClick={() => {setToken('');setEndpoint('');setUseSavedConnection(false);}}>Clear connection fields</button>}
       </details>
       {notice && <p role="status" className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-5">{notice}</p>}
       {stress && <div className="rounded-lg border border-border bg-muted/45 p-4 text-[11px] leading-5">

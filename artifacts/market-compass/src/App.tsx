@@ -1061,6 +1061,7 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
     </form>
     <div className="mt-6">
       <DebtAdvisor accounts={accounts} currency={data.currency} baseline={data.financialBaseline ?? null}
+        savedAi={data.desktopAi}
         budget={data.privateBudget ?? emptyPrivateBudget}
         onBudgetChange={next => setData(old => ({ ...old, privateBudget: next }))}
         onImport={historical => {
