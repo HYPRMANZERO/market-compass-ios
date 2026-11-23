@@ -18,7 +18,8 @@ test('AI composer handles Enter to send, Shift+Enter newline and IME composition
 });
 test('chat bubbles and fields have accessible, non-crowded mobile layout',async()=>{
   const ui=await source();
-  assert.match(ui,/mc-assistant-composer grid grid-cols-\[minmax\(0,1fr\)_44px_44px\]/);
+  assert.match(ui,/mc-assistant-composer grid grid-cols-\[minmax\(0,1fr\)_48px_48px\]/);
+  assert.match(ui,/minWidth:48,minHeight:48/);
   assert.match(ui,/mc-chat-bubble/);
   assert.doesNotMatch(ui,/min-h-\[160px\] space-y-3 overflow-y-auto/);
   assert.match(ui,/messages\.length===0 && !busy/);
