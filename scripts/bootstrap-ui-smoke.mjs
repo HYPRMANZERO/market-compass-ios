@@ -199,6 +199,92 @@ try{
   assert.ok(row.balance.includes('1')&&row.balance.includes('840'));
   assert.match(row.details,/18\.5%/);
   console.log('PASS: manual banking account, masked identifier, rate, amount and provenance');
+
+  // Real browser check: Enter sends, Shift+Enter creates a newline, and
+  // composition confirmation must never submit a financial question.
+  await js(function(){
+    const link=[...document.querySelectorAll('a')]
+      .find(item=>item.getAttribute('href')?.endsWith('/assistant'));
+    if(!link)throw Error('Assistant route missing');link.click();
+  });
+  await expect('Conversation','mobile assistant screen');
+  const before=await js(function(){
+    const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+    const log=document.querySelector('[role="log"][aria-label="AI conversation"]');
+    const submit=document.querySelector('button[aria-label="Send question"]');
+    const mic=document.querySelector('button[aria-label="Speak a question"]');
+    return {
+      present:!!input&&!!log&&!!submit&&!!mic,
+      width:input?.getBoundingClientRect().width||0,
+      fontSize:input?getComputedStyle(input).fontSize:null,
+      actions:[submit?.getBoundingClientRect().width,mic?.getBoundingClientRect().width],
+      count:log?.querySelectorAll('.mc-chat-bubble').length??0,
+      bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
+      noOverflow:document.documentElement.scrollWidth<=innerWidth+1
+    };
+  });
+  assert.equal(before.present,true,'composer and accessible controls visible');
+  assert.ok(before.width>=155,'assistant text input must not be squeezed');
+  assert.equal(before.fontSize,'16px','iPhone composer must not zoom on focus');
+  assert.ok(before.actions.every(n=>n>=44),'voice/send tap targets at least 44px');
+  assert.equal(before.noOverflow,true,'no horizontal overflow on AI tab');
+  assert.ok(before.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
+  const setQuestion=async value=>{
+    assert.equal(await js(function(value){
+      const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')
+        .set.call(input,value);
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+      return input.value;
+    },value),value);
+    await until(()=>js(function(){
+      return !document.querySelector('button[aria-label="Send question"]').disabled;
+    }),'question ready');
+  };
+  await setQuestion('What is my total debt?');
+  const shift=await js(function(){
+    const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+    const event=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',shiftKey:true,cancelable:true,bubbles:true});
+    field.dispatchEvent(event);
+    return {prevented:event.defaultPrevented,count:document.querySelectorAll('.mc-chat-bubble').length};
+  });
+  assert.equal(shift.prevented,false,'Shift+Enter should retain native newline behaviour');
+  assert.equal(shift.count,before.count,'Shift+Enter must not send');
+  const composing=await js(function(){
+    const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+    const event=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',isComposing:true,cancelable:true,bubbles:true});
+    field.dispatchEvent(event);
+    return {prevented:event.defaultPrevented,count:document.querySelectorAll('.mc-chat-bubble').length};
+  });
+  assert.equal(composing.prevented,false,'IME Enter must not be intercepted');
+  assert.equal(composing.count,before.count,'IME composition must not send');
+  const enter=await js(function(){
+    const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+    const event=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true});
+    field.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  assert.equal(enter,true,'Enter must prevent insertion of an unwanted newline');
+  await until(()=>js(function(){
+    return document.querySelectorAll('.mc-chat-bubble').length>=3;
+  }),'Enter local response');
+  const after=await js(function(){
+    return {
+      count:document.querySelectorAll('.mc-chat-bubble').length,
+      text:[...document.querySelectorAll('.mc-chat-bubble')].map(x=>x.textContent).join(' '),
+      input:document.querySelector('textarea[aria-describedby="mc-composer-hint"]').value
+    };
+  });
+  assert.equal(after.count,before.count+2,'Enter sends exactly once, with one local response');
+  assert.ok(after.text.includes('What is my total debt?'));
+  assert.equal(after.input,'','sent question clears input');
+  await js(function(){
+    const button=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Clear');
+    if(!button)throw Error('Clear conversation missing');
+    button.click();
+  });
+  await expect('Conversation cleared. Ask a new question below.','compact empty chat state');
+  console.log('PASS: responsive AI bubbles and composer; Enter/Shift+Enter/IME and compact empty state');
   console.log('PUBLIC BOOTSTRAP UI SMOKE PASS (synthetic localhost; not real iPhone)');
 }catch(error){
   console.error('PUBLIC BOOTSTRAP UI SMOKE FAIL:',error.message);
