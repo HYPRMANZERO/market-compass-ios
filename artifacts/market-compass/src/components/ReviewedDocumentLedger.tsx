@@ -10,7 +10,7 @@ import {
   type ExpenseEntry,type ExpenseCategory,type ExpenseKind
 } from '@/lib/monthlyExpenses';
 import {
-  applyReviewedDocumentToLedger,allowedDocumentCategories,
+  applyReviewedDocumentToLedger,allowedDocumentCategories,separateRepeatedDocumentChoices,
   documentAppliedIndices,type ReviewedLedgerDecision
 } from '@/lib/reviewedDocumentLedger';
 
@@ -38,9 +38,14 @@ export default function ReviewedDocumentLedger({
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
   const undatedCount=document.lines.filter((line,index)=>!line.date&&!applied.has(index)&&isReviewableLine(document,line)).length;
-  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
+  const preparedCandidates=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
       item.proposal!==null&&!applied.has(item.index));
+  const checkedDuplicates=separateRepeatedDocumentChoices(document,entries,preparedCandidates.map(({index,proposal})=>({
+    lineIndex:index,date:proposal.date,kind:proposal.kind,category:proposal.category
+  })));
+  const safePreparedIds=new Set(checkedDuplicates.accepted.map(choice=>choice.lineIndex));
+  const prepared=preparedCandidates.filter(({index})=>safePreparedIds.has(index));
   const selectPrepared=()=>{
     if(!canApply)return;
     setDraft(old=>{
@@ -118,6 +123,10 @@ export default function ReviewedDocumentLedger({
       {document.timeContext?.asOf&&<p className="mt-1 text-muted-foreground">As of {document.timeContext.asOf} · historical source reference, not a current balance</p>}
       <p className="mt-1 text-muted-foreground">A document period does not establish the payment date of an undated line. No unapproved amount is counted in Spend.</p>
     </div>
+    {checkedDuplicates.needsReview.length>0&&<p role="status" className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-5">
+      {checkedDuplicates.needsReview.length} possible duplicate(s) from other recorded sources were excluded from prepared approval.
+      Keep them as evidence, or select an individual row if this was a separate payment.
+    </p>}
     {prepared.length>0&&<div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3">
       <p className="text-[12px] font-bold">{prepared.length} source-dated transaction(s) ready to confirm</p>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Dates, debit/credit direction, amounts and suggested categories are extracted. Confirm once to record these matching rows; you can still expand individual rows to correct categories before using manual review.</p>

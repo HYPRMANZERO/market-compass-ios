@@ -37,6 +37,52 @@ export function documentAppliedIndices(doc:LocalFinanceDocument,existing:Expense
   const ids=new Set(existing.map(e=>e.id));
   return new Set(doc.lines.map((_,i)=>i).filter(i=>ids.has(documentLedgerEntryId(doc.id,i))));
 }
+
+/** Merge a reviewed ledger snapshot without replacing concurrent vault changes.
+ * Only new document-sourced entries are accepted; existing IDs are preserved. */
+export function mergeReviewedDocumentEntries(current:ExpenseEntry[],reviewed:ExpenseEntry[]):ExpenseEntry[]{
+  if(!Array.isArray(current)||!Array.isArray(reviewed))throw Error('Invalid Spend ledger update.');
+  const existingIds=new Set(current.map(entry=>entry.id));
+  const additions:ExpenseEntry[]=[];
+  const pendingIds=new Set<string>();
+  for(const entry of reviewed){
+    if(existingIds.has(entry.id))continue;
+    if(!/^doc-[0-9a-f-]{20,64}-\d+$/i.test(entry.id)||pendingIds.has(entry.id))
+      throw Error('An imported record has an invalid or repeated ID. No records were changed.');
+    pendingIds.add(entry.id);
+    additions.push(validateExpenseEntry(entry));
+  }
+  return additions.length?[...current,...additions]:current;
+}
+/** Conservative cross-source duplicate check for ONE-TAP prepared approvals.
+ * Suspicious rows stay in the saved evidence for explicit individual review.
+ * Never discard a row or infer a match from amount alone. */
+const repeatDescription=(value:string)=>maskDocumentPII(value).toLowerCase()
+  .replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+const repeatKey=(date:string,amount:number,kind:ExpenseKind,description:string)=>{
+  if(!date||!Number.isFinite(amount)||amount===0)return null;
+  const text=repeatDescription(description);
+  if(text.length<7||/^(?:payment|purchase|transfer|bank fee|pos purchase|debit order)$/.test(text))return null;
+  const flow=kind==='expense'||kind==='debt-payment'?'outflow':kind;
+  return date+'|'+Math.round(Math.abs(amount)*100)+'|'+flow+'|'+text;
+};
+export function separateRepeatedDocumentChoices(
+  document:LocalFinanceDocument,existing:ExpenseEntry[],choices:ReviewedLedgerDecision[]
+):{accepted:ReviewedLedgerDecision[];needsReview:ReviewedLedgerDecision[]}{
+  const existingKeys=new Set(existing.flatMap(entry=>{
+    const key=repeatKey(entry.date,entry.amount,entry.kind,entry.description);
+    return entry.currency==='ZAR'&&key?[key]:[];
+  }));
+  const accepted:ReviewedLedgerDecision[]=[];
+  const needsReview:ReviewedLedgerDecision[]=[];
+  for(const choice of choices){
+    const line=document.lines[choice.lineIndex];
+    const key=line?.amount!==null&&line?.amount!==undefined?
+      repeatKey(choice.date,line.amount,choice.kind,line.label):null;
+    (key&&existingKeys.has(key)?needsReview:accepted).push(choice);
+  }
+  return {accepted,needsReview};
+}
 export function applyReviewedDocumentToLedger(
   source:LocalFinanceDocument,
   current:ExpenseEntry[],

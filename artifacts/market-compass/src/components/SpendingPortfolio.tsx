@@ -8,6 +8,13 @@ const zar=(n:number)=>new Intl.NumberFormat('en-ZA',{
   style:'currency',currency:'ZAR',minimumFractionDigits:2,maximumFractionDigits:2
 }).format(n);
 const labelOf=(category:ExpenseCategory)=>EXPENSE_CATEGORIES.find(item=>item.value===category)?.label??'Other';
+const cycleTitle=(start:string)=>{
+  const range=salaryCycle(start);
+  const display=(day:string)=>new Date(day+'T00:00:00Z').toLocaleDateString('en-ZA',{
+    day:'numeric',month:'short',year:'numeric',timeZone:'UTC'
+  });
+  return display(range.start)+' – '+display(range.lastDay);
+};
 const sourceId=(entry:ExpenseEntry,documents:LocalFinanceDocument[])=>
   documents.find(doc=>entry.id.startsWith('doc-'+doc.id+'-'))?.id??'manual';
 
@@ -47,7 +54,7 @@ export default function SpendingPortfolio({entries,documents,currency}:Props){
         <select aria-label="Spending portfolio salary cycle" value={period} onChange={e=>setPeriod(e.target.value)}
           className="mt-1 min-h-11 w-full rounded-xl border border-input bg-background px-2 text-[12px]">
           <option value="all">All recorded history</option>
-          {cycles.map(c=><option key={c} value={c}>{c} onward</option>)}
+          {cycles.map(c=><option key={c} value={c}>{cycleTitle(c)}</option>)}
         </select>
       </label>
       <label className="text-[11px] font-semibold">Account / source
