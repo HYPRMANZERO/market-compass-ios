@@ -29,7 +29,7 @@ export default function EvidenceReviewInbox({documents,entries,currency,currency
      </Link>
    </div>
    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-     Saved document excerpts are not yet transactions. Review dates, directions and currency before approving any entry.
+     Approved source-dated transactions appear in Spend. Remaining excerpts still need your review; uncertain dates, amounts and balances stay as historical evidence.
    </p>
    <div className="mt-3 grid grid-cols-3 gap-2" aria-label="Review counts">
      <div className="min-w-0 rounded-[15px] bg-muted/60 px-2.5 py-3 text-center">
@@ -51,7 +51,7 @@ export default function EvidenceReviewInbox({documents,entries,currency,currency
    </p>}
    {summary.documents>0&&<details className="mt-3 rounded-xl border border-border px-3 py-3" aria-label="Grouped document review by import month">
      <summary className="cursor-pointer text-[12px] font-semibold">Review groups · imported by month</summary>
-     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These dates are when you added documents, not when bank payments occurred. Each source must still be reviewed in Spend before posting anything.</p>
+     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These are document import dates, not payment dates. Only explicitly approved source-dated transactions appear in Spend; review remaining entries there.</p>
      <div className="mt-3 space-y-2">{groupedDocumentReview(summary.items).map(group=><details key={group.month} className="rounded-xl bg-muted/40 p-3">
        <summary className="cursor-pointer text-[12px] font-semibold">{group.month} · {group.documents.length} files · {group.needsReview} excerpts to check</summary>
        <ul className="mt-2 space-y-2">{group.documents.map(doc=><li key={doc.id} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border bg-card p-2 text-[11px]">

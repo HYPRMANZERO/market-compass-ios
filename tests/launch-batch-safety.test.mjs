@@ -27,7 +27,7 @@ test('closing importer cancels ongoing processing and abandons unreviewed files'
 test('custom financial document labels are masked before entering encrypted vault',async()=>{
   const src=await component('LocalFinanceFiles.tsx');
   assert.match(src,/const privateLabel=maskDocumentPII\(label\.trim\(\)/);
-  assert.match(src,/const account=classifyDocument\(data,file\.name\)/);
+  assert.match(src,/const account=classifyDocument\(data\)/);
   assert.match(src,/extractLocalFinanceDocument\(file\.name,data,privateLabel\)/);
   const masked=maskDocumentPII('Credit card account 123456789012345');
   assert.doesNotMatch(masked,/123456789012345/);

@@ -79,7 +79,7 @@ test('a revoked/cancelled folder scan cannot continue collecting new documents',
 test('iPhone intake disables reselection or cancellation during a pending vault update',async()=>{
   const ui=await readFile(new URL('../artifacts/market-compass/src/components/LocalFinanceFiles.tsx',
     import.meta.url),'utf8');
-  assert.match(ui,/addLocalFinanceDocument\(documents,preview\)/);
+  assert.match(ui,/addLocalFinanceDocument\(documents,checked\)/);
   assert.match(ui,/pendingSaveId/);
   assert.match(ui,/documents\.some\(document=>document\.id===pendingSaveId\)/);
   assert.match(ui,/!reading&&!pendingSaveId/);

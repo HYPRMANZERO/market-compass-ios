@@ -62,7 +62,7 @@ test('UI requires explicit selection and review, and manual quote refresh lacks 
   assert.match(component,/Encrypted PDF detected/);
   assert.match(component,/Unlock &amp; review this PDF/);
   assert.match(component,/showDirectoryPicker/);
-  assert.match(component,/onAdd\(preview\)/);
+  assert.match(component,/onAdd\(checked,previewDecisions\)/);
   assert.doesNotMatch(component,/localStorage\.setItem|fetch\(/);
   assert.doesNotMatch(quotes,/lastRequest|90_000|Market refresh is limited to one request/);
   assert.match(quotes,/if\(pending\.current\)return/);

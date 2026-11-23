@@ -14,6 +14,7 @@ import {
   type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
 import { summarizeOwnerBudgetDraft, type OwnerBudgetDraft } from '@/lib/ownerBudgetDraft';
+import {applyReviewedDocumentToLedger} from '@/lib/reviewedDocumentLedger';
 import { enqueueOfflineQuestion, removeOfflineQuestion, type QueuedReadOnlyQuestion } from '@/lib/offlineAgentQueue';
 import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import type { CompassCommandContext } from '@/lib/compassCommands';
@@ -26,6 +27,7 @@ import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
+import SpendingPortfolio from '@/components/SpendingPortfolio';
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -549,17 +551,19 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
       <div className="mt-3 border-t border-border pt-4">
         <p className="mb-3 text-[12px] leading-5 text-muted-foreground">
           Import and review PDF, CSV, TXT or transaction JSON on this device.
-          Confirm the extracted lines to save encrypted excerpts. Approve actual
-          dated transactions separately before they change salary-cycle totals.
+          One approval saves reviewed document evidence and eligible source-dated transactions.
+          Check for overlapping statements before recording amounts in Spend.
         </p>
         <LocalFinanceFiles
           documents={docs}
-          onAdd={document=>setData(old=>({
-            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          onAdd={(document,approvals)=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+            expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])
           }))}
           onRemove={id=>setData(old=>({
             ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
           }))}
+          onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
           ledgerEntries={entries}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
@@ -1028,7 +1032,7 @@ type SpendSection='documents'|'activity'|'plan';
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
-  const [section,setSection]=useState<SpendSection>('documents');
+  const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   const options=[
@@ -1073,18 +1077,19 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         <div className="rounded-2xl border border-primary/15 bg-primary/[.045] px-4 py-3">
           <p className="text-[12px] font-semibold">1. Import · 2. Review · 3. Add approved lines to Spend</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            Saving an excerpt alone does not alter your ledger. Open a saved document
-            and choose Review and add to Spend to classify real entries.
+            Approving a document also records safely classified, source-dated transactions in Spend. Older saved statements can be approved below without re-uploading or entering dates.
           </p>
         </div>
         <LocalFinanceFiles
           documents={docs}
-          onAdd={document=>setData(old=>({
-            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          onAdd={(document,approvals)=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+            expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])
           }))}
           onRemove={id=>setData(old=>({
             ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
           }))}
+          onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
           ledgerEntries={ledger}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
@@ -1097,6 +1102,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
+        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
@@ -1319,8 +1325,8 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
-    {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-2 pt-4 pb-[calc(10px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
-      <section role="dialog" aria-modal="true" aria-label="Import and review financial documents" className="flex max-h-[90dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-[24px] border border-border bg-card shadow-2xl" onClick={event=>event.stopPropagation()}>
+    {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 px-3 py-[max(20px,env(safe-area-inset-top))]" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
+      <section role="dialog" aria-modal="true" aria-label="Import and review financial documents" className="flex max-h-[78dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-[24px] border border-border bg-card shadow-2xl sm:max-h-[82dvh]" onClick={event=>event.stopPropagation()}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div><h2 className="text-[16px] font-bold">Import financial documents</h2><p className="text-[11px] text-muted-foreground">Select files · review locally · approve explicitly</p></div>
           <button type="button" aria-label="Close document importer" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border"><X size={19}/></button>
@@ -1328,8 +1334,11 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
         <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
           <LocalFinanceFiles
             documents={data.localFinanceDocuments??[]}
-            onAdd={document=>setData(old=>({...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)}))}
+            onAdd={(document,approvals)=>setData(old=>({...old,
+              localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+              expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])}))}
             onRemove={id=>setData(old=>({...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)}))}
+            onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
             ledgerEntries={data.expenseEntries??[]}
             currency={data.currency}
             currencyReviewRequired={data.currencyReviewRequired}

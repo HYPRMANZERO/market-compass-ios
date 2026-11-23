@@ -13,7 +13,7 @@ export type DocumentFactField='statement-balance'|'settlement-quotation'|
 export type DocumentFact={field:DocumentFactField;amount:number|null;ratePercent?:number;
   asOf:string|null;sourceLabel:string;historical:true};
 export type AccountProfile={name:string;institution:string;category:DocumentCategory;
-  confidence:'matched-terms'|'uncertain';facts:DocumentFact[]};
+  accountType?:string;confidence:'matched-terms'|'uncertain';facts:DocumentFact[]};
 const institutions=[
   ['ABSA',/\babsa\b/i],['FNB',/\bfnb\b|\bfirst national bank\b/i],
   ['Standard Bank',/\bstandard bank\b/i],['Nedbank',/\bnedbank\b/i],
@@ -63,9 +63,24 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
     /\bIRP5\b|\bIT3\b|\bincome tax assessment\b/i,
     /\bSARS\b|\btax return\b/i]}
 ];
-export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'name'|'institution'|'category'|'confidence'>{
+export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'name'|'institution'|'category'|'confidence'|'accountType'>{
   const haystack=(text+'\n'+fileHint).slice(0,2_000_000);
-  const institution=institutions.find(([,r])=>r.test(haystack))?.[0]??'Unidentified provider';
+  // Issuing bank must be identifiable in the document heading, never simply
+  // mentioned as a merchant/payee elsewhere or inferred from a file name.
+  const firstLines=text.split(/\r?\n/).slice(0,14);
+  // Payment narrations can mention other banks. Never treat a bank name in a
+  // dated transfer or beneficiary line as the source institution.
+  const headerLines=firstLines.filter((line,index)=>{
+    if(index>5||/\b(?:transfer|payment to|beneficiary|merchant|debit|withdrawal|deposit|pos purchase|eft to)\b/i.test(line)||
+      /^\s*(?:\d{4}-\d{2}-\d{2}|\d{2}[\/-]\d{2}[\/-]\d{2,4}|\d{2}\s+[a-z]{3}\s+\d{2,4})\b/i.test(line))return false;
+    return /\b(?:statement|account|finance|bank|credit card|savings|cheque|current|issued by)\b/i.test(line)||
+      institutions.some(([,pattern])=>pattern.test(line)&&line.trim().length<=32);
+  });
+  const heading=headerLines.join(' ').slice(0,1500);
+  const foundInstitutions=institutions.filter(([,pattern])=>pattern.test(heading));
+  const institution=foundInstitutions.length===1?foundInstitutions[0][0]:'Unidentified provider';
+  const accountTypeMatch=heading.match(/\b(cheque|current|savings|transmission|transactional|credit card|business)\s+(?:bank\s+)?(?:account|statement)\b|\baccount\s+type\s*[:\-]?\s*(cheque|current|savings|transmission|transactional|credit card|business)\b/i);
+  const accountType=accountTypeMatch?(accountTypeMatch[1]??accountTypeMatch[2]).toLowerCase():undefined;
   // File names may contain identifiers; do not reuse them as account names.
   const ranked=patterns.map(p=>({kind:p.category,
     score:p.matches.reduce((score,re)=>score+(re.test(haystack)?1:0),0)}))
@@ -79,8 +94,8 @@ export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'n
     ranked.some(candidate=>candidate.kind==='bank-statement'&&candidate.score===best.score)?'bank-statement':'unclassified'):
     best.score>0?best.kind:'unclassified';
   return {name:institution==='Unidentified provider'?names[category]:
-    category==='bank-statement'?institution+' account':institution+' '+names[category],
-    institution,category,confidence:!tied&&best.score>=2?'matched-terms':'uncertain'};
+    category==='bank-statement'?institution+' '+(accountType?accountType+' ':'')+'account':institution+' '+names[category],
+    institution,category,accountType,confidence:!tied&&best.score>=2&&institution!=='Unidentified provider'?'matched-terms':'uncertain'};
 }
 /** Strong PII redaction for stored excerpts: never save full account/ID numbers. */
 export function maskDocumentPII(text:string):string{
@@ -109,7 +124,9 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
   const v=input as Record<string,unknown>;
   if(typeof v.name!=='string'||v.name.length<3||v.name.length>80||
     /[0-9@<>]/.test(v.name)||typeof v.institution!=='string'||v.institution.length>40||
-    /[0-9@<>]/.test(v.institution)||!isDocumentCategory(v.category)||
+    /[0-9@<>]/.test(v.institution)||
+    (v.accountType!==undefined&&(typeof v.accountType!=='string'||v.accountType.length>30||!/^(cheque|current|savings|transmission|transactional|credit card|business|unspecified)$/i.test(v.accountType)))||
+    !isDocumentCategory(v.category)||
     !['matched-terms','uncertain'].includes(String(v.confidence))||
     !Array.isArray(v.facts)||v.facts.length>32)return null;
   const facts:DocumentFact[]=[];
@@ -129,6 +146,7 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
     facts.push(fact);
   }
   return {name:v.name,institution:v.institution,category:v.category,
+    ...(typeof v.accountType==='string'?{accountType:v.accountType}:{}),
     confidence:v.confidence as AccountProfile['confidence'],facts};
 }
 export function makeAccountProfile(
@@ -137,7 +155,7 @@ export function makeAccountProfile(
     ratePercent?:number;runningBalance?:number
   }>
 ):AccountProfile{
-  const info=classifyDocument(text,label);
+  const info=classifyDocument(text);
   const facts:DocumentFact[]=[];
   for(const e of excerpts){
     let field:DocumentFactField|undefined=isFactField(e.semanticField)?e.semanticField:undefined;

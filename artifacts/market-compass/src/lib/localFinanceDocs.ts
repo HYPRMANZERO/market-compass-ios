@@ -301,7 +301,7 @@ export function extractLocalFinanceDocument(
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
   const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+ownerLabel):'unclassified';
-  const classified=classifyDocument(text,fileName+' '+ownerLabel);
+  const classified=classifyDocument(text);
   const bankStatement=(extension==='pdf'||extension==='txt')&&
     classified.category==='bank-statement'&&documentKind==='unclassified'?
       parseBankStatementText(text,MAX_FINANCE_LINES):null;

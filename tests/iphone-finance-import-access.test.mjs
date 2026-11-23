@@ -36,7 +36,7 @@ test('financial statement picker needs no label before choosing, with explicit r
   assert.doesNotMatch(statements,/disabled=\{[^}]*label\.trim\(\)\.length/);
   assert.match(statements,/const privateLabel=maskDocumentPII\(label\.trim\(\) \|\|/);
   assert.match(statements,/extractLocalFinanceDocument\(file\.name,data,privateLabel\)/);
-  assert.match(statements,/onAdd\(preview\)/);
+  assert.match(statements,/onAdd\(checked,previewDecisions\)/);
   assert.match(statements,/not uploaded to GitHub/);
   assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
 });

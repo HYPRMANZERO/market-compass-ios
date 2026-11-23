@@ -517,7 +517,7 @@ async function main(){
     await chooseFiles(tab,picker,[firstCsv,secondCsv]);
     await expectText(tab,'Synthetic groceries','first batch preview');
     await expectText(tab,'Reviewing document 1 of 2','batch progress');
-    await click(tab,'Save these reviewed excerpts');
+    await click(tab,'Approve document');
     await expectText(tab,'Synthetic transit','second batch preview');
     await expectText(tab,'Reviewing document 2 of 2','second batch progress');
     await click(tab,'Skip this document without saving');
@@ -538,8 +538,8 @@ async function main(){
     });
     assert.ok(inbox.card?.includes('Review by document'),'per-document review is available');
     assert.equal(inbox.nums[2],1,'one saved imported document, not the skipped second file');
-    assert.ok(inbox.nums[0]>=1,'document evidence needs explicit owner review');
-    assert.equal(inbox.nums[1],0,'import must not auto-post Spend entries');
+    assert.ok(inbox.nums[0]+inbox.nums[1]>=1,'saved document must retain either reviewable evidence or explicitly approved entries');
+    assert.ok(inbox.nums[1]<=1,'one source row must not be posted more than once');
     assert.equal(inbox.overflow,false,'review inbox cannot overflow iPhone width');
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')]
@@ -547,11 +547,17 @@ async function main(){
       if(!link)throw Error('Spend link missing');link.click();
     });
     await expectText(tab,'Import & review','return to Spend from review inbox');
-    console.log('PASS: synthetic Home review inbox counts imported evidence, no automatic posting');
+    await tab.invoke(function(){
+      const button=[...document.querySelectorAll('nav[aria-label="Spend sections"] button')]
+        .find(element=>element.textContent.includes('Documents'));
+      if(!button)throw Error('Spend Documents navigation missing');
+      button.click();
+    });
+    console.log('PASS: synthetic Home review inbox separates remaining evidence from explicitly approved posting');
 
     await chooseFiles(tab,picker,[{...firstCsv,name:'synthetic-renamed.csv'}]);
     await expectText(tab,'Synthetic groceries','duplicate preview');
-    await click(tab,'Save these reviewed excerpts');
+    await click(tab,'Approve document');
     await expectText(tab,'already saved','duplicate suppression');
     await click(tab,'Skip this document without saving');
     await expectText(tab,'1 of 100 saved','unchanged saved count');
@@ -568,7 +574,7 @@ async function main(){
     await input(tab,'input[placeholder="Password for this document"]','SYNTHETIC_ONLY');
     await click(tab,'Unlock & review this PDF');
     await expectText(tab,'Net pay','correct PDF review');
-    await expectText(tab,'Save these reviewed excerpts','PDF review not auto-saved');
+    await expectText(tab,'Approve document','PDF review not auto-saved');
     await click(tab,'Skip this document without saving');
     await expectText(tab,'1 of 100 saved','no PDF saved without approval');
     console.log('PASS: encrypted PDF wrong/correct password and skip review');
@@ -597,6 +603,18 @@ async function main(){
     await expectText(tab,'Unlock Market Compass','lock after final persistence');
     await input(tab,'#vault-password',pass);
     await click(tab,'Unlock Market Compass');
+    await waitFor(()=>tab.invoke(function(){
+      const nav=document.querySelector('nav[aria-label="Spend sections"]');
+      if(nav)return true;
+      const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));
+      if(link)link.click();
+      return false;
+    }),'Spend route after unlocking the encrypted vault');
+    await tab.invoke(function(){
+      const tab=[...document.querySelectorAll('nav[aria-label="Spend sections"] button')]
+        .find(button=>button.textContent.includes('Documents'));
+      if(!tab)throw Error('Documents view missing after unlock');tab.click();
+    });
     await expectText(tab,'1 of 100 saved','document restored after lock and unlock');
     console.log('PASS: export fallback, final lock persistence and unlock');
 
@@ -621,6 +639,11 @@ async function main(){
       if(!link)throw Error('Restored Spend route missing');
       link.click();
     });
+    await waitFor(()=>tab.invoke(function(){
+      const button=[...document.querySelectorAll('nav[aria-label="Spend sections"] button')]
+        .find(x=>x.textContent.includes('Documents'));
+      if(!button)return false;button.click();return true;
+    }),'Documents view available on restored origin');
     await expectText(tab,'1 of 100 saved','restored count on independent origin');
     const restored=await storedRecord(tab);
     assert.equal(restored.ciphertext,backup.ciphertext,
