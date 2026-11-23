@@ -10,7 +10,7 @@ Scope: original GitHub Pages Market Compass PWA. No secrets or private account i
 - PRESERVED: Push-to-talk browser speech input, speaker toggle, Enter to send, offline queued questions requiring manual sending, optional agent mode limited to three read-only tools.
 - PRESERVED: GitHub Pages original PWA remains a separate encrypted vault from the protected ngrok PWA. Never copy secrets or silently synchronize browser records.
 - PRESERVED: Optional owner-configured HTTPS Tailscale AI connection from compatible authenticated devices. It is **not** an automatic public API or a general ngrok relay. The iPhone 11 currently uses the authenticated private ngrok edition without Tailscale.
-- NOT FOUND: Jarvis Local Assistant source folder was not located in HYPRBOX's accessible common directories, local user projects, synced locations or linked GitHub repositories as of this audit. Do not assert that code was merged. Request the folder path on the device that stores it (possibly HYPRSLAP), or a project ZIP.
+- SOURCE FOUND: Owner supplied `Jarvis-Local-Assistant.zip`. Actual Python CLI in `local-jarvis/` was reviewed; all 28 isolated, mocked Python tests passed. The source uses Vosk/pyttsx3, deterministic browser/app commands and an Ollama-only loopback API. Only safe browser-local intents were ported to Compass; desktop program launches and microphone processes are not exposed to the PWA. See `docs/JARVIS-SOURCE-AUDIT-20261123.md`.
 - NOT DONE: Persistent wake word, autonomous desktop controls, email action privileges, background voice daemon, or Jarvis process integration.
 
 ## Proposed Jarvis-to-Compass architecture
@@ -24,9 +24,9 @@ Scope: original GitHub Pages Market Compass PWA. No secrets or private account i
 7. **Private memory:** The authorized bridge retains encrypted conversation memory. Separate browser vaults do not auto-merge; cross-device backup/restore needs explicit encrypted user action and approval.
 8. **Actions:** No bank movement, payments, trades, device file scanning, emails, scheduling, notifications or desktop control without an independently approved and narrowly scoped permission and implementation. The current agent remains read-only, with draft-only suggestions.
 
-## Source-code audit required before importing Jarvis
+## Jarvis source review and staged integration
 
-Inspect the actual Jarvis project for: entry points, package/venv dependencies, input handling, intents, voice/STT/TTS implementation, persistence, API/HTTP bindings, OS control/shell tools, credentials, and background services. Quarantine unsafe action handlers and replace undocumented external dependencies. Map each safe, tested capability into the existing Compass command/tool registry rather than running an all-powerful assistant process behind the public PWA.
+The owner's uploaded `Jarvis-Local-Assistant.zip` was inspected without running the desktop agent. Python CLI code lives in `local-jarvis/`; its Vosk wake-word clip loop, pyttsx3 replies, local app-discovery logic, website commands, music links and Ollama chat client have all been reviewed. 28 existing mocked Python tests passed. The new safe web-intent router lives at `src/lib/jarvisPersonalCommands.ts` and is covered by tests and a Chromium chat interaction. Desktop app launching, on-device microphone services, NewsAPI credentials and auto-start remain explicitly out of scope. See `docs/JARVIS-SOURCE-AUDIT-20261123.md` for detailed file-by-file findings.
 
 The original PWA must not be changed to call the owner-protected ngrok service from the public GitHub Pages origin. If a device is actually joined to the authorized Tailscale network, use the existing authenticated private URL with strict origin permissions. The public edition remains useful offline for deterministic local functions even with no desktop AI.
 
@@ -36,4 +36,4 @@ The original PWA must not be changed to call the owner-protected ngrok service f
 - Synthetic browser release gate must pass at mobile and desktop widths, including navigation, vault unlock, PDF password imports, document review, backup and scrolling.
 - Compare known menu labels, assistant status, read-only agent mode and microphone behavior between private and original Ionic builds.
 - Before any iPhone claim, obtain an actual owner-run physical Safari/PWA confirmation. CI and Chromium do not substitute for that.
-- When Jarvis source is supplied, add a source-specific architecture review, permitted tool matrix, migration patch and explicit acceptance results.
+- Source-specific review, safe-intent patch and mocked tests are now recorded. A Windows companion runtime, local voice verification and action permission matrix still require separate review and explicit owner approval.

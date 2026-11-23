@@ -599,6 +599,33 @@ async function main(){
     await expectText(tab,'Conversation cleared. Ask a new question below.','compact clear state');
     console.log('PASS: iPhone chat bubbles and compact composer; Enter, Shift+Enter, IME and Clear');
 
+    // Jarvis source audit: only offer a click-through HTTPS link for explicit
+    // website commands; no browser navigation or Windows program is launched.
+    await tab.invoke(function(){
+      const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')
+        .set.call(field,'Compass, open YouTube');
+      field.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !document.querySelector('button[aria-label="Send question"]').disabled;
+    }),'Jarvis-derived command ready');
+    await tab.invoke(function(){
+      const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    });
+    const jarvisLink=await waitFor(()=>tab.invoke(function(){
+      const anchor=document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
+      if(!anchor)return null;
+      return {href:anchor.getAttribute('href'),target:anchor.getAttribute('target'),
+        rel:anchor.getAttribute('rel'),text:anchor.closest('.mc-chat-bubble')?.innerText};
+    }),'safe Jarvis browser shortcut');
+    assert.equal(jarvisLink.href,'https://www.youtube.com/');
+    assert.equal(jarvisLink.target,'_blank');
+    assert.ok(jarvisLink.rel.includes('noopener')&&jarvisLink.rel.includes('noreferrer'));
+    assert.ok(jarvisLink.text.includes('not opened a website automatically'));
+    console.log('PASS: Jarvis-style Compass command offers an explicit safe HTTPS link, no auto-launch');
+
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));
       if(!link)throw Error('Spend route unavailable');
