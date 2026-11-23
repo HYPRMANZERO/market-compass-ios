@@ -37,3 +37,11 @@ Updated: 23 November 2026
 - Exact active and candidate `index.html` hashes matched; active `ionic-preview.html` exists; deployed service worker contains the Ionic preview; backup of the complete previous static bundle exists at `artifacts/market-compass/dist/public-before-finance-ux-20261123-115343`.
 - Protected browser release gate passed with synthetic Chromium data and the embedded Ionic iframe. Android `cap sync android` passed. The actual physical iPhone/ngrok Safari experience must still be visually tested by its owner.
 - The public GitHub Pages PWA remains subject to a separate main/Pages release review. Do not replace an existing vault or clear Safari site data to refresh assets.
+
+## Additional inline Ionic comparison (23 November 2026)
+- Spend > Activity provides an opt-in **Try Ionic** button in both PWA source branches; **Original UI** restores the standard spending portfolio without a data migration.
+- The existing **Try Ionic design** iframe remains a separate sample-only simulation of accounts, pop-up actions and category drilling.
+- Inline Ionic Spend cards and segmented filters use only the current authenticated React `expenseEntries` prop already approved for the existing ledger. This does not create or read a separate vault, does not request permissions, and does not submit a transaction.
+- Inline Ionic React components are lazy-loaded to keep the original first-render bundle and CSS separate until the owner requests the preview.
+- Verified both sources with TypeScript checks, all regression tests, isolated browser release gates, and production candidates under `MarketCompass/ReleaseCandidates/ionic-live-20261123/`.
+- A production build is not proof of installation on iPhone. Verify both PWA origins independently and retain their encrypted exports before any public deployment. Native iOS still requires macOS/Xcode and Apple signing.
