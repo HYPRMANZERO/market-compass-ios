@@ -322,7 +322,7 @@ async function main(){
     assert.ok(ui.rowWidth>0 && Math.abs(ui.columnWidth/ui.rowWidth-1/3)<0.025,
       'Bootstrap col-4 quick action must occupy one third of the row');
     assert.equal(ui.nav,true,'mobile tab navigation must remain');
-    assert.equal(ui.navTabs,6,'all six existing PWA routes must remain accessible');
+    assert.equal(ui.navTabs,4,'Home, Markets, AI, and Menu tabs remain visible; other sections are in Menu');
     assert.equal(ui.privacyText,true,'clear offline, manual-entry boundary must remain');
     await assertDocumentScrolling(tab,'Home on a 390px iPhone-sized viewport');
     console.log('PASS: unlocked Ionic Home supports real vertical page scrolling with sticky header');
@@ -335,7 +335,18 @@ async function main(){
     await tab.invoke(function(){document.querySelector('.mc-bs-quick-actions button.mc-quick-action')?.click();});
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Account actions"]');}),true,'account options must open directly from Home');
     await tab.invoke(function(){document.querySelector('button[aria-label="Close account actions"]')?.click();});
-    await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
+    await tab.invoke(function(){
+      const menu=document.querySelector('[data-testid="mobile-nav-menu"]');
+      if(!menu)throw Error('Mobile Menu tab unavailable');
+      menu.click();
+    });
+    await waitFor(()=>tab.invoke(function(){return !!document.querySelector('[aria-label="Market Compass quick menu"]');}),'mobile quick menu open for Spend');
+    await tab.invoke(function(){
+      const item=[...document.querySelectorAll('[aria-label="Market Compass quick menu"] button')]
+        .find(x=>x.textContent?.includes('Spend history'));
+      if(!item)throw Error('Spend history action missing from menu');
+      item.click();
+    });
     await expectText(tab,'Your finances','Spend landing page');
     await assertDocumentScrolling(tab,'Spend on a 390px iPhone-sized viewport');
     console.log('PASS: Ionic Spend can scroll through transaction history and page sections');
@@ -391,7 +402,7 @@ async function main(){
       });
       await writeFile(process.env.MC_TEST_PULSE_SCREENSHOT,Buffer.from(frame.data,'base64'));
     }
-    console.log('PASS: Bootstrap mobile grid, finance card, quick actions, privacy and six-tab shell');
+    console.log('PASS: Bootstrap mobile grid, finance card, quick actions, privacy and four-tab Menu shell');
     if(process.env.MC_TEST_SCREENSHOT){
       // Captures only the fabricated, isolated test vault; never capture owner data.
       const frame=await tab.command('Page.captureScreenshot',{
@@ -407,7 +418,7 @@ async function main(){
       link.click();
     });
     await expectText(tab,'Debt payoff','debt account editor');
-    await click(tab,'Add an account');
+    // New accounts begin as an unsaved blank draft; do not create empty persisted records.
     async function fillDebtField(label,value){
       const result=await tab.invoke(function(label,value){
         const matches=[...document.querySelectorAll('label')].filter(item=>item.textContent?.trim().startsWith(label));
@@ -423,6 +434,7 @@ async function main(){
     await fillDebtField('Balance','1840');
     await fillDebtField('APR (%)','18.5');
     await fillDebtField('Minimum / month','120');
+    await click(tab,'Save account');
     await tab.invoke(function(){
       const link=document.querySelector('a[aria-label="Go to Market Compass home"]');
       if(!link)throw Error('Home link unavailable');
@@ -454,6 +466,64 @@ async function main(){
     assert.ok(privateLabels.every(label=>!label?.includes('123456789012')),
       'the full synthetic account identifier must never be displayed as a label');
     console.log('PASS: vertical account row, privacy-masked identifier, saved balance and APR');
+    // Layout parity is tested in the SAME disposable encrypted browser vault:
+    // synthetic mobile debt must equal desktop debt, with no data migration.
+    const mobileDebt=await tab.invoke(function(){
+      const hero=document.querySelector('[data-testid="financial-space-hero"]');
+      return hero?.querySelector('[data-testid="financial-space-debt-total"]')?.textContent?.trim()??null;
+    });
+    assert.ok(mobileDebt?.includes('1')&&mobileDebt.includes('840'),'Synthetic saved debt visible on mobile');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:1366,height:850,deviceScaleFactor:1,mobile:false
+    });
+    const desktop=await waitFor(async()=>tab.invoke(function(){
+      const area=document.querySelector('[data-testid="desktop-financial-overview"]');
+      const hero=area?.querySelector('[data-testid="financial-space-hero"]');
+      const total=area?.querySelector('[data-testid="financial-space-debt-total"]');
+      const nav=document.querySelector('[data-testid="desktop-nav-menu"]');
+      const top=document.querySelector('[data-testid="desktop-header-menu"]');
+      const bounds=hero?.getBoundingClientRect();
+      return bounds?.height>150&&nav?.getBoundingClientRect().height>=40&&top?.getBoundingClientRect().height>=36
+        ? {debt:total?.textContent?.trim(),visible:true,wide:bounds?.width,nav:true,top:true}
+        : null;
+    }),'desktop debt hero and desktop menu controls');
+    assert.equal(desktop.debt,mobileDebt,'Desktop must use the same unlocked synthetic debt value as mobile');
+    assert.ok(desktop.wide>350,'Desktop card should use the available desktop content width');
+    await tab.invoke(function(){document.querySelector('[data-testid="desktop-nav-menu"]')?.click();});
+    const desktopMenu=await waitFor(async()=>tab.invoke(function(){
+      const dialog=document.querySelector('[aria-label="Market Compass quick menu"]');
+      return dialog&&dialog.getBoundingClientRect().height>100 ? dialog.textContent : null;
+    }),'desktop shared quick action menu');
+    for(const action of ['Add account','Import document','Ask Compass','Vault & backup']){
+      assert.ok(desktopMenu.includes(action),'Desktop menu missing '+action);
+    }
+    await tab.invoke(function(){
+      document.querySelector('button[aria-label="Close Market Compass menu"]')?.click();
+    });
+    assert.equal(await tab.invoke(function(){
+      return document.querySelector('[aria-label="Market Compass quick menu"]')===null;
+    }),true,'Desktop menu must close cleanly');
+    await tab.invoke(function(){
+      const action=document.querySelector('[data-testid="desktop-financial-overview"] [aria-label="View saved accounts"]');
+      if(!action)throw Error('Desktop View accounts action unavailable');
+      action.click();
+    });
+    await expectText(tab,'Debt payoff','desktop View accounts opens debt planner');
+    await tab.invoke(function(){
+      const home=document.querySelector('[data-testid="link-nav-overview"]');
+      if(!home)throw Error('Desktop Home navigation missing');
+      home.click();
+    });
+    await expectText(tab,'YOUR FINANCIAL SPACE','desktop Home reopened');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:844,deviceScaleFactor:3,mobile:true
+    });
+    await waitFor(async()=>tab.invoke(function(){
+      const card=document.querySelector('.mc-app-overview [data-testid="financial-space-hero"]');
+      return card?.getBoundingClientRect().height>100;
+    }),'iPhone hero restored after desktop layout');
+    console.log('PASS: shared debt hero matches mobile/desktop, desktop nav and header menu open, View accounts routes correctly');
+
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/assistant'));

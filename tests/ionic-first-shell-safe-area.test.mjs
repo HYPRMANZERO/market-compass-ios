@@ -43,7 +43,9 @@ test('account list and category details use Ionic components but keep their fina
     file('components/SpendingPortfolio.tsx'),
     file('components/IonicSpendPreview.tsx')
   ]);
-  assert.match(home,/<IonCard className="mc-wallet-hero"/);
+  assert.match(home,/<FinancialSpaceHero/);
+  const hero=await file('components/FinancialSpaceHero.tsx');
+  assert.match(hero,/<IonCard className="mc-wallet-hero"/);
   assert.match(home,/<IonList className="mc-account-list">/);
   assert.match(home,/accountActionsOpen && createPortal\(/);
   assert.match(spend,/<IonAccordionGroup multiple=\{true\}/);
