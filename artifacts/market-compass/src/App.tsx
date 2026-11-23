@@ -1,6 +1,6 @@
 import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { IonApp, IonHeader, IonToolbar, IonFooter, IonModal, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
+import { IonApp, IonHeader, IonToolbar, IonFooter, IonModal, IonContent, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
@@ -24,6 +24,7 @@ import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSetti
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
@@ -383,7 +384,6 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
               <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
             </div>
           </div>
-          <button type="button" onClick={()=>setMenuOpen(true)} aria-label="Open Market Compass menu" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><Menu size={21}/></button>
         </div>
         </IonToolbar>
       </IonHeader>
@@ -393,34 +393,39 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       </header>
       <InstallHelp/>
       <IonModal isOpen={menuOpen} onDidDismiss={()=>setMenuOpen(false)} initialBreakpoint={0.72} breakpoints={[0,0.72,0.95]} className="mc-ionic-menu" aria-label="Market Compass quick menu">
-        <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="w-full max-w-md rounded-[24px] bg-card p-4 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
+        <IonContent className="mc-menu-content" scrollY={true}><section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="w-full max-w-md rounded-[24px] bg-card p-4 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
           <div className="flex items-center justify-between gap-3"><h2 className="text-[18px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
           <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
           <div className="grid grid-cols-2 gap-2">
-            {([{label:'View accounts',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
+            {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
             <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
             <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
             <button type="button" onClick={()=>{setMenuOpen(false);openSettings();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
           </div>
-        </section>
+        </section></IonContent>
       </IonModal>
       <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
-      <div className="mx-auto grid max-w-[550px] grid-cols-6 gap-0.5">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const selected = href === path;
-          const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label === 'Expenses' ? 'Spend' : label;
-          return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
-            data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-            className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
-            <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
-            <span className="text-[10px] font-semibold leading-none">{short}</span>
-            {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
-          </Link>;
-        })}
-      </div>
+       <div className="mx-auto grid max-w-[550px] grid-cols-4 gap-1">
+         {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
+           const selected = href === path;
+           const short = label === 'Overview' ? 'Home' : label === 'Local assistant' ? 'AI' : label;
+           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
+             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
+             className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+             <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
+             <span className="text-[10px] font-semibold leading-none">{short}</span>
+           </Link>;
+         })}
+         <button type="button" data-testid="mobile-nav-menu" aria-label="Open Market Compass menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+           className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+           <Menu size={21} strokeWidth={2}/>
+           <span className="text-[10px] font-semibold leading-none">Menu</span>
+           {pending > 0 && <span className="absolute right-3 top-1 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
+         </button>
+</div>
       </nav>
     </IonFooter>
   </div>;
@@ -1287,6 +1292,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
+    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Select a bank or provider to organize your account documents. Live bank connections are not enabled."/><BankCarousel onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
     {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-2 pt-4 pb-[calc(10px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
