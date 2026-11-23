@@ -6,7 +6,7 @@ import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {detectFinanceDocument,isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {classifyDocument,maskDocumentPII} from '@/lib/documentIntelligence';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
-import {documentAppliedIndices,applyReviewedDocumentToLedger,type ReviewedLedgerDecision} from '@/lib/reviewedDocumentLedger';
+import {documentAppliedIndices,applyReviewedDocumentToLedger,separateRepeatedDocumentChoices,type ReviewedLedgerDecision} from '@/lib/reviewedDocumentLedger';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
 import {importFinanceBatch} from '@/lib/batchFinanceImport';
 import {buildPayrollHistory} from '@/lib/earningsHistory';
@@ -61,11 +61,14 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
     .filter((x):x is LocalFinanceDocument=>x!==null);
   // One explicit document approval can also post only source-dated, unambiguous
   // entries. Uncertain credits, reference balances and undated rows stay evidence.
-  const previewDecisions:ReviewedLedgerDecision[]=preview&&currency==='ZAR'&&!currencyReviewRequired
+  const preparedPreview:ReviewedLedgerDecision[]=preview&&currency==='ZAR'&&!currencyReviewRequired
     ?preview.lines.flatMap((_,i)=>{
       const suggestion=preparedDocumentReview(preview,i);
       return suggestion?[{lineIndex:i,date:suggestion.date,kind:suggestion.kind,category:suggestion.category}]:[];
     }):[];
+  const previewSplit=preview?separateRepeatedDocumentChoices(preview,ledgerEntries,preparedPreview):
+    {accepted:[] as ReviewedLedgerDecision[],needsReview:[] as ReviewedLedgerDecision[]};
+  const previewDecisions=previewSplit.accepted;
   const [batchProgress,setBatchProgress]=useState({file:0,total:0});
   function nextReview(){
     setPreview(remaining[0]??null);
@@ -140,7 +143,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
       const proposal=preparedDocumentReview(document,index);
       return proposal?[{lineIndex:index,date:proposal.date,kind:proposal.kind,category:proposal.category}]:[];
     });
-    return decisions.length?[{document,decisions}]:[];
+    const split=separateRepeatedDocumentChoices(document,ledgerEntries,decisions);
+    return split.accepted.length||split.needsReview.length?
+      [{document,decisions:split.accepted,needsReview:split.needsReview.length}]:[];
   });
   function updateSavedIdentity(document:LocalFinanceDocument){
     try{
@@ -314,6 +319,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
         </div>)}
       </div>
       {previewDecisions.length>0&&<p className="rounded-xl border border-primary/20 bg-background p-3 text-[11px] leading-5 text-muted-foreground">Approval will record {previewDecisions.length} source-dated, classified transaction(s) in Spend. {preview.lines.length-previewDecisions.length} other extracted line(s) remain document evidence only. Check for duplicate or overlapping statements before approval.</p>}
+      {previewSplit.needsReview.length>0&&<p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-5">
+        {previewSplit.needsReview.length} potential cross-source duplicate(s) will stay as document evidence, not be posted automatically.
+        After saving, expand this document to review any distinct genuine transactions individually.
+      </p>}
       {preview.truncated&&<p role="alert" className="text-[11px] font-semibold text-destructive">
         The saved excerpt is partial. The original remains in iPhone Files; review further source entries separately.
       </p>}
@@ -339,12 +348,18 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
       {pendingSaved.length>0&&<div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
         <p className="text-[12px] font-bold">Ready to update Spend from saved statements</p>
         <p className="text-[11px] leading-5 text-muted-foreground">These documents are already in your encrypted vault. Approve eligible dated entries below once per document. Unclear, undated and reference figures remain evidence. Check for overlapping statements before approval.</p>
-        {pendingSaved.map(({document,decisions})=><button type="button" key={document.id}
-          disabled={currency!=='ZAR'||currencyReviewRequired}
-          onClick={()=>recordSaved(document,decisions)}
-          className="min-h-12 w-full rounded-xl bg-primary px-3 py-2 text-left text-[12px] font-bold text-primary-foreground disabled:opacity-40">
-          Approve {decisions.length} dated entries from {maskDocumentPII(document.label)}
-        </button>)}
+        {pendingSaved.map(({document,decisions,needsReview})=><div key={document.id} className="space-y-2">
+          {decisions.length>0&&<button type="button"
+            disabled={currency!=='ZAR'||currencyReviewRequired}
+            onClick={()=>recordSaved(document,decisions)}
+            className="min-h-12 w-full rounded-xl bg-primary px-3 py-2 text-left text-[12px] font-bold text-primary-foreground disabled:opacity-40">
+            Approve {decisions.length} dated entries from {maskDocumentPII(document.label)}
+          </button>}
+          {needsReview>0&&<p role="status" className="text-[11px] leading-5 text-muted-foreground">
+            {needsReview} potentially repeated transaction(s) in {maskDocumentPII(document.label)} are not included in one-tap approval.
+            Open this document's individual row review if they are separate genuine payments.
+          </p>}
+        </div>)}
       </div>}
       {safe.map(document=><details key={document.id} className="rounded-xl border border-border bg-background p-3">
         <summary className="min-h-10 cursor-pointer text-[12px] font-semibold">

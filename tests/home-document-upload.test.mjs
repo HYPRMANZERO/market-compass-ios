@@ -25,7 +25,7 @@ test('Home upload uses the SAME saved encrypted documents and approved ledger as
     assert.match(view,/<LocalFinanceFiles/);
     assert.match(view,/addLocalFinanceDocument/);
     assert.match(view,/removeLocalFinanceDocument/);
-    assert.match(view,/onApplyEntries=\{approved=>setData\(old=>\(\{\.\.\.old,expenseEntries:approved\}\)\)\}/);
+    assert.match(view,/expenseEntries:mergeReviewedDocumentEntries/);
   }
   assert.match(home,/localFinanceDocuments\?\?\[\]/);
   assert.match(home,/expenseEntries\?\?\[\]/);

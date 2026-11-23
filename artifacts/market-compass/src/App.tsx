@@ -18,7 +18,7 @@ import {
   type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
 import { summarizeOwnerBudgetDraft, type OwnerBudgetDraft } from '@/lib/ownerBudgetDraft';
-import {applyReviewedDocumentToLedger} from '@/lib/reviewedDocumentLedger';
+import {applyReviewedDocumentToLedger,mergeReviewedDocumentEntries} from '@/lib/reviewedDocumentLedger';
 import { enqueueOfflineQuestion, removeOfflineQuestion, type QueuedReadOnlyQuestion } from '@/lib/offlineAgentQueue';
 import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import type { CompassCommandContext } from '@/lib/compassCommands';
@@ -511,7 +511,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
           ledgerEntries={entries}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
-          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
         />
       </div>
     </details>
@@ -1024,6 +1024,12 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         </button>)}
       </nav>
     </section>
+    {section==='documents'&&ledger.length>0&&<button type="button"
+      onClick={()=>setSection('activity')}
+      className="mb-5 flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[.065] px-4 py-3 text-left text-[12px] font-semibold">
+      <span>{ledger.length} approved or manually recorded transaction(s) are ready in your spending portfolio. View purchases and history by category.</span>
+      <ArrowRight size={19} className="shrink-0" aria-hidden="true"/>
+    </button>}
     <div aria-label={section==='documents'?'Document importer and reviewed files':
       section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
       className="min-w-0 space-y-5">
@@ -1047,7 +1053,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ledgerEntries={ledger}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
-          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
         />
         <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
           currency={data.currency}
@@ -1297,7 +1303,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
             ledgerEntries={data.expenseEntries??[]}
             currency={data.currency}
             currencyReviewRequired={data.currencyReviewRequired}
-            onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+            onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
           />
         </div>
       </section>

@@ -9,7 +9,7 @@ import {
   type ExpenseEntry,type ExpenseCategory,type ExpenseKind
 } from '@/lib/monthlyExpenses';
 import {
-  applyReviewedDocumentToLedger,allowedDocumentCategories,
+  applyReviewedDocumentToLedger,allowedDocumentCategories,separateRepeatedDocumentChoices,
   documentAppliedIndices,documentRowBlockReason,suggestDocumentClassification,type ReviewedLedgerDecision
 } from '@/lib/reviewedDocumentLedger';
 
@@ -38,7 +38,9 @@ export default function ReviewedDocumentLedger({
     return {checked:false,date:line.date??'',kind:suggestion?.kind??'',category:suggestion?.category??''};
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
-    !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0);
+    !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0&&!!line.date);
+  const undatedCount=document.lines.filter((line,index)=>
+    !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0&&!line.date).length;
   // Unreviewed movements are visible, but never included in approved Spend totals.
   const pendingCredits=ready.filter(({line})=>line.direction==='incoming')
     .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
@@ -55,9 +57,14 @@ export default function ReviewedDocumentLedger({
   });
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
-  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
+  const preparedCandidates=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
       item.proposal!==null&&!applied.has(item.index));
+  const checkedDuplicates=separateRepeatedDocumentChoices(document,entries,preparedCandidates.map(({index,proposal})=>({
+    lineIndex:index,date:proposal.date,kind:proposal.kind,category:proposal.category
+  })));
+  const safePreparedIds=new Set(checkedDuplicates.accepted.map(choice=>choice.lineIndex));
+  const prepared=preparedCandidates.filter(({index})=>safePreparedIds.has(index));
   const selectPrepared=()=>{
     if(!canApply)return;
     setDraft(old=>{
@@ -136,6 +143,13 @@ export default function ReviewedDocumentLedger({
       {sourceTimeContext(document)?.asOf&&<p className="mt-1 text-muted-foreground">Historical document as of {sourceTimeContext(document)?.asOf} · not a current balance</p>}
       <p className="mt-1 text-muted-foreground">Reporting periods do not date individual undated transactions. No unapproved amounts affect Spend.</p>
     </div>
+    {undatedCount>0&&<p role="status" className="mt-3 rounded-xl bg-muted/35 p-3 text-[11px] leading-5 text-muted-foreground">
+      {undatedCount} row(s) lack a source transaction date, so they remain historical evidence rather than being posted to Spend. You do not need to invent or enter dates.
+    </p>}
+    {checkedDuplicates.needsReview.length>0&&<p role="status" className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-5">
+      {checkedDuplicates.needsReview.length} possible duplicate(s) from other recorded sources were excluded from prepared approval.
+      Keep them as evidence, or select an individual row if this was a separate payment.
+    </p>}
     {prepared.length>0&&<button type="button" disabled={!canApply} onClick={selectPrepared}
       className="mt-3 min-h-11 w-full rounded-xl border border-primary/30 bg-primary/10 px-3 text-[12px] font-semibold disabled:opacity-40">
       Prepare {prepared.length} dated, source-labelled transaction(s) for one approval
@@ -154,7 +168,7 @@ export default function ReviewedDocumentLedger({
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
         const blocked=documentRowBlockReason(document,line);
-        const unusable=line.amount===null||line.amount===0||Boolean(blocked);
+        const unusable=line.amount===null||line.amount===0||!line.date||Boolean(blocked);
         const row=draft[index]??initialRow(index);
         const proposal=preparedDocumentReview(document,index);
         const options=row.kind?allowedDocumentCategories(row.kind):[];
@@ -177,14 +191,7 @@ export default function ReviewedDocumentLedger({
           {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No transaction date extracted from this row. The document period is not a substitute.</p>}
           {proposal&&!already&&!unusable&&<p className="mt-1 pl-6 text-[10px] text-muted-foreground">Prepared classification: {proposal.kind} · {proposal.category}. {proposal.explanation}. Confirm before recording.</p>}
           {!already&&!unusable&&row.checked&&<div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {line.date?<div className="text-[11px] font-semibold">Source payment date<p className="mt-1 rounded-lg border border-border bg-muted/35 px-3 py-3 text-[12px]">{line.date}</p></div>:
-            <label className="text-[11px] font-semibold">
-              Missing transaction date · enter only if source proves it
-              <input aria-label={'Date for imported line '+(index+1)}
-                type="date" value={row.date}
-                onChange={e=>change(index,{date:e.target.value})}
-                className="mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-2 text-[16px]"/>
-            </label>}
+            <div className="text-[11px] font-semibold">Source payment date<p className="mt-1 rounded-lg border border-border bg-muted/35 px-3 py-3 text-[12px]">{line.date}</p></div>
             <label className="text-[11px] font-semibold">
               Transaction type
               <select aria-label={'Type for imported line '+(index+1)}
