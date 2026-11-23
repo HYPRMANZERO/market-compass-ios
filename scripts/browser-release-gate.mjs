@@ -236,6 +236,40 @@ async function main(){
       width:390,height:844,deviceScaleFactor:3,mobile:true
     });
     await expectText(tab,'Create encrypted workspace','initial synthetic vault screen');
+    const login=await tab.invoke(function(){
+      const wrapper=document.querySelector('.mc-vault-entry');
+      const card=wrapper?.querySelector('.rounded-\\[22px\\]');
+      const input=document.querySelector('#vault-password');
+      const restore=[...wrapper?.querySelectorAll('details')||[]]
+        .find(x=>x.innerText.includes('Restore from encrypted backup'));
+      const privacy=[...wrapper?.querySelectorAll('details')||[]]
+        .find(x=>x.innerText.includes('Vault & privacy information'));
+      return {
+        exists:!!wrapper,
+        cardWidth:card?.getBoundingClientRect().width||0,
+        cardHeight:card?.getBoundingClientRect().height||0,
+        fontSize:input?getComputedStyle(input).fontSize:null,
+        inputHeight:input?.getBoundingClientRect().height||0,
+        privacyCollapsed:!!privacy&&!privacy.open,
+        restoreAvailable:!!restore,
+      horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1
+      };
+    });
+    assert.equal(login.exists,true,'compact vault entry must render');
+    assert.ok(login.cardWidth>0&&login.cardWidth<=390,'vault card must fit iPhone width');
+    assert.ok(login.cardHeight>0&&login.cardHeight<550,'vault card must be compact');
+    assert.equal(login.fontSize,'16px','iPhone password input must not force Safari zoom');
+    assert.ok(login.inputHeight>=44,'password input requires a usable touch target');
+    assert.equal(login.privacyCollapsed,true,'long privacy disclosure must be expandable');
+    assert.equal(login.restoreAvailable,true,'encrypted vault restore must remain accessible');
+    assert.equal(login.horizontalOverflow,false,'compact vault must not horizontally overflow');
+    console.log('PASS: compact iPhone login dimensions, 16px input and expandable privacy guidance');
+    if(process.env.MC_TEST_LOGIN_SCREENSHOT){
+      const frame=await tab.command('Page.captureScreenshot',{
+        format:'png',captureBeyondViewport:false,fromSurface:true
+      });
+      await writeFile(process.env.MC_TEST_LOGIN_SCREENSHOT,Buffer.from(frame.data,'base64'));
+    }
     const pass='synthetic-browser-gate-'+randomUUID();
     await input(tab,'#vault-password',pass);
     await click(tab,'Create encrypted workspace');
