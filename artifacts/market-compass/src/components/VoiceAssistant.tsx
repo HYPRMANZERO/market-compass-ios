@@ -518,7 +518,7 @@ export default function VoiceAssistant({
     const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!url || !settings.token || !connected) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 65000);
+    const timer = window.setTimeout(() => controller.abort(), ownerPreviewModel ? 100000 : 65000);
     try {
       const validAccount = (a: CompassCommandContext['accounts'][number]) =>
         a.name.trim().length > 0 && [a.balance, a.apr, a.minimumPayment].every(v =>
