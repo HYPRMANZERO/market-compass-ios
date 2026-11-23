@@ -42,8 +42,27 @@ jobs:
             staging=$(git rev-parse "${staging_sha}:${file}")
             if [ "$owner" = "$base" ]; then
               if [ "$owner" != "$staging" ]; then
+                # Explicit, reviewed 2026-11-23 baseline drift; NOT parity.
+                # Changes in EITHER branch invalidate this exception.
+                # For non-main bases, strict equality remains required.
+                expected_pair=''
+                if [ "$base_ref" = main ]; then
+                  case "$name" in
+                    documentIntelligence) expected_pair='2e50ee8c2d41d58e763c87f7a8a896ef3517296e|fde9367c0d62bc0398a8f84fcba85f5d7c021afe' ;;
+                    bankStatementParser) expected_pair='d3029d17d6683227cb5a1d0b57e933f6226e5bfb|e7632366626637a0e5124cde2e11aa1b2b9d6d29' ;;
+                    financialSourceNormalizer) expected_pair='23939641027dc957eb5544b522b732b3e3fd1290|312d98680863fc57090083e3640c8a67d21285f1' ;;
+                    standardBankPdfLayout) expected_pair='5a78500e121df3f13cbd97095d4cd96b7477e643|b65478786a8b32b133da697efda21347ebae58e6' ;;
+                    localFinanceDocs) expected_pair='7d766464399b45ad39fbf5c8aa313394de276e73|545add62264b685f79d723d4dd5ed3b114669532' ;;
+                    localPdfText) expected_pair='b4069cab6edc934422b901afa6d8d85273059866|69f1b07bfe6901f4a07e5b95792f04ab030bb5e3' ;;
+                    reviewedDocumentLedger) expected_pair='a3bb0d680167af8c7c545553f2a709d3aabb550d|2c4e8fb51f5e0b43f71983aa942907785df66b82' ;;
+                  esac
+                fi
+                if [ "$expected_pair" != "$owner|$staging" ]; then
+                  echo "::error file=${file}::Unknown financial-core drift; abort UI release."
+                  exit 1
+                fi
                 baseline_drift=$((baseline_drift+1))
-                echo "::warning file=${file}::Existing public/staging finance-core difference remains; this PR did not modify the file."
+                echo "::warning file=${file}::Pinned pre-existing public/staging drift; reconciliation remains outstanding."
               fi
               continue
             fi

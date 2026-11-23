@@ -31,3 +31,7 @@ The public PWA follows GitHub Pages `pages.yml` on `main`; the private ngrok PWA
 ## Synthetic visual preview
 
 ![Compact Market Compass vault login (synthetic browser)](compact-login-synthetic.png)
+
+### Hash-pinned existing parser drift (not semantic equivalence)
+
+For the public visual-only release, the parity workflow now records the **exact Git blob SHA-1 pairs** for the seven pre-existing source differences between current public `main` and `feature/ios-safari-launch-2026-11-26`. A changed hash on either side fails CI, as does any new core-file change unless it matches the protected staging source. The eighth core file (`vehicleFinance.ts`) already matches. This narrowly allows an unchanged visual-only release while retaining a fail-closed check for any newly introduced parser drift. It is **not a waiver of future financial-core reconciliation** and does not claim equivalent classification behaviour. Automated parsing tests remain mandatory.
