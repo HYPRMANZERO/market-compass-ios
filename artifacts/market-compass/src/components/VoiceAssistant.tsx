@@ -113,6 +113,7 @@ export default function VoiceAssistant({
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [activeModel,setActiveModel]=useState('');
   const [busy, setBusy] = useState(false);
   const agentMode = true; // Model-backed read-only agent always active.
   const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
@@ -242,8 +243,10 @@ export default function VoiceAssistant({
           throw Error(why);
         }
         if (!active || probeSerial.current !== id) return;
+        const reportedModel='model' in payload && typeof payload.model==='string' && /^[a-z0-9.:-]{1,80}$/i.test(payload.model)?payload.model:'';
+        setActiveModel(reportedModel);
         setConnection('connected');
-        setConnectionMessage('Private desktop AI connected. Reconnection is automatic while the app is open and unlocked.');
+        setConnectionMessage(`Private desktop AI connected${reportedModel?` (${reportedModel})`:''}. Reconnection is automatic while the app is open and unlocked.`);
       } catch (err) {
         if (!active || probeSerial.current !== id || controller.signal.aborted && !navigator.onLine) return;
         setConnection('offline');
@@ -518,7 +521,7 @@ export default function VoiceAssistant({
     const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!url || !settings.token || !connected) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), ownerPreviewModel ? 100000 : 65000);
+    const timer = window.setTimeout(() => controller.abort(), 105000); // Qwen 4B on HYPRBOX can require a cold CPU load.
     try {
       const validAccount = (a: CompassCommandContext['accounts'][number]) =>
         a.name.trim().length > 0 && [a.balance, a.apr, a.minimumPayment].every(v =>
@@ -694,7 +697,7 @@ export default function VoiceAssistant({
       <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private HYPRBOX Ollama status"}>
         <span className={connected?"h-2 w-2 shrink-0 rounded-full bg-emerald-400":connection==="checking"?"h-2 w-2 shrink-0 rounded-full bg-amber-300":"h-2 w-2 shrink-0 rounded-full bg-white/50"} aria-hidden="true"/>
-        {connected?(ownerPreviewModel?"4B preview connected":"Ollama connected"):connection==="checking"?"Checking Ollama":settings.enabled?(ownerPreviewModel?"4B preview offline":"Ollama offline"):"Ollama not set"}
+        {connected?(activeModel==='qwen3.5:4b'?(ownerPreviewModel?'Qwen 4B preview':'Qwen 4B connected'):'Ollama connected'):connection==="checking"?'Checking Ollama':settings.enabled?(ownerPreviewModel?'4B preview offline':'Ollama offline'):'Ollama not set'}
       </span>
       <button type="button" aria-label={settings.speakReplies?"Turn off spoken replies":"Turn on spoken replies"} aria-pressed={settings.speakReplies}
         onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
@@ -804,52 +807,7 @@ export default function VoiceAssistant({
     </section>
 
     <div className="mc-assistant-dock flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-4" aria-label="AI tools and connections">
-    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
-      <summary className="cursor-pointer text-[13px] font-bold">Spoken replies · voice &amp; pace</summary>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-        Choose an English voice offered by this iPhone or browser. Preview voices without sending your financial replies to another speech service.
-      </p>
-      <label className="mt-3 block text-[12px] font-semibold">
-        Spoken voice
-        <select value={settings.voiceURI===DEVICE_DEFAULT_VOICE ? DEVICE_DEFAULT_VOICE :
-          availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
-          onChange={e=>onSettingsChange({...settings,voiceURI:e.target.value})}
-          disabled={!speakingSupported}
-          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="">Automatic · best Safari-listed English voice</option>
-          <option value={DEVICE_DEFAULT_VOICE}>Use iPhone system default voice</option>
-          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
-        </select>
-      </label>
-      <label className="mt-3 block text-[12px] font-semibold">
-        Speaking pace
-        <select value={settings.voicePace||'natural'}
-          onChange={e=>onSettingsChange({...settings,voicePace:e.target.value as VoicePace})}
-          disabled={!speakingSupported}
-          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="natural">Natural · relaxed</option>
-          <option value="calm">Calm · slower</option>
-          <option value="brisk">Brisk · quicker</option>
-        </select>
-      </label>
-      <button type="button" disabled={!speakingSupported}
-        onClick={()=>speak('Hello. I am Compass. This is your iPhone voice preview. Your historical financial plan is dated the fifteenth of October. No current bank balance is verified.',true)}
-        className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
-        <Speaker size={15} className="mr-1 inline"/> Preview this voice
-      </button>
-      <button type="button" disabled={!speakingSupported}
-        onClick={()=>setAvailableVoices(sortedEnglishVoices(window.speechSynthesis.getVoices()))}
-        className="ml-2 mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
-        <RefreshCw size={14} className="mr-1 inline"/> Refresh iPhone voices
-      </button>
-      {voicePreviewStatus && <p role="status" aria-live="polite" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{voicePreviewStatus}</p>}
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-        Safari reports {availableVoices.length} English voices on this device. The iPhone system default
-        option lets iOS choose instead. Safari may not expose all downloaded Enhanced/Premium
-        iPhone voices; unavailable voices cannot be forced by a web app. Try voice previews
-        and keep the one you prefer. No financial reply is sent to a new voice service.
-      </p>
-    </details>
+
 
     <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary>
     <section className="mt-2">

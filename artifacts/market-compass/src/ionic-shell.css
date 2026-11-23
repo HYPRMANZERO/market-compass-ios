@@ -398,5 +398,5 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
 .mc-quick-menu-layer{touch-action:pan-y;overscroll-behavior:contain;}
 .mc-quick-menu-panel{max-height:min(77dvh,calc(100dvh - env(safe-area-inset-top,0px) - 14px));overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
 .mc-assistant-dock{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;}
-.mc-assistant-dock-card{width:min(83vw,345px);flex:0 0 min(83vw,345px);min-height:132px;max-height:75dvh;overflow-y:auto;overscroll-behavior:contain;}
+.mc-assistant-dock-card{width:min(68vw,270px);flex:0 0 min(68vw,270px);max-height:65dvh;overflow-y:auto;overscroll-behavior:contain;}
 .mc-assistant-dock-card > summary{min-height:62px;display:flex;align-items:center;gap:6px;line-height:1.4;}
