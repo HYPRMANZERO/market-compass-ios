@@ -25,8 +25,8 @@ export default function IonicSpendPreview({entries,currency,onOpenDocuments}:Pro
     <IonCard className="mc-ionic-finance-card">
       <IonCardContent>
         <p className="mc-finance-eyebrow">Recorded spending · historical</p>
-        <strong className="mc-finance-total">{currency==='ZAR'?zar(total):'Review currency'}</strong>
-        <p className="mc-finance-helper">{spending.length} approved purchases and debt repayments. Not a live bank balance.</p>
+        <strong className="mc-finance-total">{currency!=='ZAR'?'Review currency':spending.length?zar(total):'Not recorded'}</strong>
+        <p className="mc-finance-helper">{spending.length?`${spending.length} approved purchases and debt repayments. Not a live bank balance.`:'No spending approved in this local vault. Another Market Compass PWA or Safari origin may hold a separate encrypted workspace.'}</p>
         <div className="mc-finance-metrics">
           <div><span>Income recorded</span><strong>{zar(income.reduce((sum,item)=>sum+item.amount,0))}</strong></div>
           <div><span>Transfers excluded</span><strong>{transfers.length}</strong></div>
