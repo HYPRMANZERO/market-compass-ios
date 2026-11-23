@@ -142,6 +142,26 @@ async function input(tab,selector,value){
   },selector,value);
   assert.equal(actual,value,'Input '+selector+' did not update');
 }
+async function assertDocumentScrolling(tab,label){
+  const result=await tab.invoke(async function(){
+    const css=getComputedStyle(document.body);
+    const doc=document.scrollingElement;
+    const extent=Math.max(0,(doc?.scrollHeight??0)-innerHeight);
+    window.scrollTo(0,Math.min(260,extent));
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const scrolled=window.scrollY;
+    const header=document.querySelector('.mc-mobile-header');
+    const headerTop=header?.getBoundingClientRect().top??null;
+    window.scrollTo(0,0);
+    return {position:css.position,touch:css.touchAction,extent,scrolled,headerTop};
+  });
+  assert.notEqual(result.position,'fixed',label+': Ionic must not fix the body');
+  assert.notEqual(result.touch,'manipulation',label+': vertical finger panning must be allowed');
+  assert.ok(result.extent>120,label+': content needs vertical room, '+JSON.stringify(result));
+  assert.ok(result.scrolled>40,label+': window must actually scroll, '+JSON.stringify(result));
+  assert.ok(result.headerTop===null || Math.abs(result.headerTop)<3,
+    label+': sticky header should remain visible, '+JSON.stringify(result));
+}
 async function text(tab){return tab.invoke(function(){return document.body.innerText;});}
 async function expectText(tab,needle,label){
   await waitFor(async()=> (await text(tab)).includes(needle),label||needle);
@@ -304,6 +324,8 @@ async function main(){
     assert.equal(ui.nav,true,'mobile tab navigation must remain');
     assert.equal(ui.navTabs,6,'all six existing PWA routes must remain accessible');
     assert.equal(ui.privacyText,true,'clear offline, manual-entry boundary must remain');
+    await assertDocumentScrolling(tab,'Home on a 390px iPhone-sized viewport');
+    console.log('PASS: unlocked Ionic Home supports real vertical page scrolling with sticky header');
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Market Compass menu"]')?.click();});
     const menu=await tab.invoke(function(){const root=document.querySelector('[aria-label="Market Compass quick menu"]');return {visible:!!root,labels:root?.innerText||''};});
     assert.equal(menu.visible,true,'iPhone menu must open an in-app action sheet');
@@ -315,6 +337,8 @@ async function main(){
     await tab.invoke(function(){document.querySelector('button[aria-label="Close account actions"]')?.click();});
     await tab.invoke(function(){document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Expenses"]')?.click();});
     await expectText(tab,'Your finances','Spend landing page');
+    await assertDocumentScrolling(tab,'Spend on a 390px iPhone-sized viewport');
+    console.log('PASS: Ionic Spend can scroll through transaction history and page sections');
     await tab.invoke(function(){ const choices=[...document.querySelectorAll('ion-segment-button')]; const item=choices.find(x=>x.value==='activity'||x.textContent?.includes('Activity')); if(!item)throw Error('Ionic Spend Activity tab missing: '+choices.length+' segments; nav='+!!document.querySelector('nav[aria-label="Spend sections"]')); item.click(); });
     await expectText(tab,'Where your income goes','salary-cycle allocation panel');
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[aria-label="Spend and income allocation"]');}),true,'salary allocation is visible in Spend activity');
