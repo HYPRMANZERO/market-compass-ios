@@ -15,7 +15,7 @@ import {randomUUID} from 'node:crypto';
 import {setTimeout as sleep} from 'node:timers/promises';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const app=path.join(root,'artifacts','market-compass');
-assert.ok(existsSync(path.join(app,'dist','public','index.html')),'Build public PWA first');
+assert.ok(existsSync(path.join(path.resolve(process.env.MC_PWA_OUT_DIR||path.join(app,'dist','public')),'index.html')),'Build public PWA first');
 const base=process.env.BASE_PATH||'/market-compass-ios/';
 assert.match(base,/^\/(?:[a-z0-9-]+\/)?$/,'Safe static BASE_PATH required');
 const candidates=[process.env.MC_TEST_BROWSER,
@@ -249,6 +249,33 @@ try{
     if(!link)throw Error('Assistant route missing');link.click();
   });
   await expect('Conversation','mobile assistant screen');
+  // All assistant panels must stack vertically across the full available
+  // iPhone width. No horizontal carousel or 270px cards.
+  const dock=await js(function(){
+    const host=document.querySelector('.mc-assistant-dock');
+    const cards=[...host?.children||[]];
+    const personal=host?.querySelector('[aria-label="Compass Personal productivity tools"]');
+    const width=host?.getBoundingClientRect().width||0;
+    return {
+      vertical:host?getComputedStyle(host).flexDirection==='column':false,
+      width,
+      panels:cards.length,
+      ordered:cards.every((card,i)=>i===0||
+        card.getBoundingClientRect().top>=cards[i-1].getBoundingClientRect().bottom-1),
+      fullWidth:cards.every(card=>Math.abs(card.getBoundingClientRect().width-width)<4),
+      hasPersonal:!!personal,
+      xOverflow:document.documentElement.scrollWidth>innerWidth+1,
+      personalSummaryWidth:personal?.querySelector('summary')?.getBoundingClientRect().width||0
+    };
+  });
+  assert.equal(dock.vertical,true,'AI tool panels must stack vertically');
+  assert.ok(dock.panels>=4,'all assistant panels remain reachable');
+  assert.equal(dock.ordered,true,'AI tool panels must appear one below another');
+  assert.equal(dock.fullWidth,true,'AI tool panels must use full available width');
+  assert.equal(dock.hasPersonal,true,'Personal tool desk must remain accessible');
+  assert.ok(dock.personalSummaryWidth>250,'Personal header must not be squeezed');
+  assert.equal(dock.xOverflow,false,'AI tool panels must not overflow phone width');
+  console.log('PASS: stacked full-width Personal tool desk and assistant panels at iPhone width');
   const before=await js(function(){
     const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
     const log=document.querySelector('[role="log"][aria-label="AI conversation"]');

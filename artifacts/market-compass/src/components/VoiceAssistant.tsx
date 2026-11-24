@@ -845,7 +845,7 @@ export default function VoiceAssistant({
 
 
 
-    <div className="mc-assistant-dock flex snap-x snap-mandatory items-start gap-2 overflow-x-auto pb-3" aria-label="AI tools and connections">
+    <div className="mc-assistant-dock flex flex-col items-stretch gap-3 pb-3" aria-label="AI tools and connections">
     <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[12px] font-bold">Private memory</summary><div className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>

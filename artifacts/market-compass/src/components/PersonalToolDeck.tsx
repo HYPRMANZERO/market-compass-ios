@@ -38,10 +38,10 @@ export default function PersonalToolDeck({onAsk,onImportDocuments}:Props){
     try{await navigator.clipboard.writeText(draft);setStatus('Draft copied. Nothing was sent.');}
     catch{setStatus('Automatic copy is unavailable. Select and copy the draft text below.');}
   };
-  return <details className="rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Compass Personal productivity tools">
-    <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-bold">
+  return <details className="w-full min-w-0 rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Compass Personal productivity tools">
+    <summary className="flex min-h-12 cursor-pointer flex-wrap items-center gap-2 text-[13px] font-bold">
       <Lightbulb size={18} className="text-primary"/> Personal tool desk
-      <span className="ml-auto text-[11px] font-normal text-muted-foreground">Local drafts · explicit approvals</span>
+      <span className="min-w-0 text-[11px] font-normal text-muted-foreground sm:ml-auto">Local drafts · explicit approvals</span>
     </summary>
     <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
       Plan and draft offline. No email is sent, no calendar entry is created and no device files are scanned.
@@ -106,10 +106,10 @@ export default function PersonalToolDeck({onAsk,onImportDocuments}:Props){
 }
 
 export function FinanceFocusDeck({onAsk,onImportDocuments}:Props){
-  return <details className="rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Financial Advisor focus tools">
-    <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-bold">
+  return <details className="w-full min-w-0 rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Financial Advisor focus tools">
+    <summary className="flex min-h-12 cursor-pointer flex-wrap items-center gap-2 text-[13px] font-bold">
       <ShieldCheck size={18} className="text-primary"/> Finance review tools
-      <span className="ml-auto text-[11px] font-normal text-muted-foreground">Read-only · verified sources labelled</span>
+      <span className="min-w-0 text-[11px] font-normal text-muted-foreground sm:ml-auto">Read-only · verified sources labelled</span>
     </summary>
     <p className="my-2 text-[12px] leading-5 text-muted-foreground">
       Analyse accounts, debt, spending and markets. Imported statements are historical evidence, not live bank balances.
