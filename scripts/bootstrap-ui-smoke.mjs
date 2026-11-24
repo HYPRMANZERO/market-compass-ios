@@ -15,7 +15,7 @@ import {randomUUID} from 'node:crypto';
 import {setTimeout as sleep} from 'node:timers/promises';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const app=path.join(root,'artifacts','market-compass');
-assert.ok(existsSync(path.join(app,'dist','public','index.html')),'Build public PWA first');
+assert.ok(existsSync(path.join(path.resolve(process.env.MC_PWA_OUT_DIR||path.join(app,'dist','public')),'index.html')),'Build public PWA first');
 const base=process.env.BASE_PATH||'/market-compass-ios/';
 assert.match(base,/^\/(?:[a-z0-9-]+\/)?$/,'Safe static BASE_PATH required');
 const candidates=[process.env.MC_TEST_BROWSER,
