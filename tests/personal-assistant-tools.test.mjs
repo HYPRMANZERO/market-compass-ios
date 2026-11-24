@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectAssistantEdition,mayUsePersonalTools} from '../artifacts/market-compass/src/lib/assistantEdition.ts';
 import {makeDailyPlan,makeMessageDraft,makeCalendarFile,PERSONAL_CAPABILITIES} from '../artifacts/market-compass/src/lib/personalTools.ts';
+import {privateTailnetOrigin} from '../artifacts/market-compass/src/lib/privateTailnetUrl.ts';
 
 test('explicit build selection is authoritative; legacy hostname fallback is only visual',()=>{
   assert.equal(selectAssistantEdition('personal','owner.ngrok-free.app'),'personal');
@@ -29,4 +30,15 @@ test('cited research and connectors are not falsely marked as already connected'
   assert.equal(PERSONAL_CAPABILITIES.find(x=>x.id==='cited_research')?.availability,'private_ai_required');
   assert.equal(PERSONAL_CAPABILITIES.find(x=>x.id==='selected_file_review')?.effect,'explicit_file_import');
   assert.equal(PERSONAL_CAPABILITIES.find(x=>x.id==='message_draft')?.effect,'copy_after_click');
+});
+
+test('original Pages PWA permits only a separately build-pinned Personal gateway',()=>{
+  const pinned='https://owner-personal.ngrok-free.app';
+  const pages='https://hyprmanzero.github.io';
+  assert.equal(privateTailnetOrigin(pinned,pinned,pages),pinned);
+  assert.equal(privateTailnetOrigin('https://owner-finance.ngrok-free.app',pinned,pages),null);
+  assert.equal(privateTailnetOrigin(pinned,pinned,'https://owner-finance.ngrok-free.app'),null);
+  assert.equal(privateTailnetOrigin('http://owner-personal.ngrok-free.app',pinned,pages),null);
+  assert.equal(privateTailnetOrigin('https://owner-personal.ngrok-free.app/api/chat',pinned,pages),null);
+  assert.equal(privateTailnetOrigin(pinned,'https://arbitrary.example',pages),null);
 });
