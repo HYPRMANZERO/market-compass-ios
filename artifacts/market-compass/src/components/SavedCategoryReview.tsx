@@ -95,7 +95,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
       </div>
       <button type="button" onClick={startScan}
         className={button+' w-full justify-center bg-primary text-primary-foreground py-3 sm:w-auto sm:min-w-56'}
-        aria-label="Rescan all saved payments and propose categories for unresolved entries">
+        aria-label="Scan saved payments for categories">
         <RotateCcw size={16}/> Scan saved payments
       </button>
     </div>
@@ -109,7 +109,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
         Region changed since this scan. Run the scan again before approving.
       </p>}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-xl bg-muted/40 p-2"><strong className="block text-[19px] tabular-nums">{scan.checked}</strong><span className="text-[10px] text-muted-foreground">Rechecked</span></div>
+        <div className="rounded-xl bg-muted/40 p-2"><strong className="block text-[19px] tabular-nums">{scan.checked}</strong><span className="text-[10px] text-muted-foreground">Checked</span></div>
         <div className="rounded-xl bg-muted/40 p-2"><strong className="block text-[19px] tabular-nums">{scan.proposals.length}</strong><span className="text-[10px] text-muted-foreground">Suggested</span></div>
         <div className="rounded-xl bg-muted/40 p-2"><strong className="block text-[19px] tabular-nums">{unresolved.length}</strong><span className="text-[10px] text-muted-foreground">Need your decision</span></div>
       </div>
