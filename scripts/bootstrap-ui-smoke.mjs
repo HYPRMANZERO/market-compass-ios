@@ -90,7 +90,7 @@ try{
     env:{...process.env,BASE_PATH:base,NODE_ENV:'production',PORT:String(port)}
   });
   await until(async()=>{if(preview.exitCode!==null)throw Error('Preview exited');
-    const r=await fetch(url);return r.status===200&&(await r.text()).includes('Market Compass');
+    const r=await fetch(url);return r.status===200&&/(?:Market Compass|Compass Personal|Compass Financial Advisor)/.test(await r.text());
   },'localhost preview');
   edge=spawn(browser,['--headless=new','--disable-gpu','--no-first-run',
     '--no-default-browser-check','--disable-extensions','--remote-debugging-port=0',
@@ -159,7 +159,7 @@ try{
   });
   assert.equal(ui.hero,true);assert.equal(ui.grid,'flex');assert.equal(ui.columns,3);
   assert.ok(Math.abs(ui.colWidth/ui.width-1/3)<0.025);
-  assert.equal(ui.tabs,6);assert.equal(ui.privacy,true);
+  assert.equal(ui.tabs,4,'Current Ionic navigation has Home, Markets, AI and Menu');assert.equal(ui.privacy,true);
   assert.equal(ui.horizontalOverflow,false,'no horizontal scrolling at iPhone width');
   const pulse=await js(function(){
     const review=document.querySelector('.mc-financial-pulse');
@@ -200,17 +200,17 @@ try{
   assert.equal(reviewInbox.noOverflow,true);
   console.log('PASS: empty evidence inbox, source disclosures and mobile fit');
   console.log('PASS: financial pulse, cycle navigation, consented evidence and missing-data disclosure');
-  console.log('PASS: local Bootstrap grid, private dashboard, iPhone viewport, six tabs');
+  console.log('PASS: local Bootstrap grid, private dashboard, iPhone viewport, four tabs');
   await js(function(){
     const a=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/debt'));
     if(!a)throw Error('Debt navigation missing');a.click();
   });
   await expect('Debt payoff','debt editor');
-  await click('Add an account');
+  await until(()=>js(function(){return !!document.querySelector('#mc-add-debt-account input');}),'blank account form visible');
   for(const [name,value] of [['Account name','TEST CARD 123456789012'],
     ['Balance','1840'],['APR (%)','18.5'],['Minimum / month','120']]){
     assert.equal(await js(function(name,value){
-      const input=[...document.querySelectorAll('label')]
+      const input=[...document.querySelectorAll('#mc-add-debt-account label')]
         .filter(label=>label.textContent.trim().startsWith(name))
         .map(label=>label.querySelector('input')).find(Boolean);
       if(!input)return false;
@@ -218,6 +218,8 @@ try{
       input.dispatchEvent(new Event('input',{bubbles:true}));return true;
     },name,value),true,name+' control');
   }
+  await click('Save account');
+  await expect('TEST CARD','account draft saved');
   await js(function(){
     const a=document.querySelector('a[aria-label="Go to Market Compass home"]');
     if(!a)throw Error('Home link missing');a.click();
@@ -323,6 +325,44 @@ try{
     button.click();
   });
   await expect('Conversation cleared. Ask a new question below.','compact empty chat state');
+  // The original Personal edition must persist tasks in the same encrypted
+  // workspace as finances, not in plaintext browser storage.
+  await js(function(){
+    const planner=document.querySelector('details[aria-label="Encrypted Personal task planner"]');
+    if(!planner)throw Error('Personal task planner missing');
+    planner.open=true;
+    const input=planner.querySelector('input[aria-label="New Personal task"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')
+      .set.call(input,'SYNTHETIC PERSONAL TASK');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await until(()=>js(function(){
+    const planner=document.querySelector('details[aria-label="Encrypted Personal task planner"]');
+    return !!planner?.querySelector('button[type="submit"]:not(:disabled)');
+  }),'Personal task add ready');
+  await js(function(){
+    document.querySelector('details[aria-label="Encrypted Personal task planner"] button[type="submit"]').click();
+  });
+  await until(()=>js(function(){
+    return !![...document.querySelectorAll('[aria-label="Saved Personal tasks"] li')]
+      .find(x=>x.textContent.includes('SYNTHETIC PERSONAL TASK'));
+  }),'Personal task created in encrypted workspace state');
+  const personalTask=await js(function(){
+    const row=[...document.querySelectorAll('[aria-label="Saved Personal tasks"] li')]
+      .find(x=>x.textContent.includes('SYNTHETIC PERSONAL TASK'));
+    return {present:!!row,done:row?.querySelector('[aria-label="Mark task complete"]')!==null,
+      plaintext:localStorage.getItem('personalTasks')};
+  });
+  assert.equal(personalTask.present,true);
+  assert.equal(personalTask.done,true);
+  assert.equal(personalTask.plaintext,null,'no separate plaintext task cache');
+  await js(function(){
+    document.querySelector('[aria-label="Saved Personal tasks"] [aria-label="Mark task complete"]').click();
+  });
+  await until(()=>js(function(){
+    return document.querySelector('[aria-label="Saved Personal tasks"] [aria-label="Mark task unfinished"]')!==null;
+  }),'Personal task complete');
+  console.log('PASS: original Personal task creation, completion and encrypted-vault-only storage');
   console.log('PASS: responsive AI bubbles and composer; Enter/Shift+Enter/IME and compact empty state');
   console.log('PUBLIC BOOTSTRAP UI SMOKE PASS (synthetic localhost; not real iPhone)');
 }catch(error){

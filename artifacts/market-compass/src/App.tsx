@@ -7,6 +7,9 @@ import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
+import PersonalTaskBoard from '@/components/PersonalTaskBoard';
+import { normalizePersonalTasks, type PersonalTask } from '@/lib/personalTasks';
+import { currentAssistantEdition } from '@/lib/assistantEdition';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
 import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
@@ -62,16 +65,18 @@ type DraftStatus = 'pending' | 'approved' | 'rejected';
 type Draft = { id: string; symbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number; rationale: string; status: DraftStatus; createdAt: string };
 type DebtAccount = { id: string; name: string; balance: string; apr: string; minimumPayment: string };
 type QueuedCommand = AssistantCommand & { id: string; status: 'pending'; createdAt: string; originalText: string };
-type WorkspaceData = { desktopAi: DesktopAiSettings; ownerBudgetDraft: OwnerBudgetDraft | null; localFinanceDocuments: LocalFinanceDocument[]; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; solanaSeries: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
+type WorkspaceData = { desktopAi: DesktopAiSettings; personalTasks: PersonalTask[]; ownerBudgetDraft: OwnerBudgetDraft | null; localFinanceDocuments: LocalFinanceDocument[]; offlineAgentQuestions: QueuedReadOnlyQuestion[]; expenseEntries: ExpenseEntry[]; expenseSettings: ExpenseSettings; drafts: Draft[]; accounts: DebtAccount[]; monthlyExtra: string; emergencyReserve: string; currency: string; region: string; currencyReviewRequired: boolean; financialBaseline: FinancialBaseline | null; privateBudget: PrivateBudget; merchantRequests: MerchantRequestRecord[]; fxRates: Record<string, FxReference>; marketCache: MarketSeries | null; solanaSeries: MarketSeries | null; marketRange: CandleRange | null; analysisCache: MarketAnalysis | null; queue: QueuedCommand[] };
 // The owner is in South Africa. Locale tags like en-US are not evidence of physical region.
 // All new installations start in ZAR; the user can change country and currency explicitly.
 const initialRegion = 'ZA';
-const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, ownerBudgetDraft: null, localFinanceDocuments: [], offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, solanaSeries: null, marketRange: null, analysisCache: null, queue: [] };
+const defaultData: WorkspaceData = { desktopAi: DEFAULT_DESKTOP_AI, personalTasks: [], ownerBudgetDraft: null, localFinanceDocuments: [], offlineAgentQuestions: [], expenseEntries: [], expenseSettings: DEFAULT_EXPENSE_SETTINGS, drafts: [], accounts: [], monthlyExtra: '', emergencyReserve: '', currency: regionDefaultCurrency(initialRegion), region: initialRegion, currencyReviewRequired: false, financialBaseline: null, privateBudget: emptyPrivateBudget, merchantRequests: [], fxRates: {}, marketCache: null, solanaSeries: null, marketRange: null, analysisCache: null, queue: [] };
 
 function readLegacyWorkspace(): WorkspaceData {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    return raw ? { ...defaultData, ...JSON.parse(raw) } : defaultData;
+    if(!raw)return defaultData;
+    const parsed=JSON.parse(raw);
+    return {...defaultData,...parsed,personalTasks:normalizePersonalTasks(parsed?.personalTasks)};
   } catch { return defaultData; }
 }
 function useWorkspaceVault() {
@@ -109,7 +114,7 @@ function useWorkspaceVault() {
       if (!stored) throw new Error('There is no encrypted vault yet. Create one below.');
       const restored = await decryptWorkspace<WorkspaceData>(stored, entered);
       if (!restored || !Array.isArray(restored.drafts) || !Array.isArray(restored.accounts) || !Array.isArray(restored.queue)) throw new Error('Vault contains an invalid workspace.');
-      setEnabled(false); setData({ ...defaultData, ...restored }); setPassword(entered); setHasVault(true);
+      setEnabled(false); setData({ ...defaultData, ...restored, personalTasks: normalizePersonalTasks(restored.personalTasks) }); setPassword(entered); setHasVault(true);
       setSavedAt(stored.updatedAt); setLastRecord(stored); setGeneration((n) => n + 1);
       // The saved vault is authoritative. Never restore old plaintext over it.
       localStorage.removeItem(STORE_KEY);
@@ -223,7 +228,7 @@ function useWorkspaceVault() {
       if (!restored || !Array.isArray(restored.drafts) || !Array.isArray(restored.accounts) || !Array.isArray(restored.queue)) throw new Error('Backup is not a Market Compass workspace.');
       setEnabled(false);
       await writeVault(incoming);
-      setData({ ...defaultData, ...restored }); setHasVault(true); setPassword(entered);
+      setData({ ...defaultData, ...restored, personalTasks: normalizePersonalTasks(restored.personalTasks) }); setHasVault(true); setPassword(entered);
       setSavedAt(incoming.updatedAt); setLastRecord(incoming); setGeneration((n) => n + 1);
       localStorage.removeItem(STORE_KEY); setHasLegacy(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -286,10 +291,8 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
   </main>;
 }
 
-// The original Pages PWA is the flagship Personal+Finance edition.
-// The protected ngrok host displays the finance-only specialist; server policy is authoritative.
-const isFinanceEdition = () => typeof window !== 'undefined' &&
-  /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname);
+// Product edition is selected at build time where available. Server privileges are independent.
+const isFinanceEdition = () => currentAssistantEdition() === 'finance';
 
 const navItems = [
   { href: '/', label: 'Overview', icon: Compass },
@@ -1264,6 +1267,8 @@ function Assistant({ data, setData, onImportDocuments }: {
       onRemoveQueuedReadOnlyQuestion={id=>setData(old=>({
         ...old,offlineAgentQuestions:removeOfflineQuestion(old.offlineAgentQuestions??[],id)
       }))} />
+    {currentAssistantEdition()==='personal' && <PersonalTaskBoard tasks={Array.isArray(data.personalTasks)?data.personalTasks:[]}
+      onChange={tasks=>setData(old=>({...old,personalTasks:tasks}))}/>}
     {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
       <summary className="cursor-pointer text-[12px] font-semibold">Earlier saved instructions · {data.queue.length}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These records came from the original command interpreter and remain encrypted in your vault. They are not active instructions, payments or trades.</p>

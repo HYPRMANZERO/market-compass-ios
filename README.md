@@ -1,5 +1,9 @@
 # Market Compass — encrypted, local-first Ionic PWA
 
+> **24 November 2026 edition work:** The original GitHub Pages application is **Compass Personal**, the complete financial workspace plus general-purpose personal assistant. A separately authenticated ngrok installation is **Compass Financial Advisor** and is finance-only. Both use the same HYPRBOX Qwen 3.5 4B runtime when online, with separate role rules and encrypted histories. Development of offline Personal tasks, draft tools, dual-edition builds and the independent Personal gateway is staged in [PR #78](https://github.com/HYPRMANZERO/market-compass-ios/pull/78) and its [backend counterpart](https://github.com/HYPRMANZERO/financial-advisor/pull/30). Neither draft PR is a live deployment. The original iPhone Personal PWA still needs its separate approved private AI ingress and physical Safari testing.
+>
+> **Read the current capability and security contract:** [Personal tools and separate PWA editions](docs/PERSONAL-CAPABILITIES-AND-FINANCE-EDITION-20261124.md). Only the existing audited `main` release is live on GitHub Pages. Do not clear local website data or assume private finance vaults sync between app origins.
+
 Market Compass is an offline-capable financial workspace and **Ionic/React progressive web app** for reviewing manually entered debt, budgets, spending and financial documents, with a private, optionally connected AI assistant named **Compass**.
 
 **Original public PWA:** https://hyprmanzero.github.io/market-compass-ios/

@@ -9,6 +9,8 @@ import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText
 import { queueNativeSpeech } from '@/lib/speechPlayback';
 import { parseOwnerBudgetView, type OwnerBudgetView } from '@/lib/ownerBudgetView';
 import OwnerBudgetPanel from '@/components/OwnerBudgetPanel';
+import PersonalToolDeck, { FinanceFocusDeck } from '@/components/PersonalToolDeck';
+import { currentAssistantEdition } from '@/lib/assistantEdition';
 import {
   eligibleToSendQueuedQuestion,isReadOnlyOfflineQuestion,validateQueuedQuestion,
   type QueuedReadOnlyQuestion
@@ -91,7 +93,7 @@ export default function VoiceAssistant({
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', source: 'local',
-    text: typeof window !== 'undefined' && /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
+    text: currentAssistantEdition() === 'finance'
       ? 'Welcome back to Compass Financial Advisor. Ask about your accounts, spending, debt, financial documents, markets and plans. My tools are read-only.'
       : 'Welcome back to Compass Personal, your personal and financial assistant. Ask about daily plans, writing, research, budgeting or markets. Private actions require permission.'
   }]);
@@ -110,7 +112,7 @@ export default function VoiceAssistant({
     window.location.hostname.endsWith('.ts.net')
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
-  const financeEdition = typeof window !== 'undefined' && /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname);
+  const financeEdition = currentAssistantEdition() === 'finance';
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
@@ -980,6 +982,8 @@ export default function VoiceAssistant({
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
     </div></details>
 
+    {financeEdition ? <FinanceFocusDeck onAsk={submit} onImportDocuments={onImportDocuments}/> :
+      <PersonalToolDeck onAsk={submit} onImportDocuments={onImportDocuments}/>}
     <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[12px] font-bold">Suggested questions</summary><div className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
