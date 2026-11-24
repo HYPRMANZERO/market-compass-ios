@@ -323,6 +323,44 @@ try{
     button.click();
   });
   await expect('Conversation cleared. Ask a new question below.','compact empty chat state');
+  // The original Personal edition must persist tasks in the same encrypted
+  // workspace as finances, not in plaintext browser storage.
+  await js(function(){
+    const planner=document.querySelector('details[aria-label="Encrypted Personal task planner"]');
+    if(!planner)throw Error('Personal task planner missing');
+    planner.open=true;
+    const input=planner.querySelector('input[aria-label="New Personal task"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')
+      .set.call(input,'SYNTHETIC PERSONAL TASK');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await until(()=>js(function(){
+    const planner=document.querySelector('details[aria-label="Encrypted Personal task planner"]');
+    return !!planner?.querySelector('button[type="submit"]:not(:disabled)');
+  }),'Personal task add ready');
+  await js(function(){
+    document.querySelector('details[aria-label="Encrypted Personal task planner"] button[type="submit"]').click();
+  });
+  await until(()=>js(function(){
+    return !![...document.querySelectorAll('[aria-label="Saved Personal tasks"] li')]
+      .find(x=>x.textContent.includes('SYNTHETIC PERSONAL TASK'));
+  }),'Personal task created in encrypted workspace state');
+  const personalTask=await js(function(){
+    const row=[...document.querySelectorAll('[aria-label="Saved Personal tasks"] li')]
+      .find(x=>x.textContent.includes('SYNTHETIC PERSONAL TASK'));
+    return {present:!!row,done:row?.querySelector('[aria-label="Mark task complete"]')!==null,
+      plaintext:localStorage.getItem('personalTasks')};
+  });
+  assert.equal(personalTask.present,true);
+  assert.equal(personalTask.done,true);
+  assert.equal(personalTask.plaintext,null,'no separate plaintext task cache');
+  await js(function(){
+    document.querySelector('[aria-label="Saved Personal tasks"] [aria-label="Mark task complete"]').click();
+  });
+  await until(()=>js(function(){
+    return document.querySelector('[aria-label="Saved Personal tasks"] [aria-label="Mark task unfinished"]')!==null;
+  }),'Personal task complete');
+  console.log('PASS: original Personal task creation, completion and encrypted-vault-only storage');
   console.log('PASS: responsive AI bubbles and composer; Enter/Shift+Enter/IME and compact empty state');
   console.log('PUBLIC BOOTSTRAP UI SMOKE PASS (synthetic localhost; not real iPhone)');
 }catch(error){
