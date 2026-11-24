@@ -3,6 +3,7 @@ import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Refresh
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
+import { beginPersonalOauth, consumePersonalOauth, isValidPersonalSession, type PersonalSession } from '@/lib/personalHandoff';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
@@ -105,6 +106,13 @@ export default function VoiceAssistant({
     /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
+  // Disabled by default: requires the separately audited ngrok owner-OAuth
+  // path exception and server-side, scoped Personal bearer exchange.
+  const personalPilotEnabled=publicPagesEdition && import.meta.env.VITE_PERSONAL_HANDOFF_ENABLED==='true' && Boolean(import.meta.env.VITE_PERSONAL_APPROVED_HOST);
+  const [personalSession,setPersonalSession]=useState<PersonalSession|null>(null);
+  const [personalConnectHost,setPersonalConnectHost]=useState('');
+  const [personalConnectError,setPersonalConnectError]=useState('');
+  const [personalShareFinancialContext,setPersonalShareFinancialContext]=useState(false);
   // Explicit, reversible owner-only trial; the default private agent remains unchanged.
   const ownerPreviewModel = Boolean(protectedSameOrigin) && typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('compassAI') === 'qwen35-4b';
@@ -136,10 +144,20 @@ export default function VoiceAssistant({
   const messageSerial = useRef(0);
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
-  const connected = settings.enabled && connection === 'connected';
+  const personalConnected=personalPilotEnabled && isValidPersonalSession(personalSession);
+  const connected = (settings.enabled && connection === 'connected') || personalConnected;
   const add = (source: Message['source'], text: string, link?:Message['link']) => setMessages(old => [...old, {
     id: crypto.randomUUID(), source, text, ...(link?{link}:{}),
   }].slice(-35));
+
+  useEffect(()=>{
+    if(!personalPilotEnabled)return;
+    let live=true;
+    void consumePersonalOauth(import.meta.env.VITE_PERSONAL_APPROVED_HOST).then(session=>{
+      if(live && session){setPersonalSession(session);setPersonalConnectError('');}
+    }).catch(e=>{if(live)setPersonalConnectError(explainError(e));});
+    return ()=>{live=false;};
+  },[personalPilotEnabled]);
 
   // The encrypted vault is the ONLY persistence layer. Never use localStorage,
   // URL params, cookies or browser autofill for the bearer token.
@@ -519,8 +537,9 @@ export default function VoiceAssistant({
   }
 
   async function askDesktop(prompt: string, id: number, queuedId?:string) {
-    const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
-    if (!url || !settings.token || !connected) return;
+    const url = personalConnected && personalSession ? personalSession.origin :
+      (protectedSameOrigin || privateTailnetOrigin(settings.url));
+    if (!url || (!personalConnected && !settings.token) || !connected) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 105000); // Qwen 4B on HYPRBOX can require a cold CPU load.
     try {
@@ -531,13 +550,14 @@ export default function VoiceAssistant({
       // unrelated question must not transmit salary, account or spending figures.
       const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
       const wantsDocuments=/\b(?:documents?|statements?|payslips?|invoices?|instalments?|quotations?)\b/i.test(prompt);
-      const includeFacts=settings.shareFinancialContext&&shareDocumentFacts&&wantsDocuments;
+      const sharePrivateFacts=personalConnected?personalShareFinancialContext:settings.shareFinancialContext;
+      const includeFacts=sharePrivateFacts&&shareDocumentFacts&&wantsDocuments;
       const documentFacts=includeFacts?(context.localFinanceDocuments??[]).slice().sort((a,b)=>b.importedAt.localeCompare(a.importedAt))
         .flatMap(doc=>(doc.accountProfile?.facts??[]).slice(0,4).map(fact=>({
           category:doc.accountProfile!.category,field:fact.field,amount:fact.amount,
           asOf:fact.asOf,ratePercent:fact.ratePercent
         }))).slice(0,12):undefined;
-      const summary = settings.shareFinancialContext && (wantsFinancialContext||includeFacts) ? {
+      const summary = sharePrivateFacts && (wantsFinancialContext||includeFacts) ? {
         currency: context.currency,
         accounts: context.accounts.filter(validAccount).slice(0, 30).map(a => ({
           name: a.name.slice(0,60), balance: Number(a.balance),
@@ -551,10 +571,12 @@ export default function VoiceAssistant({
         documentFacts,
       } : undefined;
       const useAgent = agentMode; // Every AI reply comes from the authenticated private Compass model, with read-only agent safety.
-      const response = await fetch(url + (useAgent ? (ownerPreviewModel ? '/api/agent/preview' : '/api/agent/run') : '/api/chat'), {
-        method: 'POST', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+      const personalPath=useAgent?'/api/personal/agent/run':'/api/personal/chat';
+      const desktopPath=useAgent?(ownerPreviewModel?'/api/agent/preview':'/api/agent/run'):'/api/chat';
+      const response = await fetch(url + (personalConnected?personalPath:desktopPath), {
+        method: 'POST', mode: 'cors', credentials: !personalConnected && (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${personalConnected?personalSession!.token:settings.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
       });
       const payload: unknown = await response.json();
@@ -595,8 +617,8 @@ export default function VoiceAssistant({
       if (queuedId) onRemoveQueuedReadOnlyQuestion(queuedId);
     } catch (error) {
       if (messageSerial.current !== id) return;
-      setConnection('offline');
-      setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
+      if(personalConnected){setPersonalSession(null);setPersonalConnectError('The private Personal session ended. Reconnect with owner OAuth.');}
+      else{setConnection('offline');setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);}
       add('local', 'Compass AI is unavailable. Read-only questions can be saved locally for your approval and sent when the private gateway reconnects.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
@@ -985,7 +1007,24 @@ export default function VoiceAssistant({
         </div>
         {connectionMessage && <p className="mt-1 text-muted-foreground">{connectionMessage}</p>}
       </div>
-      {publicPagesEdition && (
+      {personalPilotEnabled && <div className="mt-3 space-y-2 rounded-xl border border-border p-3 text-xs">
+        <strong>Compass Personal · private HYPRBOX connection</strong>
+        <p className="leading-5 text-muted-foreground">Use the existing owner-protected ngrok website for a 15-minute Personal session. No backend key is saved in this public app.</p>
+        <label className="block">Protected HTTPS website
+          <input type="url" value={personalConnectHost} onChange={e=>setPersonalConnectHost(e.target.value)}
+            placeholder="https://your-domain.ngrok-free.dev/"
+            className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-base"/>
+        </label>
+        <button type="button" disabled={personalConnected} onClick={()=>{setPersonalConnectError('');void beginPersonalOauth(personalConnectHost,import.meta.env.VITE_PERSONAL_APPROVED_HOST).catch(e=>setPersonalConnectError(explainError(e)));}}
+          className="min-h-11 w-full rounded-xl bg-primary px-3 font-semibold text-primary-foreground disabled:opacity-50">
+          {personalConnected?'Personal connected':'Continue with protected owner sign-in'}
+        </button>
+        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={personalShareFinancialContext} onChange={e=>setPersonalShareFinancialContext(e.target.checked)}/>
+          Share my approved financial summary with Personal only when I ask a relevant finance question
+        </label>
+        {personalConnectError&&<p role="alert" className="text-destructive">{personalConnectError}</p>}
+      </div>}
+      {publicPagesEdition && !personalPilotEnabled && (
         <p role="note" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] leading-5">
           <strong>This Home Screen icon is the public GitHub Pages edition ({window.location.hostname}).</strong>
           {' '}It cannot connect directly to the protected ngrok AI; this cross-site connection is blocked to keep the token and financial data private.
