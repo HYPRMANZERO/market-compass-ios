@@ -159,7 +159,7 @@ try{
   });
   assert.equal(ui.hero,true);assert.equal(ui.grid,'flex');assert.equal(ui.columns,3);
   assert.ok(Math.abs(ui.colWidth/ui.width-1/3)<0.025);
-  assert.equal(ui.tabs,6);assert.equal(ui.privacy,true);
+  assert.equal(ui.tabs,4,'Current Ionic navigation has Home, Markets, AI and Menu');assert.equal(ui.privacy,true);
   assert.equal(ui.horizontalOverflow,false,'no horizontal scrolling at iPhone width');
   const pulse=await js(function(){
     const review=document.querySelector('.mc-financial-pulse');
@@ -200,7 +200,7 @@ try{
   assert.equal(reviewInbox.noOverflow,true);
   console.log('PASS: empty evidence inbox, source disclosures and mobile fit');
   console.log('PASS: financial pulse, cycle navigation, consented evidence and missing-data disclosure');
-  console.log('PASS: local Bootstrap grid, private dashboard, iPhone viewport, six tabs');
+  console.log('PASS: local Bootstrap grid, private dashboard, iPhone viewport, four tabs');
   await js(function(){
     const a=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/debt'));
     if(!a)throw Error('Debt navigation missing');a.click();
