@@ -7,6 +7,7 @@ import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import VoiceAssistant from '@/components/VoiceAssistant';
+import { currentAssistantEdition } from '@/lib/assistantEdition';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
 import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
@@ -286,10 +287,8 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
   </main>;
 }
 
-// The original Pages PWA is the flagship Personal+Finance edition.
-// The protected ngrok host displays the finance-only specialist; server policy is authoritative.
-const isFinanceEdition = () => typeof window !== 'undefined' &&
-  /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname);
+// Product edition is selected at build time where available. Server privileges are independent.
+const isFinanceEdition = () => currentAssistantEdition() === 'finance';
 
 const navItems = [
   { href: '/', label: 'Overview', icon: Compass },
