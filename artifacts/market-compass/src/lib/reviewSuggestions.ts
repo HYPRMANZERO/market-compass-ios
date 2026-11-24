@@ -21,9 +21,12 @@ export function preparedDocumentReview(
  let explanation:string;
  if(line.direction==='outgoing'){
    const investment=classifyInvestmentNarration('expense',line.label,region);
-   if(investment?.kind==='transfer'&&allowedDocumentCategories('transfer').includes(investment.category)){
-     kind='transfer';category=investment.category;
-     explanation='Source debit explicitly names savings or investment funding; confirm account ownership before approval';
+   if(investment?.kind==='transfer'){
+     kind='transfer';
+     category=allowedDocumentCategories('transfer').includes(investment.category)?investment.category:'other';
+     explanation=category==='other'
+       ?'Source debit suggests investment funding. Review as transfer now; choose the exact investment category later in saved-payment review.'
+       :'Source debit explicitly names savings or investment funding; confirm account ownership before approval';
    }else if(/\b(?:internal transfer|own account transfer|transfer to savings|savings transfer)\b/i.test(label)){
      kind='transfer';category='savings';explanation='Source debit with explicit internal transfer wording';
    }else if(/\b(?:loan repayment|credit card repayment|vehicle loan payment|finance instalment paid)\b/i.test(label)){
@@ -52,8 +55,11 @@ export function preparedDocumentReview(
      explanation='Source credit with explicit salary wording';
    }else if(classifyInvestmentNarration('income',line.label,region)?.kind==='income'){
      const credited=classifyInvestmentNarration('income',line.label,region)!;
-     kind='income';category=credited.category;
-     explanation='Source credit with explicit dividend or interest income wording';
+     kind='income';
+     category=allowedDocumentCategories('income').includes(credited.category)?credited.category:'unsorted';
+     explanation=category==='unsorted'
+       ?'Source credit describes dividends or interest. Confirm cash was posted, then select the detailed category in saved-payment review.'
+       :'Source credit with explicit dividend or interest income wording';
    }else if(/\b(?:commission earned)\b/i.test(label)){
      kind='income';category='side-income';
      explanation='Source credit with explicit commission income wording';

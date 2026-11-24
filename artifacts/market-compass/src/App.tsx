@@ -33,12 +33,12 @@ import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import FinancialSpaceHero from '@/components/FinancialSpaceHero';
-import BankCarousel from '@/components/BankCarousel';
+import AccountsPlatformHub from '@/components/AccountsPlatformHub';
 import FinancialPulse from '@/components/FinancialPulse';
-import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import SpendingPortfolio from '@/components/SpendingPortfolio';
+import BudgetDetailReview from '@/components/BudgetDetailReview';
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
@@ -436,7 +436,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
             <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
             <div className="grid grid-cols-2 gap-2">
-              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
+              {([{label:'Debt & credit plan',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Accounts & platforms',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
               <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
               <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
               <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
@@ -541,7 +541,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
     </div>
     <div className="mb-5 hidden lg:block" data-testid="desktop-financial-overview">
       <FinancialSpaceHero currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
-        onViewAccounts={()=>navigate('/debt')}/>
+        onViewAccounts={()=>navigate('/banks')}/>
     </div>
     <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
@@ -578,10 +578,6 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
-    <AccountTransactionHistory accounts={data.accounts} entries={entries} currency={data.currency}
-      onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
-        ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
-      }:old)}/>
     <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
       currency={data.currency}
       onCreate={account=>setData(old=>({...old,accounts:[
@@ -1181,6 +1177,9 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
                !allowedSavedCategory(original.kind,category))return old;
             return {...old,expenseEntries:old.expenseEntries.map(item=>item.id===entryId?{...item,category}:item)};
           })}/>
+        <BudgetDetailReview entries={ledger} currency={data.currency}
+          settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+          onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}/>
         <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
@@ -1190,10 +1189,6 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
             dated but not reconciled with a live bank; confirm the selected cycle.
           </p>
         </div>
-        <AccountTransactionHistory accounts={data.accounts} entries={ledger} currency={data.currency}
-          onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
-            ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
-          }:old)}/>
         <MonthlyExpenses
           entries={ledger}
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
@@ -1408,7 +1403,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
-    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Organize account documents; secure live bank connections are not enabled."/><BankCarousel onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
+    <Route path="/banks"><div className="mx-auto max-w-3xl"><PageIntro eyebrow="Accounts" title="Accounts & platforms" description="Keep track of providers and reviewed records. Live connections are not yet enabled."/><AccountsPlatformHub debtAccounts={data.accounts} currency={data.currency} onImportDocuments={()=>setImportOpen(true)}/></div></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
     {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-2 pt-4 pb-[calc(10px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>

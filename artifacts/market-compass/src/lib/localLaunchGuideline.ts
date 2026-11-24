@@ -4,6 +4,7 @@
  * safe to spend. Only a user-triggered copy may disclose this limited brief.
  */
 import {evaluateFinancialReadiness,type FinancialReadinessInputs} from './financialReadiness.ts';
+import {salaryCycle} from './monthlyExpenses.ts';
 
 export type LaunchGuideline={
   readyForIllustration:boolean;
@@ -11,6 +12,12 @@ export type LaunchGuideline={
   steps:{period:string;title:string;detail:string}[];
   preliminaryHeadroom:number|null;
   reserveGap:number|null;
+  /** Local approved records only. A partial ledger is never a verified budget or bank balance. */
+  ledgerSnapshot:{
+    start:string;end:string;count:number;categorized:number;unresolved:number;
+    income:number;spending:number;debtPayments:number;transfers:number;
+  }|null;
+  ledgerCoverage:{count:number;categorized:number;unresolved:number};
   /** Bounded, owner-reviewable brief; never includes raw file text or account names. */
   reviewBrief:string;
   /** Fits the authenticated HYPRBOX Agent's 500-character query limit. */
@@ -53,6 +60,25 @@ export function buildLocalLaunchGuideline(input:FinancialReadinessInputs,now=new
     preliminaryHeadroom=(cents(income!)-cents(essentials!)-cents(minimums))/100;
     reserveGap=Math.max(0,cents(reserve!)-cents(funds!))/100;
   }
+  const allRows=Array.isArray(input.expenseEntries)?input.expenseEntries:[];
+  const allUnresolved=allRows.filter(e=>!e.category||e.category==='other'||e.category==='unsorted').length;
+  const ledgerCoverage={count:allRows.length,categorized:allRows.length-allUnresolved,unresolved:allUnresolved};
+  const day=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),
+    String(now.getDate()).padStart(2,'0')].join('-');
+  const cycle=salaryCycle(day);
+  const localRows=(Array.isArray(input.expenseEntries)?input.expenseEntries:[]).filter(e=>
+    e&&e.currency===input.currency&&e.date>=cycle.start&&e.date<cycle.endExclusive&&
+    Number.isFinite(e.amount)&&e.amount>=0&&
+    ['income','expense','debt-payment','transfer'].includes(e.kind));
+  const total=(kind:string)=>Math.round(localRows.filter(e=>e.kind===kind)
+    .reduce((sum,e)=>sum+Math.round(e.amount*100),0))/100;
+  const unresolved=localRows.filter(e=>!e.category||e.category==='other'||e.category==='unsorted').length;
+  const ledgerSnapshot=localRows.length?{
+    start:cycle.start,end:cycle.lastDay,count:localRows.length,
+    categorized:localRows.length-unresolved,unresolved,income:total('income'),
+    spending:total('expense'),debtPayments:total('debt-payment'),
+    transfers:total('transfer')
+  }:null;
   const issues=report.items.filter(x=>x.status!=='recorded');
   const needs=issues.slice(0,5).map(x=>x.title+' ('+x.status+')');
   const coverage=report.recordedCount+' of '+report.items.length+
@@ -113,5 +139,5 @@ export function buildLocalLaunchGuideline(input:FinancialReadinessInputs,now=new
   ].join(' ');
   if(agentBrief.length>500) throw Error('Private Agent summary exceeds 500 characters.');
   return {readyForIllustration:canCalculate,coverage,steps,
-    preliminaryHeadroom,reserveGap,reviewBrief:brief.slice(0,2400),agentBrief};
+    preliminaryHeadroom,reserveGap,ledgerSnapshot,ledgerCoverage,reviewBrief:brief.slice(0,2400),agentBrief};
 }

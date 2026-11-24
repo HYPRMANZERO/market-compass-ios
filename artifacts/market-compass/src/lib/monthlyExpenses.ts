@@ -1,6 +1,7 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 import {matchRegionalCategory,regionalSalaryNarration} from './regionalSpendRules.ts';
 import {classifyInvestmentNarration} from './investmentNarration.ts';
+import {budgetDetailValid} from './budgetDetailGroups.ts';
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
 export type ExpenseCategory = 'salary' | 'side-income' | 'dividends' | 'interest' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'card-load' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
@@ -9,6 +10,8 @@ export type ExpenseEntry = {
   recordedAt: string;
   kind: ExpenseKind;
   category: ExpenseCategory;
+  /** Optional owner-selected detail, never guessed from an existing bank reference. */
+  subcategory?: string;
   description: string;
   paidVia: string;
   amount: number;
@@ -23,6 +26,8 @@ export type ExpenseSettings = {
   expectedSalary: string;
   salaryReminderEnabled: boolean;
   lastSalaryReminderCycle: string;
+  /** Optional owner-entered budgets for the reference subcategory groups. */
+  subcategoryBudgets?: Record<string,string>;
 };
 export const DEFAULT_EXPENSE_SETTINGS: ExpenseSettings = {
   cycleBudget: '', expectedSalary: '',
@@ -152,6 +157,8 @@ export function validateExpenseEntry(value:ExpenseEntry) {
   dateParts(value.date);
   if(!EXPENSE_KINDS.some(x=>x.value===value.kind) || !EXPENSE_CATEGORIES.some(x=>x.value===value.category))
     throw Error('Choose a valid payment type and category.');
+  if(value.subcategory!==undefined && !budgetDetailValid(value.subcategory,value.kind,value.category))
+    throw Error('Choose a valid detailed category for this movement.');
   if(typeof value.id!=='string' || value.id.length>120 || typeof value.recordedAt!=='string')throw Error('Invalid payment record.');
   if(!Number.isFinite(value.amount) || value.amount<=0 || value.amount>1e10)throw Error('Invalid payment amount.');
   if(!/^[A-Z]{3}$/.test(value.currency))throw Error('Invalid currency.');

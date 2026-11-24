@@ -166,7 +166,7 @@ test('approvals retain exact evidence, and dashboard separates income from trans
  assert.equal(scanSavedCategories(approved,'ZA').proposals.length,0);
 });
 
-test('document review can prepare credited dividends/interest and explicit savings or investing debits without auto-posting',()=>{
+test('protected document import stays narrow while saved review offers detailed investing categories',()=>{
  const source=[
    'Date,Description,Debit,Credit',
    '27 Nov 26,ETF DISTRIBUTION CREDITED,,125.25',
@@ -180,19 +180,21 @@ test('document review can prepare credited dividends/interest and explicit savin
  assert.equal(doc.lines.length,5);
  const prepared=doc.lines.map((_,i)=>preparedDocumentReview(doc,i,'ZA'));
  assert.deepEqual(prepared.map(x=>x&&[x.kind,x.category]),[
-   ['income','dividends'],['income','interest'],['transfer','investments'],
+   ['income','unsorted'],['income','unsorted'],['transfer','other'],
    ['transfer','savings'],null
  ]);
- assert.ok(allowedDocumentCategories('income').includes('dividends'));
- assert.ok(allowedDocumentCategories('income').includes('interest'));
- assert.ok(allowedDocumentCategories('transfer').includes('investments'));
+ assert.equal(allowedDocumentCategories('income').includes('dividends'),false);
+ assert.equal(allowedDocumentCategories('income').includes('interest'),false);
+ assert.equal(allowedDocumentCategories('transfer').includes('investments'),false);
  assert.equal(doc.lines[0].date,'2026-11-27');
  const originals=JSON.stringify(doc.lines);
  const approvals=prepared.map((x,i)=>x?{lineIndex:i,...x}:null).filter(Boolean);
  assert.equal(approvals.length,4);
  const posted=applyReviewedDocumentToLedger(doc,[],approvals,'ZAR',new Date('2026-11-28T12:00:00.000Z'));
  assert.equal(posted.length,4);
- assert.deepEqual(posted.map(x=>x.category),['dividends','interest','investments','savings']);
+ assert.deepEqual(posted.map(x=>x.category),['unsorted','unsorted','other','savings']);
+ const followup=scanSavedCategories(posted,'ZA');
+ assert.deepEqual(followup.proposals.map(x=>x.category).sort(),['dividends','interest','investments']);
  assert.equal(JSON.stringify(doc.lines),originals);
 });
 test('document period or a dividend declaration never substitutes for completed cash-credit evidence',()=>{
