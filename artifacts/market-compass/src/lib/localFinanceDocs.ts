@@ -1,6 +1,7 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
 import {makeAccountProfile,maskDocumentPII,safeAccountProfile,classifyDocument,type AccountProfile} from './documentIntelligence.ts';
 import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
+import {documentTimeContext,validatedDocumentTimeContext,type DocumentTimeContext} from './documentTimeContext.ts';
 import {extractPayslipEvidence,PAYROLL_FIELDS,type PayrollField} from './payslipIntelligence.ts';
 
 /**
@@ -37,6 +38,8 @@ export type LocalFinanceDocument={
   truncated:boolean;
   documentKind?:FinanceDocumentKind;
   accountProfile?:AccountProfile;
+  /** Allowlisted dates from document headers or actual dated rows, not a payment instruction. */
+  timeContext?:DocumentTimeContext;
 };
 export const MAX_FINANCE_FILES=100;
 export const MAX_FINANCE_FILE_BYTES=16_000_000;
@@ -243,6 +246,11 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     format:input.format as LocalFinanceDocument['format'],
     lines,truncated:input.truncated as boolean};
   if(input.documentKind!==undefined)validated.documentKind=input.documentKind as FinanceDocumentKind;
+  if(input.timeContext!==undefined){
+    const period=validatedDocumentTimeContext(input.timeContext);
+    if(!period)return null;
+    validated.timeContext=period;
+  }
   if(input.accountProfile!==undefined){
     const profile=safeAccountProfile(input.accountProfile);
     if(!profile)return null;
@@ -301,6 +309,7 @@ export function extractLocalFinanceDocument(
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
+    timeContext:documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))??undefined,
     accountProfile:{...makeAccountProfile(text,safeOwnerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
   };
   const validated=validateLocalFinanceDocument(document);

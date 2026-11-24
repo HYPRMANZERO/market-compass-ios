@@ -1,6 +1,6 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
-export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'savings' | 'other' | 'unsorted';
+export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
   id: string;
   date: string;
@@ -33,6 +33,13 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'transport',label:'Fuel and transport'},{value:'utilities',label:'Utilities'},
   {value:'insurance',label:'Insurance'},{value:'fees',label:'Bank and finance fees'},
   {value:'subscriptions',label:'Subscriptions and gym'},{value:'health',label:'Healthcare'},
+  {value:'dining',label:'Restaurants and coffee'},{value:'pets',label:'Pets and vet'},
+  {value:'personal-care',label:'Personal care'},
+  {value:'taxes',label:'Taxes and duties'},{value:'education',label:'Education'},
+  {value:'childcare',label:'Childcare'},{value:'travel',label:'Travel and holidays'},
+  {value:'shopping',label:'Shopping and retail'},{value:'entertainment',label:'Entertainment'},
+  {value:'donations',label:'Charity and donations'},{value:'business',label:'Business expenses'},
+  {value:'cash',label:'Cash withdrawal'},{value:'investments',label:'Investment transfers'},
   {value:'savings',label:'Savings transfer'},{value:'other',label:'Other expense'},
   {value:'unsorted',label:'Unsorted · needs category'},
 ];
@@ -68,6 +75,9 @@ export function suggestKnownSpendCategory(kind:ExpenseKind,description:string):E
   if(/\b(?:electricity|municipal|water bill|airtime|mobile data|fibre|wifi|internet bill|utilities)\b/.test(text))return 'utilities';
   if(/\b(?:insurance|premium|assurance|policy debit)\b/.test(text))return 'insurance';
   if(/\b(?:pharmacy|doctor|hospital|clinic|medical aid|healthcare|dentist)\b/.test(text))return 'health';
+  if(/\b(?:dog food|cat food|pet food|pet store|veterinary|veterinarian|nexgard|bravecto|vet bill)\b/.test(text))return 'pets';
+  if(/\b(?:restaurant|takeaway|fast food|kfc|nandos|mcdonalds|steers|coffee shop|cafe|coffee|dessert)\b/.test(text))return 'dining';
+  if(/\b(?:haircut|hair cut|barber|hair salon|manicure|pedicure|grooming|toiletries)\b/.test(text))return 'personal-care';
   if(/\b(?:vehicle service|car service|vehicle repair|car repair)\b/.test(text))return 'car';
   return 'unsorted';
 }

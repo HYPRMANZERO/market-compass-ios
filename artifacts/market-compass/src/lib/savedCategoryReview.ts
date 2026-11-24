@@ -1,93 +1,160 @@
-/** Re-review existing encrypted-vault entries without re-importing documents.
- * Only unambiguous narration matches become proposals. No model calls, bank
- * writes, invented dates, changes to approved amounts or silent updates. */
-import {validateExpenseEntry,type ExpenseCategory,type ExpenseEntry,type ExpenseKind} from './monthlyExpenses.ts';
+/**
+ * Owner-triggered, region-aware scan of existing encrypted entries only.
+ * Terms do not verify a bank transaction and never authorize a change.
+ */
+import {validateExpenseEntry,expenseCategoryNeedsSorting,
+  type ExpenseCategory,type ExpenseEntry,type ExpenseKind} from './monthlyExpenses.ts';
+import {matchRegionalCategory,normalizeFinancialNarration,regionalSalaryNarration} from './regionalSpendRules.ts';
 
 export type SavedCategorySuggestion={
- id:string; date:string; amount:number; description:string;
- previousKind:ExpenseKind; previousCategory:ExpenseCategory;
- kind:ExpenseKind; category:ExpenseCategory; reason:string;
+ id:string;date:string;amount:number;description:string;
+ previousKind:ExpenseKind;previousCategory:ExpenseCategory;
+ kind:ExpenseKind;category:ExpenseCategory;reason:string;
 };
+export type SavedCategoryScan={
+ checked:number;uncategorized:number;unresolved:number;
+ alreadyCategorized:number;region:string;proposals:SavedCategorySuggestion[];
+};
+const result=(kind:ExpenseKind,category:ExpenseCategory,reason:string)=>({kind,category,reason});
+type Proposal=ReturnType<typeof result>;
+const status=/\b(?:refund(?:ed)?|revers(?:al|ed)|chargeback|disput(?:e|ed)|failed|declined|pending|cancelled|quotation|request to pay|mandate approved|mandate request|unpaid|unsuccessful)\b/;
+const ownTransfer=/\b(?:own account transfer|transfer (?:to|from) (?:my |own )?savings|internal transfer|savings (?:pocket|transfer)|move to savings|transfer to investment account|transfer to brokerage account)\b/;
+const investmentTransfer=/\b(?:transfer to investment account|transfer to brokerage account|transfer to trading account|investments savings transfer)\b/;
+const cashWithdrawal=/\b(?:atm cash withdrawal|cash withdrawal from atm|atm withdrawal|cash withdrawn from atm)\b/;
+const creditCard=/\b(?:credit card|card account|credit facility)\s*(?:repayment|payment|instalment|installment|debit)\b|\bcard repayment\b|\bpayment (?:to|of) credit card\b/;
+const carFinance=/\b(?:vehicle finance|vehicle loan|car loan|car instalment|car installment|car repayment|motor finance|auto loan|auto finance|vehicle financing)\b/;
+const debtWord=/\b(?:repayment|debit(?: order)?|instalment|installment|payment|monthly)\b/;
+const personalLoan=/\b(?:personal loan|loan account|unsecured loan|personal credit loan)\b/;
+const personalLoanDebit=/\b(?:repayment|instalment|installment|payment|debit order|debit check)\b/;
+const mortgage=/\b(?:mortgage repayment|mortgage payment|home loan repayment|home loan payment|housing loan repayment)\b/;
+const studentLoan=/\b(?:student loan repayment|education loan repayment|tuition loan repayment)\b/;
+const salary=/\b(?:salary|payroll|wages|net pay|pay cheque|paycheck|direct deposit payroll)\b/;
+const sideIncome=/\b(?:dividend received|interest received|interest earned|commission earned|freelance income|consulting income|side income|income received|pension paid|pension credit)\b/;
+const loanProvidersByRegion:Partial<Record<string,RegExp>>={
+  ZA:/\b(?:capfin|finbond|wesbank|mfc vehicle)\b/,
+  GB:/\b(?:zopa personal loan|lending stream loan)\b/,
+  US:/\b(?:sofi personal loan|upstart loan)\b/,
+  IN:/\b(?:bajaj finance loan|personal loan emi)\b/
+};
+const genericMethod=/^(?:(?:pos|card|debit card|contactless|merchant|point of sale) (?:purchase|payment)|purchase|payment|pos)(?: \d+)?$/;
 
-function classify(entry:ExpenseEntry):{kind:ExpenseKind;category:ExpenseCategory;reason:string}|null{
- const s=entry.description.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
- if(!s)return null;
- const matches=(pattern:RegExp)=>pattern.test(s);
- const result=(kind:ExpenseKind,category:ExpenseCategory,reason:string)=>({kind,category,reason});
- // Capfin collects instalments by debit order. DebiCheck alone can also mean
- // a mandate, not a settled payment. Suggest only; never auto-adjust balances.
- if(entry.kind!=='income' && entry.kind!=='transfer' && matches(/\bcapfin\b/) &&
-    matches(/\b(?:debi\s*check|debit\s*check|debi\s*order|debit\s*order|repayment|instalment|payment)\b/))
-   return result('debt-payment','personal-loan','Capfin loan debit: confirm it was posted, not only a DebiCheck mandate');
-
- // An incoming credit is not automatically a salary: only explicit wording.
+function classify(entry:ExpenseEntry,region:string):Proposal|null{
+ const basic=normalizeFinancialNarration(entry.description);
+ if(!basic||status.test(basic))return null;
+ const match=(pattern:RegExp)=>pattern.test(basic);
+ const own=match(ownTransfer);
  if(entry.kind==='income'){
-   if(matches(/\b(?:salary|payroll|wages|net pay)\b/))return result('income','salary','Explicit salary narration');
-   if(matches(/\b(?:dividend received|interest received|commission earned|income received)\b/))return result('income','side-income','Explicit other-income narration');
-   if(matches(/\b(?:own account transfer|transfer from savings|internal transfer)\b/))return result('transfer','savings','Explicit transfer between own accounts');
+   if(regionalSalaryNarration(basic,region)||match(salary))
+     return result('income','salary','Explicit salary/payroll text for the selected region');
+   if(match(sideIncome))return result('income','side-income','Explicit other-income narration');
+   if(own)return result('transfer',match(investmentTransfer)?'investments':'savings',
+     'Explicit own-account transfer; verify before excluding it from income');
    return null;
  }
- if(entry.kind==='transfer')return null;
- if(entry.kind==='debt-payment') {
-   if(matches(/\b(?:vehicle finance|car loan|vehicle loan|motor finance|auto loan)\b/))return result('debt-payment','car','Explicit vehicle debt narration');
-   if(matches(/\b(?:credit card repayment|credit card payment|card repayment|credit facility payment)\b/))return result('debt-payment','credit-card','Explicit credit card repayment');
+ if(entry.kind==='transfer'){
+   if(own)return result('transfer',match(investmentTransfer)?'investments':'savings','Own-account transfer wording');
+   if(match(cashWithdrawal))return result('transfer','cash','ATM cash withdrawal is not automatically retail spending');
    return null;
  }
- // Expense-only rules: generic debit orders and EFTs are NOT debt repayments.
- if(matches(/\b(?:own account transfer|transfer to savings|savings transfer|internal transfer)\b/))
-   return result('transfer','savings','Explicit own-account transfer');
- if(matches(/\b(?:loan repayment|credit card repayment|vehicle loan payment|finance instalment paid|vehicle finance payment|mortgage repayment|home loan repayment)\b/))
-   return result('debt-payment',
-     matches(/\b(?:vehicle|car)\b/)?'car':matches(/\bcredit card\b/)?'credit-card':'other',
-     'Explicit completed debt repayment wording');
- if(matches(/\b(?:bank fee|bank charges|service fee|transaction fee|debit order fee|debit fee|account fee|monthly fee|commission charge|interest charge|overdraft fee)\b/))
-   return result('expense','fees','Explicit fee or bank charge');
- if(matches(/\b(?:insurance|premium|outsurance|discovery insure|miway)\b/))
-   return result('expense','insurance','Insurance or premium narration');
- if(matches(/\b(?:netflix|spotify|showmax|dstv|subscription|gym|virgin active|planet fitness)\b/))
-   return result('expense','subscriptions','Subscription or gym narration');
- if(matches(/\b(?:rent|rental payment|landlord|housing levy|body corporate)\b/))
-   return result('expense','housing','Housing payment narration');
- if(matches(/\b(?:checkers|pick n pay|shoprite|superspar|supermarket|groceries|grocery|food store|woolworths food)\b/))
-   return result('expense','groceries','Groceries or food retailer narration');
- if(matches(/\b(?:fuel|petrol|diesel|engen|shell garage|caltex|totalenergies|uber|bolt ride|transport fare)\b/))
-   return result('expense','transport','Fuel or transport narration');
- if(matches(/\b(?:electricity|prepaid power|eskom|water utility|municipal utilities|rates and taxes)\b/))
-   return result('expense','utilities','Utilities narration');
- if(matches(/\b(?:pharmacy|hospital|clinic|medical aid|doctor consultation|healthcare|dis chem|clicks pharmacy)\b/))
-   return result('expense','health','Healthcare narration');
+ // Posted charges/refunds must be distinguished from a provider rail.
+ if(entry.kind==='debt-payment'){
+   if(match(creditCard))return result('debt-payment','credit-card','Explicit credit-card repayment');
+   if(match(mortgage))return result('debt-payment','housing','Explicit home-loan/mortgage repayment');
+   if(match(studentLoan))return result('debt-payment','education','Explicit education-loan repayment');
+   if(match(carFinance)&&match(debtWord))return result('debt-payment','car','Explicit vehicle-finance instalment');
+   if(match(personalLoan)&&match(personalLoanDebit))
+     return result('debt-payment','personal-loan','Explicit personal loan repayment');
+   if(region==='ZA'&&match(/\bcapfin\b/)&&match(/\b(?:debi check|debit check|debit order|repayment|instalment|installment|payment)\b/))
+     return result('debt-payment','personal-loan','Capfin loan debit: confirm posted debit rather than DebiCheck mandate');
+   return null;
+ }
+ if(own)return result('transfer',match(investmentTransfer)?'investments':'savings',
+   'Explicit own-account transfer; verify before excluding from spending');
+ if(match(mortgage))return result('debt-payment','housing','Explicit mortgage repayment');
+ if(match(studentLoan))return result('debt-payment','education','Explicit education-loan repayment');
+ if(match(creditCard))return result('debt-payment','credit-card','Explicit credit-card repayment');
+ if(match(carFinance)&&match(debtWord))return result('debt-payment','car','Explicit vehicle-finance repayment');
+ if(match(personalLoan)&&match(personalLoanDebit))
+   return result('debt-payment','personal-loan','Explicit personal loan repayment');
+ if(region==='ZA'&&match(/\bcapfin\b/)&&match(/\b(?:debi check|debit check|debit order|repayment|instalment|installment|payment)\b/))
+   return result('debt-payment','personal-loan','Capfin loan debit: confirm posted debit rather than DebiCheck mandate');
+ if(loanProvidersByRegion[region]?.test(basic)&&match(/\b(?:repayment|installment|instalment|debit order|payment)\b/)){
+   // Provider branding alone does not prove which debt type was settled.
+   // Ambiguous providers are deliberately left for manual review.
+   return null;
+ }
+ // A fee on an ATM withdrawal is an expense; an actual cash withdrawal is
+ // a transfer to physical cash. Do not bundle either with unspecified ATM text.
+ const category=matchRegionalCategory(basic,region);
+ if(category?.category==='fees')return result('expense','fees',category.reason);
+ if(match(cashWithdrawal))return result('transfer','cash','Explicit ATM cash withdrawal; check before excluding from expenses');
+ if(category)return result('expense',category.category,
+   (category.origin==='region'?'Region-specific term: ':'Global financial term: ')+category.reason);
+ // A bank/card payment line sometimes has a generic description and a
+ // merchant name separately in "paid via". Never treat generic banks and
+ // payment rails as merchants.
+ if(genericMethod.test(basic)){
+   const payVia=matchRegionalCategory(normalizeFinancialNarration(entry.paidVia||''),region);
+   if(payVia?.origin==='region'){
+     return result('expense',payVia.category,'Selected-region merchant named in payment-method field: '+payVia.reason);
+   }
+ }
  return null;
 }
 
-export function suggestSavedCategoryChanges(entries:ExpenseEntry[]):SavedCategorySuggestion[]{
- return entries.flatMap(entry=>{
-   if(!entry||!Number.isFinite(entry.amount)||entry.amount<=0 || !entry.date)return [];
-   const next=classify(entry);
-   if(!next||(next.kind===entry.kind&&next.category===entry.category))return [];
-   // Do not change a bank-linked debt repayment into a different kind.
-   if(next.kind!=='debt-payment' && (entry.remainingBalance!==undefined&&entry.remainingBalance!==null || entry.debtAccountId))return [];
-   return [{
+/** Paginate a deterministic snapshot, including the final partial page. */
+export function categoryReviewPage<T>(items:readonly T[],requestedPage:number,pageSize=8){
+ const safeSize=Number.isInteger(pageSize)&&pageSize>0&&pageSize<=100?pageSize:8;
+ const pages=Math.max(1,Math.ceil(items.length/safeSize));
+ const page=Number.isFinite(requestedPage)
+   ?Math.min(pages-1,Math.max(0,Math.floor(requestedPage))):0;
+ const start=page*safeSize;
+ return {items:items.slice(start,start+safeSize),page,pages,start,
+   end:Math.min(items.length,start+safeSize)};
+}
+
+/** Called only from the user's Scan button. Rows with user-assigned
+ * categories remain untouched. Unknown or mixed evidence stays unresolved.
+ */
+export function scanSavedCategories(entries:ExpenseEntry[],region='ZA'):SavedCategoryScan{
+ const safe=Array.isArray(entries)?entries:[];
+ const proposals:SavedCategorySuggestion[]=[];
+ let uncategorized=0;
+ for(const entry of safe){
+   if(!entry||!expenseCategoryNeedsSorting(entry.category))continue;
+   uncategorized++;
+   if(!Number.isFinite(entry.amount)||entry.amount<=0||!entry.date||!entry.id)continue;
+   const next=classify(entry,region);
+   if(!next||(next.kind===entry.kind&&next.category===entry.category))continue;
+   const linked=!!entry.debtAccountId||entry.remainingBalance!==undefined&&entry.remainingBalance!==null;
+   if(linked&&next.kind!==entry.kind)continue;
+   proposals.push({
      id:entry.id,date:entry.date,amount:entry.amount,description:entry.description,
      previousKind:entry.kind,previousCategory:entry.category,
      kind:next.kind,category:next.category,reason:next.reason
-   }];
- });
+   });
+ }
+ return {checked:safe.length,uncategorized,unresolved:uncategorized-proposals.length,
+   alreadyCategorized:safe.length-uncategorized,region,proposals};
 }
+export const suggestSavedCategoryChanges=(entries:ExpenseEntry[],region='ZA')=>
+ scanSavedCategories(entries,region).proposals;
 
-/** Owner-accepted proposals only. Reject stale/different saved categories. */
-export function applySavedCategoryChanges(entries:ExpenseEntry[],approved:SavedCategorySuggestion[]):ExpenseEntry[]{
+/** Apply only still-current proposals from the exact selected region. */
+export function applySavedCategoryChanges(entries:ExpenseEntry[],approved:SavedCategorySuggestion[],region='ZA'):ExpenseEntry[]{
  if(!approved.length)return entries;
- const offered=new Map(suggestSavedCategoryChanges(entries).map(p=>[p.id,p]));
+ const offered=new Map(suggestSavedCategoryChanges(entries,region).map(p=>[p.id,p]));
  const seen=new Set<string>();
  for(const p of approved){
    if(seen.has(p.id))throw Error('Repeated category review selection.');
    seen.add(p.id);
    const current=offered.get(p.id);
-   if(!current || JSON.stringify(current)!==JSON.stringify(p))
-     throw Error('Saved records changed while you were reviewing. Refresh the category preview.');
+   if(!current||JSON.stringify(current)!==JSON.stringify(p))
+     throw Error('Saved records or region changed while you were reviewing. Refresh the category preview.');
  }
+ const choices=new Map(approved.map(p=>[p.id,p]));
  return entries.map(entry=>{
-   const chosen=approved.find(p=>p.id===entry.id);
+   const chosen=choices.get(entry.id);
    return chosen?validateExpenseEntry({...entry,kind:chosen.kind,category:chosen.category}):entry;
  });
 }
