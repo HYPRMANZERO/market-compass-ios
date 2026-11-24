@@ -13,7 +13,9 @@ test('original Ionic assistant keeps a compact Compass header and maximizes conv
   assert.match(src,/min-h-\[min\(64dvh,650px\)\]/);
   assert.match(src,/max-h-\[min\(62dvh,650px\)\]/);
   assert.doesNotMatch(src,/>Just ask\.</);
-  assert.match(css,/\.mc-assistant-dock-card > summary\{min-height:62px/);
+  assert.match(css,/\.mc-assistant-dock\{display:flex;flex-direction:column/);
+  assert.match(css,/\.mc-assistant-dock-card\{width:100%;max-width:100%/);
+  assert.match(css,/\.mc-assistant-dock-card > summary\{min-height:48px/);
 });
 
 test('original PWA preserves vault and voice safety instead of importing ngrok-only assistant',async()=>{
