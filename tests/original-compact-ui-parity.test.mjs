@@ -34,5 +34,8 @@ test('saved Capfin reclassification needs explicit owner acceptance',async()=>{
   const [app,review]=await Promise.all([read('src/App.tsx'),read('src/components/SavedCategoryReview.tsx')]);
   assert.match(app,/applySavedCategoryChanges/);
   assert.match(app,/<SavedCategoryReview/);
-  assert.match(review,/Approve \{selected\.length\}/);
+  assert.match(review,/Approve \{currentSuggestions\.length\} selected on this page/);
+  assert.match(review,/Scan saved payments/);
+  assert.match(review,/Needs your decision/);
+  assert.match(review,/categoryReviewPage/);
 });

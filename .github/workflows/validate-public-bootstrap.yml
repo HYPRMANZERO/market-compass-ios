@@ -75,7 +75,31 @@ jobs:
         shell: pwsh
         env:
           BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: personal
           NODE_ENV: production
         run: |
           node scripts/bootstrap-ui-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Synthetic Edge UI check failed' }
+      - name: Personal Spend pagination and encrypted-review browser smoke
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: personal
+          NODE_ENV: production
+        run: |
+          node scripts/category-review-ui-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Personal Spend review browser check failed' }
+      - name: Build and smoke Finance review UI separately
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: finance
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+          NODE_ENV: production
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          if ($LASTEXITCODE -ne 0) { throw 'Finance static build failed' }
+          node scripts/prepare-offline-shell.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Finance offline shell failed' }
+          node scripts/category-review-ui-smoke.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Finance Spend review browser check failed' }

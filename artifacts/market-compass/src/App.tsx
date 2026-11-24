@@ -11,7 +11,8 @@ import PersonalTaskBoard from '@/components/PersonalTaskBoard';
 import { normalizePersonalTasks, type PersonalTask } from '@/lib/personalTasks';
 import { currentAssistantEdition } from '@/lib/assistantEdition';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
-import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
+import {applySavedCategoryChanges,allowedSavedCategory} from '@/lib/savedCategoryReview';
+import {expenseCategoryNeedsSorting} from '@/lib/monthlyExpenses';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
@@ -1156,6 +1157,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           }))}
           ledgerEntries={ledger}
           currency={data.currency}
+          region={selectedRegion(data.region)}
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
         />
@@ -1170,8 +1172,15 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
-        <SavedCategoryReview entries={ledger} currency={data.currency}
-          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
+        <SavedCategoryReview entries={ledger} currency={data.currency} region={selectedRegion(data.region)}
+          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(
+            old.expenseEntries??[],approved,selectedRegion(old.region))}))}
+          onManualCategorize={(entryId,category)=>setData(old=>{
+            const original=(old.expenseEntries??[]).find(item=>item.id===entryId);
+            if(!original||!expenseCategoryNeedsSorting(original.category)||
+               !allowedSavedCategory(original.kind,category))return old;
+            return {...old,expenseEntries:old.expenseEntries.map(item=>item.id===entryId?{...item,category}:item)};
+          })}/>
         <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
@@ -1190,6 +1199,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
           desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
           currency={data.currency}
+          region={selectedRegion(data.region)}
           debtAccounts={data.accounts}
           onSave={(entry,syncDebtBalance)=>setData(old=>({
             ...old,

@@ -6,12 +6,15 @@
 import type {LocalFinanceDocument,LocalFinanceLine} from './localFinanceDocs.ts';
 import type {ExpenseEntry} from './monthlyExpenses.ts';
 import {documentAppliedIndices} from './reviewedDocumentLedger.ts';
+import {sourceTimeContext,type DocumentTimeContext} from './documentTimeContext.ts';
 import {isFinanceReferenceLabel} from './vehicleFinance.ts';
 
 export type InboxDocument={
   id:string;label:string;format:string;importedAt:string;
   reviewable:number;approved:number;needsReview:number;
   undated:number;referenceOnly:number;otherCurrencyUnverified:boolean;
+  /** Dated source period, or null for legacy/undated imports. Never a payment date. */
+  timeContext?:DocumentTimeContext|null;
 };
 export type InboxSummary={
   documents:number;reviewable:number;approved:number;needsReview:number;
@@ -48,7 +51,8 @@ export function reviewInbox(documents:LocalFinanceDocument[],entries:ExpenseEntr
     items.push({
       id:doc.id,label:doc.label,format:doc.format,importedAt:doc.importedAt,
       reviewable,approved,needsReview:reviewable-approved,undated,referenceOnly,
-      otherCurrencyUnverified:true
+      otherCurrencyUnverified:true,
+      timeContext:sourceTimeContext(doc)
     });
   }
   items.sort((a,b)=>b.needsReview-a.needsReview||

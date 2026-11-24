@@ -4,13 +4,14 @@ import {preparedDocumentReview} from '@/lib/reviewSuggestions';
 import {isReviewableLine} from '@/lib/reviewInbox';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
+import {suggestRegionalDocumentClassification} from '@/lib/regionalDocumentReview';
 import {
   EXPENSE_CATEGORIES,EXPENSE_KINDS,
   type ExpenseEntry,type ExpenseCategory,type ExpenseKind
 } from '@/lib/monthlyExpenses';
 import {
   applyReviewedDocumentToLedger,allowedDocumentCategories,
-  documentAppliedIndices,documentRowBlockReason,suggestDocumentClassification,type ReviewedLedgerDecision
+  documentAppliedIndices,documentRowBlockReason,type ReviewedLedgerDecision
 } from '@/lib/reviewedDocumentLedger';
 
 type ReviewRow={checked:boolean;date:string;kind:ExpenseKind|'';category:ExpenseCategory|''};
@@ -18,6 +19,7 @@ type Props={
   document:LocalFinanceDocument;
   entries:ExpenseEntry[];
   currency:string;
+  region?:string;
   currencyReviewRequired:boolean;
   onApply:(entries:ExpenseEntry[])=>void;
 };
@@ -26,7 +28,7 @@ const showMoney=(value:number|null)=>value===null?'Unknown amount':
 
 /** Suggest classifications locally and require confirmation before posting. */
 export default function ReviewedDocumentLedger({
-  document,entries,currency,currencyReviewRequired,onApply
+  document,entries,currency,region='ZA',currencyReviewRequired,onApply
 }:Props){
   const [draft,setDraft]=useState<Record<number,ReviewRow>>({});
   const [feedback,setFeedback]=useState('');
@@ -34,7 +36,7 @@ export default function ReviewedDocumentLedger({
   const applied=documentAppliedIndices(document,entries);
   function initialRow(index:number):ReviewRow{
     const line=document.lines[index];
-    const suggestion=suggestDocumentClassification(line);
+    const suggestion=suggestRegionalDocumentClassification(line,region);
     return {checked:false,date:line.date??'',kind:suggestion?.kind??'',category:suggestion?.category??''};
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
@@ -46,7 +48,7 @@ export default function ReviewedDocumentLedger({
     .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
   const pendingUnclear=ready.filter(({line})=>line.direction==='unclassified').length;
   const pendingUnsorted=ready.filter(({line})=>{
-    const proposed=suggestDocumentClassification(line);
+    const proposed=suggestRegionalDocumentClassification(line,region);
     return proposed===null||proposed.category==='unsorted';
   }).length;
   const suggested=ready.filter(({index})=>{
@@ -55,7 +57,7 @@ export default function ReviewedDocumentLedger({
   });
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
-  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
+  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i,region)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
       item.proposal!==null&&!applied.has(item.index));
   const selectPrepared=()=>{

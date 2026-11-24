@@ -19,6 +19,7 @@ type Props = {
   entries:ExpenseEntry[];
   settings:ExpenseSettings;
   currency:string;
+  region?:string;
   debtAccounts:DebtAccount[];
   desktopAi:DesktopAiSettings;
   onSave:(entry:ExpenseEntry,syncDebtBalance:boolean)=>void;
@@ -32,7 +33,7 @@ const cash=(value:number,code:string)=>{
 };
 const readable=(date:string)=>new Date(date+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'});
 const suggestCategory=(_kind:ExpenseKind):ExpenseCategory=>'unsorted';
-export default function MonthlyExpenses({entries,settings,currency,debtAccounts,desktopAi,onSave,onDelete,onSettingsChange}:Props){
+export default function MonthlyExpenses({entries,settings,currency,region='ZA',debtAccounts,desktopAi,onSave,onDelete,onSettingsChange}:Props){
   const today=localDate();
   const calendarUrl = new URL(import.meta.env.BASE_URL + 'salary-reminder.ics',window.location.origin).toString();
   const [cycleStart,setCycleStart]=useState(()=>salaryCycle(today).start);
@@ -63,7 +64,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const analysis=cycleAnalysis(allEntries,cycleStart,currency,settings.cycleBudget);
   const historicalTrends=cycleSpendingTrends(allEntries,cycleStart,today,currency);
   const cutIdeas=cycleCashflowCutIdeas(allEntries,cycleStart,currency);
-  const suggestedManualCategory=suggestKnownSpendCategory(kind,description);
+  const suggestedManualCategory=suggestKnownSpendCategory(kind,description,region);
   // Recompute only after approved ledger data, selected cycle or budget changes.
   // No transaction descriptions or banking identifiers enter this summary.
   const coachingRequest=useMemo(

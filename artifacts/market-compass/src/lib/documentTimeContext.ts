@@ -44,7 +44,33 @@ export function documentTimeContext(
  if(rows)return {...rows,asOf,basis:'dated-rows'};
  return asOf?{from:null,to:null,asOf,basis:'explicit-as-of'}:null;
 }
-/** UI-only summary for existing encrypted excerpts; no source files or vault schema changed. */
+/**
+ * Preserve only normalized date evidence in the encrypted vault.
+ * Reject forged or structurally inconsistent reporting dates during import.
+ * These dates describe source coverage; they never fill missing transaction dates.
+ */
+export function validatedDocumentTimeContext(input:unknown):DocumentTimeContext|null{
+ if(!input||typeof input!=='object'||Array.isArray(input))return null;
+ const value=input as Record<string,unknown>;
+ const iso=(v:unknown):v is string=>{
+   if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;
+   const when=new Date(v+'T12:00:00Z');
+   return Number.isFinite(when.getTime())&&when.toISOString().slice(0,10)===v;
+ };
+ const nullable=(v:unknown)=>v===null||iso(v);
+ if(!nullable(value.from)||!nullable(value.to)||!nullable(value.asOf))return null;
+ const from=value.from as string|null,to=value.to as string|null,asOf=value.asOf as string|null;
+ if((from===null)!==(to===null)|| (from&&to&&from>to))return null;
+ const basis=value.basis;
+ if(basis==='explicit-as-of'){
+   if(from!==null||to!==null||asOf===null)return null;
+ }else if(basis==='explicit-period'||basis==='dated-rows'){
+   if(from===null||to===null)return null;
+ }else return null;
+ return {from,to,asOf,basis};
+}
+
+/** UI-only summary for saved excerpts; source bytes are not retained. */
 export function sourceTimeContext(document:{lines:ReadonlyArray<{date:string|null}>;timeContext?:DocumentTimeContext}):DocumentTimeContext|null{
  return document.timeContext??documentTimeContext('',document.lines);
 }
