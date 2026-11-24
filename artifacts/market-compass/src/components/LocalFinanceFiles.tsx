@@ -33,6 +33,7 @@ type Props={
   onRemove:(id:string)=>void;
   ledgerEntries:ExpenseEntry[];
   currency:string;
+  region?:string;
   currencyReviewRequired:boolean;
   onApplyEntries:(entries:ExpenseEntry[])=>void;
 };
@@ -42,7 +43,7 @@ type Props={
  * Only owner-approved, bounded excerpts enter the existing encrypted vault.
  */
 export default function LocalFinanceFiles({documents,onAdd,onRemove,
-  ledgerEntries,currency,currencyReviewRequired,onApplyEntries}:Props){
+  ledgerEntries,currency,region='ZA',currencyReviewRequired,onApplyEntries}:Props){
   const [label,setLabel]=useState('');
   const passwordInput=useRef<HTMLInputElement>(null);
   const [reading,setReading]=useState(false);
@@ -297,7 +298,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
             No existing entry has been silently removed or changed.
           </p>}
         <ReviewedDocumentLedger key={document.id} document={document}
-          entries={ledgerEntries} currency={currency}
+          entries={ledgerEntries} currency={currency} region={region}
           currencyReviewRequired={currencyReviewRequired}
           onApply={onApplyEntries}/>
         <button type="button" onClick={()=>{

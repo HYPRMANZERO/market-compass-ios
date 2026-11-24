@@ -98,7 +98,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
       </button>
     </div>
     <p className="mt-2 text-[11px] text-muted-foreground">
-      Region: <strong>{summary.country}</strong>. Change your country in encrypted vault settings; this review uses the selected region without converting currency.
+      Region: <strong>{summary.country}</strong>. Change country under Debt Plan → Monthly guardrails. Your planning currency is {currency}; each row displays its original currency. Changing country selects a currency default but never converts existing amounts.
     </p>
     {!scan?<p className="mt-3 rounded-xl bg-muted/40 p-3 text-[12px] text-muted-foreground">
       No scan results displayed. Tap <strong>Scan saved payments</strong> to inspect existing records. Already-categorized transactions will not be overwritten.
@@ -135,7 +135,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
                 onChange={e=>setExcluded(old=>{const next=new Set(old);if(e.target.checked)next.delete(p.id);else next.add(p.id);return next;})}/>
               <span className="min-w-0 flex-1">
                 <strong className="block break-words">{maskDocumentPII(p.description)}</strong>
-                <span className="mt-1 block text-[11px] text-muted-foreground">{p.date} · {amount(p.amount,currency)}</span>
+                <span className="mt-1 block text-[11px] text-muted-foreground">{p.date} · {amount(p.amount,p.currency)}</span>
                 <span className="mt-1 block">{kindName(p.previousKind)} / {categoryName(p.previousCategory)}
                   {' → '}<strong>{kindName(p.kind)} / {categoryName(p.category)}</strong>
                 </span>
@@ -148,7 +148,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
             <div key={entry.id} className="rounded-xl border border-border/75 px-3 py-3 text-[12px]">
               <strong className="block break-words">{maskDocumentPII(entry.description)}</strong>
               <span className="mt-1 block text-[11px] text-muted-foreground">
-                {entry.date} · {amount(entry.amount,currency)} · {kindName(entry.kind)} · No confident matching category
+                {entry.date} · {amount(entry.amount,entry.currency)} · {kindName(entry.kind)} · No confident matching category
               </span>
               <label className="mt-2 block text-[11px] font-semibold">Choose a category for this entry
                 <select value={manualChoices[entry.id]??''}

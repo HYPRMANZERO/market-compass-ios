@@ -1,14 +1,15 @@
 /** Deterministic, auditable review suggestions; not an AI inference or bank verification. */
 import {isReviewableLine} from './reviewInbox.ts';
 import type {LocalFinanceDocument} from './localFinanceDocs.ts';
-import type {ExpenseKind,ExpenseCategory} from './monthlyExpenses.ts';
+import {suggestKnownSpendCategory,type ExpenseKind,type ExpenseCategory} from './monthlyExpenses.ts';
+import {regionalSalaryNarration} from './regionalSpendRules.ts';
 
 export type PreparedReview={
  date:string;kind:ExpenseKind;category:ExpenseCategory;
  explanation:string;
 };
 export function preparedDocumentReview(
- document:LocalFinanceDocument,index:number
+ document:LocalFinanceDocument,index:number,region='ZA'
 ):PreparedReview|null{
  const line=document.lines[index];
  if(!line||!isReviewableLine(document,line)||!line.date)return null;
@@ -26,7 +27,9 @@ export function preparedDocumentReview(
      explanation='Source debit with explicit completed repayment wording';
    }else{
      kind='expense';
-     category=/\b(?:rent|housing|landlord)\b/.test(label)?'housing':
+     const regionCategory=suggestKnownSpendCategory('expense',label,region);
+     category=regionCategory!=='unsorted'?regionCategory:
+       /\b(?:rent|housing|landlord)\b/.test(label)?'housing':
        /\b(?:grocery|groceries|supermarket|food store)\b/.test(label)?'groceries':
        /\b(?:petrol|diesel|fuel|transport|uber)\b/.test(label)?'transport':
        /\b(?:insurance|premium)\b/.test(label)?'insurance':
@@ -38,7 +41,7 @@ export function preparedDocumentReview(
        'Source debit with matching description';
    }
  }else if(line.direction==='incoming'){
-   if(/\b(?:salary|payroll|wages|payday|net pay)\b/i.test(label)){
+   if(regionalSalaryNarration(label,region)||/\b(?:salary|payroll|wages|payday|net pay)\b/i.test(label)){
      kind='income';category='salary';
      explanation='Source credit with explicit salary wording';
    }else if(/\b(?:interest received|dividend received|commission earned)\b/i.test(label)){

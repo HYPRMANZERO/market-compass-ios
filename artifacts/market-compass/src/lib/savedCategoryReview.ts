@@ -7,7 +7,7 @@ import {validateExpenseEntry,expenseCategoryNeedsSorting,
 import {matchRegionalCategory,normalizeFinancialNarration,regionalSalaryNarration} from './regionalSpendRules.ts';
 
 export type SavedCategorySuggestion={
- id:string;date:string;amount:number;description:string;
+ id:string;date:string;amount:number;currency:string;description:string;
  previousKind:ExpenseKind;previousCategory:ExpenseCategory;
  kind:ExpenseKind;category:ExpenseCategory;reason:string;
 };
@@ -129,7 +129,7 @@ export function scanSavedCategories(entries:ExpenseEntry[],region='ZA'):SavedCat
    const linked=!!entry.debtAccountId||entry.remainingBalance!==undefined&&entry.remainingBalance!==null;
    if(linked&&next.kind!==entry.kind)continue;
    proposals.push({
-     id:entry.id,date:entry.date,amount:entry.amount,description:entry.description,
+     id:entry.id,date:entry.date,amount:entry.amount,currency:entry.currency,description:entry.description,
      previousKind:entry.kind,previousCategory:entry.category,
      kind:next.kind,category:next.category,reason:next.reason
    });

@@ -6,8 +6,10 @@ import {
 } from '../artifacts/market-compass/src/lib/savedCategoryReview.ts';
 import {matchRegionalCategory,regionalPackInfo,regionalSalaryNarration}
   from '../artifacts/market-compass/src/lib/regionalSpendRules.ts';
-import {cycleAnalysis,EXPENSE_CATEGORIES}
+import {cycleAnalysis,EXPENSE_CATEGORIES,suggestKnownSpendCategory}
   from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
+import {suggestDocumentClassification} from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
+import {preparedDocumentReview} from '../artifacts/market-compass/src/lib/reviewSuggestions.ts';
 import {REGIONS} from '../artifacts/market-compass/src/lib/regions.ts';
 
 const row=(id,description,kind='expense',category='other',currency='ZAR')=>({
@@ -126,6 +128,62 @@ test('each offered country has an explicit terminology pack and global fallback'
     assert.ok(info.countryRules>0,region.country);
   }
   assert.equal(matchRegionalCategory('Account service fee','XX')?.category,'fees');
+});
+
+test('new manual entries and imported-document suggestions use the selected region',()=>{
+  assert.equal(suggestKnownSpendCategory('expense','POS CHECKERS PURCHASE','ZA'),'groceries');
+  assert.equal(suggestKnownSpendCategory('expense','POS CHECKERS PURCHASE','GB'),'unsorted');
+  assert.equal(suggestKnownSpendCategory('expense','POS TESCO PURCHASE','GB'),'groceries');
+  assert.equal(suggestKnownSpendCategory('expense','POS TESCO PURCHASE','ZA'),'unsorted');
+  assert.equal(suggestKnownSpendCategory('expense','PAYMENT KROGER','US'),'groceries');
+  assert.equal(suggestKnownSpendCategory('expense','KFC', 'IN'),'dining');
+  assert.equal(suggestKnownSpendCategory('income','NOMINA NOVIEMBRE','ES'),'salary');
+  assert.equal(suggestKnownSpendCategory('income','NOMINA NOVIEMBRE','US'),'unsorted');
+  assert.equal(suggestKnownSpendCategory('debt-payment','home loan repayment','GB'),'housing');
+  assert.equal(suggestKnownSpendCategory('transfer','ATM cash withdrawal','GB'),'cash');
+
+  const outgoing={label:'POS TESCO PURCHASE',date:'2026-11-21',direction:'outgoing',
+    amount:35.8,semanticRole:'transaction'};
+  const englishSource=suggestDocumentClassification(outgoing,'GB');
+  assert.deepEqual(englishSource,{kind:'expense',category:'groceries'});
+  assert.deepEqual(suggestDocumentClassification(outgoing,'ZA'),
+    {kind:'expense',category:'unsorted'});
+  const doc={id:'synthetic-source',label:'Synthetic statement',format:'csv',
+    importedAt:'2026-11-24T00:00:00Z',lines:[outgoing]};
+  assert.equal(preparedDocumentReview(doc,0,'GB')?.category,'groceries');
+  assert.equal(preparedDocumentReview(doc,0,'ZA')?.category,'other');
+  const spanishCredit={...outgoing,label:'NOMINA NOVIEMBRE',direction:'incoming'};
+  assert.equal(suggestDocumentClassification(spanishCredit,'ES')?.category,'salary');
+  assert.equal(preparedDocumentReview({...doc,lines:[spanishCredit]},0,'ES')?.category,'salary');
+});
+test('all category proposal amounts retain their original currency',()=>{
+  const rows=[row('zar','Bank account service fee','expense','other','ZAR'),
+    row('usd','Bank account service fee','expense','other','USD')];
+  const scan=scanSavedCategories(rows,'US');
+  assert.deepEqual(scan.proposals.map(x=>x.currency),['ZAR','USD']);
+  const applied=applySavedCategoryChanges(rows,scan.proposals,'US');
+  assert.deepEqual(applied.map(x=>x.currency),['ZAR','USD']);
+  const ui=readFileSync(new URL('../artifacts/market-compass/src/components/SavedCategoryReview.tsx',import.meta.url),'utf8');
+  assert.match(ui,/amount\(p\.amount,p\.currency\)/);
+  assert.match(ui,/amount\(entry\.amount,entry\.currency\)/);
+});
+test('Home and Spend unsorted totals fall after category approval, never changing money totals',()=>{
+  const rows=[row('grocery','POS CHECKERS PURCHASE'),row('fee','Bank account service fee'),
+    row('unknown','Unidentified QR merchant')];
+  const before=cycleAnalysis(rows,'2026-10-26','ZAR');
+  assert.equal(before.unsortedCount,3);
+  assert.equal(before.unsortedOutflow,359.25);
+  const suggestions=scanSavedCategories(rows,'ZA').proposals;
+  assert.equal(suggestions.length,2);
+  const updated=applySavedCategoryChanges(rows,suggestions,'ZA');
+  const after=cycleAnalysis(updated,'2026-10-26','ZAR');
+  assert.equal(after.unsortedCount,1);
+  assert.equal(after.unsortedOutflow,119.75);
+  assert.equal(after.outflow,before.outflow);
+  assert.equal(after.income,before.income);
+  assert.ok(after.byCategory.some(x=>x.category==='groceries'&&x.amount===119.75));
+  assert.ok(after.byCategory.some(x=>x.category==='fees'&&x.amount===119.75));
+  assert.equal(updated[2].category,'other');
 });
 
 test('review UI exposes manual unresolved entries and Next, Previous and page-scoped approval',()=>{

@@ -1158,6 +1158,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           }))}
           ledgerEntries={ledger}
           currency={data.currency}
+          region={selectedRegion(data.region)}
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
         />
@@ -1199,6 +1200,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
           desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
           currency={data.currency}
+          region={selectedRegion(data.region)}
           debtAccounts={data.accounts}
           onSave={(entry,syncDebtBalance)=>setData(old=>({
             ...old,

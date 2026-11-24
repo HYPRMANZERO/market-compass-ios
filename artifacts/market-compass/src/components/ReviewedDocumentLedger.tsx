@@ -18,6 +18,7 @@ type Props={
   document:LocalFinanceDocument;
   entries:ExpenseEntry[];
   currency:string;
+  region?:string;
   currencyReviewRequired:boolean;
   onApply:(entries:ExpenseEntry[])=>void;
 };
@@ -26,7 +27,7 @@ const showMoney=(value:number|null)=>value===null?'Unknown amount':
 
 /** Suggest classifications locally and require confirmation before posting. */
 export default function ReviewedDocumentLedger({
-  document,entries,currency,currencyReviewRequired,onApply
+  document,entries,currency,region='ZA',currencyReviewRequired,onApply
 }:Props){
   const [draft,setDraft]=useState<Record<number,ReviewRow>>({});
   const [feedback,setFeedback]=useState('');
@@ -34,7 +35,7 @@ export default function ReviewedDocumentLedger({
   const applied=documentAppliedIndices(document,entries);
   function initialRow(index:number):ReviewRow{
     const line=document.lines[index];
-    const suggestion=suggestDocumentClassification(line);
+    const suggestion=suggestDocumentClassification(line,region);
     return {checked:false,date:line.date??'',kind:suggestion?.kind??'',category:suggestion?.category??''};
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
@@ -46,7 +47,7 @@ export default function ReviewedDocumentLedger({
     .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
   const pendingUnclear=ready.filter(({line})=>line.direction==='unclassified').length;
   const pendingUnsorted=ready.filter(({line})=>{
-    const proposed=suggestDocumentClassification(line);
+    const proposed=suggestDocumentClassification(line,region);
     return proposed===null||proposed.category==='unsorted';
   }).length;
   const suggested=ready.filter(({index})=>{
@@ -55,7 +56,7 @@ export default function ReviewedDocumentLedger({
   });
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
-  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
+  const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i,region)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
       item.proposal!==null&&!applied.has(item.index));
   const selectPrepared=()=>{

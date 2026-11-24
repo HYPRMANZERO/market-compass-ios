@@ -1,4 +1,5 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
+import {matchRegionalCategory,regionalSalaryNarration} from './regionalSpendRules.ts';
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
 export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
@@ -52,28 +53,37 @@ export const EXPENSE_KINDS: {value:ExpenseKind;label:string}[] = [
  * An unknown merchant is UNSORTED, not silently called groceries or income.
  * These suggestions never write to the ledger until the owner approves.
  */
-export function suggestKnownSpendCategory(kind:ExpenseKind,description:string):ExpenseCategory{
+export function suggestKnownSpendCategory(kind:ExpenseKind,description:string,region='ZA'):ExpenseCategory{
   const text=description.toLowerCase().replace(/\s+/g,' ');
   if(kind==='income'){
-    if(/\b(?:salary|payroll|wages|pay cheque|paycheck|net pay)\b/.test(text))return 'salary';
+    if(regionalSalaryNarration(description,region))return 'salary';
     if(/\b(?:freelance|side income|consulting income|interest earned|commission earned)\b/.test(text))return 'side-income';
     return 'unsorted';
   }
   if(kind==='transfer'){
+    if(/\b(?:transfer to (?:investment|brokerage|trading) account|investment savings transfer)\b/.test(text))return 'investments';
+    if(/\b(?:atm cash withdrawal|atm withdrawal|cash withdrawn from atm)\b/.test(text))return 'cash';
     return /\b(?:savings|save to|saving pocket|savings pocket)\b/.test(text)?'savings':'unsorted';
   }
   if(kind==='debt-payment'){
     if(/\b(?:vehicle finance|car (?:loan|instalment|installment|repayment)|auto loan)\b/.test(text))return 'car';
     if(/\b(?:credit card (?:repayment|payment)|card repayment)\b/.test(text))return 'credit-card';
+    if(/\b(?:mortgage (?:repayment|payment)|home loan (?:repayment|payment))\b/.test(text))return 'housing';
+    if(/\b(?:student loan repayment|education loan repayment)\b/.test(text))return 'education';
+    if(/\b(?:personal loan (?:repayment|payment|instalment|installment))\b/.test(text))return 'personal-loan';
     return 'unsorted';
   }
+  const regional=matchRegionalCategory(description,region);
+  if(regional)return regional.category;
   if(/\b(?:bank (?:charge|fee)|service (?:charge|fee)|account (?:fee|charge)|transaction fee|payshap fee|monthly fee|commission fee|fees?)\b/.test(text))return 'fees';
   if(/\b(?:netflix|spotify|showmax|disney\+?|youtube premium|subscription|membership|gym|icloud|apple music)\b/.test(text))return 'subscriptions';
   if(/\b(?:rent|rental|housing|board payment|body corporate|levy)\b/.test(text))return 'housing';
-  if(/\b(?:grocery|groceries|supermarket|checkers|pick n pay|pnp|spar|food lovers|foodlovers|shoprite)\b/.test(text))return 'groceries';
-  if(/\b(?:fuel|petrol|diesel|transport|uber|bolt ride|taxi|bus ticket|engen|caltex|shell fuel|bp fuel)\b/.test(text))return 'transport';
+  if(/\b(?:grocery|groceries|supermarket)\b/.test(text))return 'groceries';
+  if(region==='ZA'&&/\b(?:checkers|pick n pay|pnp|spar|food lovers|foodlovers|shoprite)\b/.test(text))return 'groceries';
+  if(/\b(?:fuel|petrol|diesel|transport|uber|bolt ride|taxi|bus ticket|shell fuel|bp fuel)\b/.test(text))return 'transport';
+  if(region==='ZA'&&/\b(?:engen|caltex)\b/.test(text))return 'transport';
   if(/\b(?:electricity|municipal|water bill|airtime|mobile data|fibre|wifi|internet bill|utilities)\b/.test(text))return 'utilities';
-  if(/\b(?:insurance|premium|assurance|policy debit)\b/.test(text))return 'insurance';
+  if(/\b(?:insurance|insurer|insurance premium|policy debit)\b/.test(text))return 'insurance';
   if(/\b(?:pharmacy|doctor|hospital|clinic|medical aid|healthcare|dentist)\b/.test(text))return 'health';
   if(/\b(?:dog food|cat food|pet food|pet store|veterinary|veterinarian|nexgard|bravecto|vet bill)\b/.test(text))return 'pets';
   if(/\b(?:restaurant|takeaway|fast food|kfc|nandos|mcdonalds|steers|coffee shop|cafe|coffee|dessert)\b/.test(text))return 'dining';
