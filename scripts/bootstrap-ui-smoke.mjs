@@ -206,11 +206,11 @@ try{
     if(!a)throw Error('Debt navigation missing');a.click();
   });
   await expect('Debt payoff','debt editor');
-  await click('Add an account');
+  await until(()=>js(function(){return !!document.querySelector('#mc-add-debt-account input');}),'blank account form visible');
   for(const [name,value] of [['Account name','TEST CARD 123456789012'],
     ['Balance','1840'],['APR (%)','18.5'],['Minimum / month','120']]){
     assert.equal(await js(function(name,value){
-      const input=[...document.querySelectorAll('label')]
+      const input=[...document.querySelectorAll('#mc-add-debt-account label')]
         .filter(label=>label.textContent.trim().startsWith(name))
         .map(label=>label.querySelector('input')).find(Boolean);
       if(!input)return false;
@@ -218,6 +218,8 @@ try{
       input.dispatchEvent(new Event('input',{bubbles:true}));return true;
     },name,value),true,name+' control');
   }
+  await click('Save account');
+  await expect('TEST CARD','account draft saved');
   await js(function(){
     const a=document.querySelector('a[aria-label="Go to Market Compass home"]');
     if(!a)throw Error('Home link missing');a.click();
