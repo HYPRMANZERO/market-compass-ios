@@ -1,7 +1,7 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 import {matchRegionalCategory,regionalSalaryNarration} from './regionalSpendRules.ts';
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
-export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'savings' | 'other' | 'unsorted';
+export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'card-load' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
   id: string;
   date: string;
@@ -41,6 +41,7 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'shopping',label:'Shopping and retail'},{value:'entertainment',label:'Entertainment'},
   {value:'donations',label:'Charity and donations'},{value:'business',label:'Business expenses'},
   {value:'cash',label:'Cash withdrawal'},{value:'investments',label:'Investment transfers'},
+  {value:'card-load',label:'Prepaid / virtual card loads'},
   {value:'savings',label:'Savings transfer'},{value:'other',label:'Other expense'},
   {value:'unsorted',label:'Unsorted · needs category'},
 ];
