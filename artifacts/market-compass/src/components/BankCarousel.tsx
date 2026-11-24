@@ -26,9 +26,10 @@ function BankMark({bank}:{bank:Bank}){
 }
 
 export default function BankCarousel({
-  compact = false, onImportDocuments, onAddAccount,
+  compact = false, showStandardBankConnect = false, onImportDocuments, onAddAccount,
 }: {
   compact?: boolean;
+  showStandardBankConnect?: boolean;
   onImportDocuments?: () => void;
   onAddAccount?: () => void;
 }) {
@@ -54,7 +55,10 @@ export default function BankCarousel({
     {chosen ? <div className="mt-2 rounded-xl border border-border bg-background p-3" role="region" aria-label={`${chosen.name} account options`} data-testid="selected-bank-options">
       <p className="flex items-center gap-2 text-[13px] font-bold"><WalletCards size={16} className="text-primary"/>{chosen.name}</p>
       {chosen.description && <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{chosen.description}</p>}
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Secure live account linking is not enabled for this provider. You can import a statement for local review; importing does not establish a bank connection or update a balance automatically.</p>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{showStandardBankConnect&&chosen.id==='standard-bank'
+        ?'A secure Standard Bank consent setup is available below. Bank sign-in only becomes active after partner approval and read-only API onboarding.'
+        :'Secure live account linking is not enabled for this provider. You can import a statement for local review; importing does not establish a bank connection or update a balance automatically.'}</p>
+      {showStandardBankConnect&&chosen.id==='standard-bank'&&<a href="#mc-standard-bank-connection" className="mt-2 inline-flex min-h-11 items-center text-[12px] font-semibold text-primary">Go to Standard Bank connection options</a>}
       <div className="mt-3 flex flex-wrap gap-2">
         {onImportDocuments && <button type="button" onClick={onImportDocuments} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground"><FileUp size={16}/> Import statement</button>}
         {onAddAccount && <button type="button" onClick={onAddAccount} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-[12px] font-semibold"><WalletCards size={16}/> Add debt record manually</button>}

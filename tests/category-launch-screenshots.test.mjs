@@ -56,7 +56,7 @@ test('Accounts is a provider hub, not an account-by-account spending categorizer
   const hub=readFileSync(new URL('components/AccountsPlatformHub.tsx',root),'utf8');
   assert.doesNotMatch(app,/<AccountTransactionHistory/);
   assert.match(app,/<Route path="\/banks">/);
-  assert.match(app,/<AccountsPlatformHub debtAccounts=\{data.accounts\} currency=\{data.currency\}/);
+  assert.match(app,/<AccountsPlatformHub debtAccounts=\{data.accounts\} currency=\{data.currency\} desktopAi=\{data.desktopAi\}/);
   assert.match(hub,/0 live connections/);
   assert.match(hub,/manual records/);
   assert.match(hub,/Review payment categories in Spend/);

@@ -3,6 +3,9 @@ import {ChevronDown,ChevronUp,Coins,ExternalLink,FileUp,Gift,Landmark,Plus,Refre
 import {Link} from 'wouter';
 import BankCarousel from './BankCarousel';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
+import StandardBankConnection from './StandardBankConnection';
+import type {DesktopAiSettings} from '@/lib/desktopAiSettings';
+import {currentAssistantEdition} from '@/lib/assistantEdition';
 
 type DebtRecord={id:string;name:string;balance?:string};
 type Group='bank'|'investments'|'rewards'|'cryptocurrency'|'credit';
@@ -24,8 +27,8 @@ const crypto:Provider[]=[
 ];
 
 /** Provider directory only. No live balance is inferred, no credentials are collected. */
-export default function AccountsPlatformHub({debtAccounts,currency,onImportDocuments}:{
-  debtAccounts:DebtRecord[];currency:string;onImportDocuments:()=>void;
+export default function AccountsPlatformHub({debtAccounts,currency,desktopAi,onImportDocuments}:{
+  debtAccounts:DebtRecord[];currency:string;desktopAi:DesktopAiSettings;onImportDocuments:()=>void;
 }){
   const [expanded,setExpanded]=useState<Group|null>('bank');
   const [showPicker,setShowPicker]=useState(false);
@@ -123,7 +126,7 @@ export default function AccountsPlatformHub({debtAccounts,currency,onImportDocum
           <p className="px-4 py-3 text-[11px] leading-5 text-muted-foreground">{g.description}.
             {g.id==='credit'?' Saved liability records are not bank-linked accounts.':' No live accounts are linked; platforms below are options for future integration or manual import.'}
           </p>
-          {g.id==='bank'&&<div className="px-3 pb-3"><BankCarousel compact onImportDocuments={onImportDocuments}/></div>}
+          {g.id==='bank'&&<div className="px-3 pb-3"><BankCarousel compact showStandardBankConnect={currentAssistantEdition()==='finance'} onImportDocuments={onImportDocuments}/><StandardBankConnection settings={desktopAi}/></div>}
           {g.id==='investments'&&providerCards(investments)}
           {g.id==='cryptocurrency'&&providerCards(crypto)}
           {g.id==='rewards'&&<div className="border-t border-border px-4 py-4 text-[11px] leading-5 text-muted-foreground">
