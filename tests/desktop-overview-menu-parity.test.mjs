@@ -10,7 +10,7 @@ test('one local financial-space hero serves mobile and desktop with saved debt, 
   assert.match(home,/onViewAccounts=\{\(\)=>setAccountActionsOpen\(true\)\}/);
   assert.match(app,/data-testid="desktop-financial-overview"/);
   assert.match(app,/<FinancialSpaceHero currency=\{data.currency\} totalDebt=\{debtTotal\}/);
-  assert.match(app,/onViewAccounts=\{\(\)=>navigate\('\/debt'\)\}/);
+  assert.match(app,/onViewAccounts=\{\(\)=>navigate\('\/banks'\)\}/);
   assert.match(hero,/data-testid="financial-space-debt-total"/);
   assert.match(hero,/No bank connection|Not a live or bank-verified balance/);
   assert.doesNotMatch(hero,/330,017\.78|330017\.78/);

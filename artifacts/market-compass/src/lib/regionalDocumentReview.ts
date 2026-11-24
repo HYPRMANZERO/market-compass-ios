@@ -1,7 +1,8 @@
 /**
  * Region-aware suggestions for OWNER review only.
- * This overlay deliberately leaves the protected document parser and
- * posting allowlists unmodified, preserving bank-source parity.
+ * This overlay preserves protected document parsing and source-direction
+ * checks. Only explicitly posted investment income/transfers extend the
+ * approval taxonomy; documents never post without owner approval.
  */
 import type {LocalFinanceLine} from './localFinanceDocs.ts';
 import {allowedDocumentCategories,suggestDocumentClassification} from './reviewedDocumentLedger.ts';

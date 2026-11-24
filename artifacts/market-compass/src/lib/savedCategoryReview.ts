@@ -5,6 +5,7 @@
 import {validateExpenseEntry,expenseCategoryNeedsSorting,
   type ExpenseCategory,type ExpenseEntry,type ExpenseKind} from './monthlyExpenses.ts';
 import {matchRegionalCategory,normalizeFinancialNarration,regionalSalaryNarration} from './regionalSpendRules.ts';
+import {classifyInvestmentNarration} from './investmentNarration.ts';
 
 export type SavedCategorySuggestion={
  id:string;date:string;amount:number;currency:string;description:string;
@@ -51,7 +52,9 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
  if(!basic||(status.test(basic)&&!(postedFailedPosFee.test(basic)&&!feeStatusReversal.test(basic))))return null;
  const match=(pattern:RegExp)=>pattern.test(basic);
  const own=match(ownTransfer);
+ const investment=classifyInvestmentNarration(entry.kind,entry.description,region);
  if(entry.kind==='income'){
+   if(investment)return investment;
    if(regionalSalaryNarration(basic,region)||match(salary))
      return result('income','salary','Explicit salary/payroll text for the selected region');
    if(match(sideIncome))return result('income','side-income','Explicit other-income narration');
@@ -60,6 +63,7 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
    return null;
  }
  if(entry.kind==='transfer'){
+   if(investment)return investment;
    if(own)return result('transfer',match(investmentTransfer)?'investments':'savings','Own-account transfer wording');
    if(match(cashWithdrawal))return result('transfer','cash','ATM cash withdrawal is not automatically retail spending');
    return null;
@@ -76,6 +80,7 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
      return result('debt-payment','personal-loan','Capfin loan debit: confirm posted debit rather than DebiCheck mandate');
    return null;
  }
+ if(investment)return investment;
  if(own)return result('transfer',match(investmentTransfer)?'investments':'savings',
    'Explicit own-account transfer; verify before excluding from spending');
  if(match(mortgage))return result('debt-payment','housing','Explicit mortgage repayment');
@@ -114,17 +119,18 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
 }
 
 /** Saved, already-approved transactions may use a wider category taxonomy
- * than a new financial-document approval. The parser's protected category
- * allowlist remains unchanged; this review only relabels stored ledger items.
+ * than new financial-document approvals. Document imports allow narrowly
+ * defined, direction-confirmed investment income and transfers only; both
+ * flows still require an explicit owner approval before changing the ledger.
  */
 export function allowedSavedCategory(kind:ExpenseKind,category:ExpenseCategory):boolean{
  if(category==='other'||category==='unsorted')return false;
- if(kind==='income')return ['salary','side-income'].includes(category);
+ if(kind==='income')return ['salary','side-income','dividends','interest'].includes(category);
  if(kind==='debt-payment')
    return ['car','credit-card','personal-loan','housing','education'].includes(category);
  if(kind==='transfer')return ['savings','cash','investments','card-load'].includes(category);
  if(kind==='expense')
-   return !['salary','side-income','personal-loan','savings','cash','investments'].includes(category);
+   return !['salary','side-income','dividends','interest','personal-loan','savings','cash','investments','card-load'].includes(category);
  return false;
 }
 

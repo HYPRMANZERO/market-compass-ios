@@ -4,6 +4,8 @@ import { localDate } from '@/lib/dailyBackup';
 import SalaryPush from './SalaryPush';
 import {Link} from 'wouter';
 import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
+import {allowedSavedCategory} from '@/lib/savedCategoryReview';
+import {budgetDetailOptions} from '@/lib/budgetDetailGroups';
 import {privateTailnetOrigin} from '@/lib/privateTailnetUrl';
 import {buildSpendCoachingRequest} from '@/lib/spendAiGuidance';
 import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
@@ -41,6 +43,7 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
   const [date,setDate]=useState(today);
   const [kind,setKind]=useState<ExpenseKind>('expense');
   const [category,setCategory]=useState<ExpenseCategory>('unsorted');
+  const [subcategory,setSubcategory]=useState('');
   const [viewFilter,setViewFilter]=useState('all');
   const [description,setDescription]=useState('');
   const [paidVia,setPaidVia]=useState('');
@@ -87,7 +90,7 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
   const salaryDay=today.endsWith('-26');
   const salaryReminderDue=salaryDay&&!currentSalaryEntered;
   function reset(){
-    setEditingId('');setDate(today);setKind('expense');setCategory('unsorted');setDescription('');
+    setEditingId('');setDate(today);setKind('expense');setCategory('unsorted');setSubcategory('');setDescription('');
     setPaidVia('');setAmount('');setLinkedDebtId('');setAccountLabel('');setRemaining('');setSyncDebt(false);setNote('');
   }
   function save(event:FormEvent<HTMLFormElement>){
@@ -98,7 +101,7 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
       const original=allEntries.find(x=>x.id===editingId);
       const entry=validateExpenseEntry({
         id:original?.id||crypto.randomUUID(),recordedAt:original?.recordedAt||new Date().toISOString(),
-        date,kind,category,description:description.trim(),paidVia:paidVia.trim(),
+        date,kind,category,subcategory:subcategory||undefined,description:description.trim(),paidVia:paidVia.trim(),
         amount:parseMoneyAmount(amount),currency,
         debtAccountId:kind==='debt-payment'&&linked?linked.id:undefined,
         accountLabel:kind==='debt-payment'?(linked?.name||accountLabel.trim()):undefined,
@@ -115,7 +118,7 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
     }catch(e){setError(e instanceof Error?e.message:'Unable to save payment.');}
   }
   function edit(e:ExpenseEntry){
-    setEditingId(e.id);setDate(e.date);setKind(e.kind);setCategory(e.category);
+    setEditingId(e.id);setDate(e.date);setKind(e.kind);setCategory(e.category);setSubcategory(e.subcategory??'');
     setDescription(e.description);setPaidVia(e.paidVia);setAmount(String(e.amount));
     setLinkedDebtId(e.debtAccountId||'');setAccountLabel(e.accountLabel||'');
     setRemaining(e.remainingBalance===undefined||e.remainingBalance===null?'':String(e.remainingBalance));
@@ -328,18 +331,26 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
             <input required type="date" className={field} value={date} onChange={e=>setDate(e.target.value)}/>
           </label>
           <label className="text-[12px] font-semibold">Entry type
-            <select className={field} value={kind} onChange={e=>{const k=e.target.value as ExpenseKind;setKind(k);setCategory(suggestCategory(k));setRemaining('');setLinkedDebtId('');setSyncDebt(false);}}>
+            <select className={field} value={kind} onChange={e=>{const k=e.target.value as ExpenseKind;setKind(k);setCategory(suggestCategory(k));setSubcategory('');setRemaining('');setLinkedDebtId('');setSyncDebt(false);}}>
               {EXPENSE_KINDS.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
             </select>
           </label>
           <label className="text-[12px] font-semibold">Category
-            <select className={field} value={category} onChange={e=>setCategory(e.target.value as ExpenseCategory)}>
-              {EXPENSE_CATEGORIES.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
+            <select className={field} value={category} onChange={e=>{setCategory(e.target.value as ExpenseCategory);setSubcategory('');}}>
+              {EXPENSE_CATEGORIES.filter(x=>expenseCategoryNeedsSorting(x.value)||allowedSavedCategory(kind,x.value)||x.value===category)
+                .map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
             </select>
           </label>
+          {budgetDetailOptions(kind,category).length>0&&<label className="text-[12px] font-semibold">Detailed category (optional)
+            <select className={field} value={subcategory} onChange={e=>setSubcategory(e.target.value)}
+              aria-label="Detailed spend category">
+              <option value="">Not selected · keep general category</option>
+              {budgetDetailOptions(kind,category).map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+          </label>}
           {category==='unsorted'&&suggestedManualCategory!=='unsorted'&&
             <button type="button" className="min-h-11 self-end rounded-xl border border-primary/30 px-3 text-[12px] font-semibold"
-              onClick={()=>setCategory(suggestedManualCategory)}>
+              onClick={()=>{setCategory(suggestedManualCategory);setSubcategory('');}}>
               Use suggested category: {EXPENSE_CATEGORIES.find(x=>x.value===suggestedManualCategory)?.label}
             </button>}
           <label className="text-[12px] font-semibold">Amount ({currency})
@@ -415,6 +426,16 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
       <div className="mt-3 space-y-2">
         {guidance.map((item,i)=><p key={i} className="flex items-start gap-2 text-[12px] leading-5"><CircleAlert size={16} className="mt-0.5 shrink-0 text-muted-foreground"/>{item}</p>)}
       </div>
+      {analysis.byIncomeCategory.length>0&&<div className="mt-4 border-t border-border pt-3" aria-label="Recorded income categories">
+        <h3 className="text-[12px] font-semibold">Income sources (salary, dividends and interest)</h3>
+        <div className="mt-2 space-y-2">{analysis.byIncomeCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Only income already recorded in your workspace. Declared dividends and accrued interest are not counted as received cash.</p>
+      </div>}
+      {analysis.byTransferCategory.length>0&&<div className="mt-4 border-t border-border pt-3" aria-label="Recorded savings and investment transfers">
+        <h3 className="text-[12px] font-semibold">Savings and investment movements</h3>
+        <div className="mt-2 space-y-2">{analysis.byTransferCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Recorded transfers, not portfolio gains or verified investment value. Confirm beneficiary ownership before approving suggestions.</p>
+      </div>}
       {analysis.byCategory.length>0&&<div className="mt-4 border-t border-border pt-3">
         <h3 className="text-[12px] font-semibold">Largest categories (excluding transfers)</h3>
         <div className="mt-2 space-y-2">{analysis.byCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>

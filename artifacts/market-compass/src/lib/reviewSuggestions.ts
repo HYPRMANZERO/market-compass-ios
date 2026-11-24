@@ -3,6 +3,7 @@ import {isReviewableLine} from './reviewInbox.ts';
 import type {LocalFinanceDocument} from './localFinanceDocs.ts';
 import {suggestKnownSpendCategory,type ExpenseKind,type ExpenseCategory} from './monthlyExpenses.ts';
 import {regionalSalaryNarration} from './regionalSpendRules.ts';
+import {classifyInvestmentNarration} from './investmentNarration.ts';
 import {allowedDocumentCategories} from './reviewedDocumentLedger.ts';
 
 export type PreparedReview={
@@ -19,7 +20,14 @@ export function preparedDocumentReview(
  let category:ExpenseCategory;
  let explanation:string;
  if(line.direction==='outgoing'){
-   if(/\b(?:internal transfer|own account transfer|transfer to savings|savings transfer)\b/i.test(label)){
+   const investment=classifyInvestmentNarration('expense',line.label,region);
+   if(investment?.kind==='transfer'){
+     kind='transfer';
+     category=allowedDocumentCategories('transfer').includes(investment.category)?investment.category:'other';
+     explanation=category==='other'
+       ?'Source debit suggests investment funding. Review as transfer now; choose the exact investment category later in saved-payment review.'
+       :'Source debit explicitly names savings or investment funding; confirm account ownership before approval';
+   }else if(/\b(?:internal transfer|own account transfer|transfer to savings|savings transfer)\b/i.test(label)){
      kind='transfer';category='savings';explanation='Source debit with explicit internal transfer wording';
    }else if(/\b(?:loan repayment|credit card repayment|vehicle loan payment|finance instalment paid)\b/i.test(label)){
      kind='debt-payment';
@@ -45,9 +53,16 @@ export function preparedDocumentReview(
    if(regionalSalaryNarration(label,region)||/\b(?:salary|payroll|wages|payday|net pay)\b/i.test(label)){
      kind='income';category='salary';
      explanation='Source credit with explicit salary wording';
-   }else if(/\b(?:interest received|dividend received|commission earned)\b/i.test(label)){
+   }else if(classifyInvestmentNarration('income',line.label,region)?.kind==='income'){
+     const credited=classifyInvestmentNarration('income',line.label,region)!;
+     kind='income';
+     category=allowedDocumentCategories('income').includes(credited.category)?credited.category:'unsorted';
+     explanation=category==='unsorted'
+       ?'Source credit describes dividends or interest. Confirm cash was posted, then select the detailed category in saved-payment review.'
+       :'Source credit with explicit dividend or interest income wording';
+   }else if(/\b(?:commission earned)\b/i.test(label)){
      kind='income';category='side-income';
-     explanation='Source credit with explicit income wording';
+     explanation='Source credit with explicit commission income wording';
    }else if(/\b(?:internal transfer|own account transfer|transfer from savings)\b/i.test(label)){
      kind='transfer';category='savings';
      explanation='Source credit with explicit internal transfer wording';

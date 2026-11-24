@@ -24,7 +24,7 @@ export type FinancialReadinessInputs={
     liquidFunds?:string;reserveTarget?:string;
   }|null;
   accounts?:{name:string;balance:string;apr:string;minimumPayment:string}[]|null;
-  expenseEntries?:{date:string;kind:string;amount:number}[]|null;
+  expenseEntries?:{date:string;kind:string;amount:number;category?:string;currency?:string}[]|null;
   localFinanceDocuments?:{
     label:string;importedAt:string;truncated:boolean;
     lines:{label:string;amount:number|null;date:string|null;direction:string}[];

@@ -59,7 +59,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
     setMode(result.proposals.length?'suggested':'unresolved');
     setNotice(result.proposals.length
       ?result.proposals.length+' candidate correction(s) found. Inspect each page before approving.'
-      :'Scan complete. No confident automatic matches; inspect the unresolved list.');
+      :'Rescan complete. No confident automatic matches; all unresolved items remain available for manual review.');
   };
   const approve=()=>{
     if(!currentSuggestions.length||stale)return;
@@ -83,8 +83,8 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
     }catch(e){setNotice(e instanceof Error?e.message:'Unable to save the chosen category.');}
   };
   return <section className="mb-4 min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Review uncategorized saved payments">
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <div className="min-w-0 flex-1">
+    <div className="space-y-3">
+      <div className="min-w-0 w-full">
         <h2 className="flex items-center gap-2 text-[14px] font-bold">
           <Filter size={17} className="shrink-0 text-primary"/> Review uncategorized payments
         </h2>
@@ -93,7 +93,9 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
           Payment rails are not categories. All updates require your approval.
         </p>
       </div>
-      <button type="button" onClick={startScan} className={button+' bg-primary text-primary-foreground'} aria-label="Scan saved payments for categories">
+      <button type="button" onClick={startScan}
+        className={button+' w-full justify-center bg-primary text-primary-foreground py-3 sm:w-auto sm:min-w-56'}
+        aria-label="Scan saved payments for categories">
         <RotateCcw size={16}/> Scan saved payments
       </button>
     </div>
@@ -111,6 +113,12 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
         <div className="rounded-xl bg-muted/40 p-2"><strong className="block text-[19px] tabular-nums">{scan.proposals.length}</strong><span className="text-[10px] text-muted-foreground">Suggested</span></div>
         <div className="rounded-xl bg-muted/40 p-2"><strong className="block text-[19px] tabular-nums">{unresolved.length}</strong><span className="text-[10px] text-muted-foreground">Need your decision</span></div>
       </div>
+      <p className="text-[11px] leading-5 text-muted-foreground" aria-live="polite">
+        {scan.alreadyCategorized} records already categorized and protected from this scan.
+        {scan.proposals.length===0&&unresolved.length>0
+          ? ' No confident suggestions were found, but all unresolved entries remain available below for manual categorization.'
+          : ' Proposed corrections are not saved until you approve them.'}
+      </p>
       <div className="grid grid-cols-2 gap-2" role="group" aria-label="Category review mode">
         <button type="button" className={button+(mode==='suggested'?' border-primary bg-primary/10 text-primary':'')}
           aria-pressed={mode==='suggested'} onClick={()=>{setMode('suggested');setPage(0);}}>

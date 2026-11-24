@@ -108,6 +108,31 @@ export default function FinancialReadinessChecklist({data}:Props){
         advice to execute a payment or trade. Missing records never mean R0.
       </p>
       <p className="mt-2 text-[11px] font-medium">{plan.coverage}</p>
+      <div className="mt-3 rounded-xl border border-border bg-muted/30 p-3" aria-live="polite">
+        <p className="text-[12px] font-semibold">Saved-category progress · updates after approval</p>
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          {plan.ledgerCoverage.categorized} of {plan.ledgerCoverage.count} saved transactions categorized;
+          {' '}{plan.ledgerCoverage.unresolved} still need review, across all recorded dates.
+          Older transactions count toward review progress, not today's available funds.
+        </p>
+        {plan.ledgerSnapshot?<p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Current salary cycle {plan.ledgerSnapshot.start} to {plan.ledgerSnapshot.end}:
+          {' '}{plan.ledgerSnapshot.categorized} of {plan.ledgerSnapshot.count} categorized;
+          {' '}{plan.ledgerSnapshot.unresolved} unresolved.
+          Recorded income {data.currency} {plan.ledgerSnapshot.income.toFixed(2)},
+          expenses {data.currency} {plan.ledgerSnapshot.spending.toFixed(2)},
+          debt payments {data.currency} {plan.ledgerSnapshot.debtPayments.toFixed(2)},
+          savings/investment and other transfers {data.currency} {plan.ledgerSnapshot.transfers.toFixed(2)}.
+          These are partial local records, not bank-verified totals.
+        </p>:<p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          No currency-matched saved transactions for the current 26th–25th salary cycle.
+          Current income, spending and cash flow remain unknown rather than zero.
+        </p>}
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Approving a category updates this snapshot automatically. It does not overwrite
+          your separate Debt Plan income, essentials, balances or cash-reserve inputs.
+        </p>
+      </div>
       <div className="mt-3 space-y-3">
         {plan.steps.map(step=><div key={step.period} className="rounded-lg bg-muted/50 p-3">
           <h3 className="text-[12px] font-semibold">{step.period} · {step.title}</h3>
