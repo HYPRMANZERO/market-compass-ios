@@ -1,0 +1,52 @@
+name: Compass editions and Personal tools
+on:
+  push:
+    branches: [feature/personal-tool-deck-and-edition-gates-20261124]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  editions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test Personal tool isolation, finance workflows and privacy
+        run: node --experimental-strip-types --test tests/*.test.mjs
+      - name: Typecheck shared libraries and PWA
+        run: |
+          pnpm run typecheck:libs
+          pnpm --filter @workspace/market-compass run typecheck
+      - name: Build original Personal edition
+        env:
+          BASE_PATH: /market-compass-ios/
+          VITE_MC_EDITION: personal
+          NODE_ENV: production
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          node scripts/prepare-offline-shell.mjs
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('artifacts/market-compass/dist/public/manifest.webmanifest','utf8'));if(m.name!=='Compass Personal')process.exit(1)"
+      - name: Build Finance edition in isolated staging directory
+        env:
+          BASE_PATH: /market-compass-ios/
+          VITE_MC_EDITION: finance
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+          NODE_ENV: production
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          node scripts/prepare-offline-shell.mjs
+          node -e "const fs=require('fs');const p='.release/finance';const m=JSON.parse(fs.readFileSync(p+'/manifest.webmanifest','utf8'));const h=fs.readFileSync(p+'/index.html','utf8');if(m.name!=='Compass Financial Advisor'||!h.includes('<title>Compass Financial Advisor</title>'))process.exit(1)"
+      - name: Preserve Finance build for owner-reviewed protected deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-finance-candidate
+          path: .release/finance
+          retention-days: 7
