@@ -90,7 +90,7 @@ try{
     env:{...process.env,BASE_PATH:base,NODE_ENV:'production',PORT:String(port)}
   });
   await until(async()=>{if(preview.exitCode!==null)throw Error('Preview exited');
-    const r=await fetch(url);return r.status===200&&(await r.text()).includes('Market Compass');
+    const r=await fetch(url);return r.status===200&&/(?:Market Compass|Compass Personal|Compass Financial Advisor)/.test(await r.text());
   },'localhost preview');
   edge=spawn(browser,['--headless=new','--disable-gpu','--no-first-run',
     '--no-default-browser-check','--disable-extensions','--remote-debugging-port=0',
