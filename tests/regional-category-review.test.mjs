@@ -2,15 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
-  scanSavedCategories,applySavedCategoryChanges,categoryReviewPage
+  scanSavedCategories,applySavedCategoryChanges,categoryReviewPage,allowedSavedCategory
 } from '../artifacts/market-compass/src/lib/savedCategoryReview.ts';
 import {matchRegionalCategory,regionalPackInfo,regionalSalaryNarration}
   from '../artifacts/market-compass/src/lib/regionalSpendRules.ts';
 import {cycleAnalysis,EXPENSE_CATEGORIES,suggestKnownSpendCategory}
   from '../artifacts/market-compass/src/lib/monthlyExpenses.ts';
-import {suggestDocumentClassification} from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
+import {suggestRegionalDocumentClassification as suggestDocumentClassification} from '../artifacts/market-compass/src/lib/regionalDocumentReview.ts';
 import {preparedDocumentReview} from '../artifacts/market-compass/src/lib/reviewSuggestions.ts';
 import {REGIONS} from '../artifacts/market-compass/src/lib/regions.ts';
+import {allowedDocumentCategories} from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
 
 const row=(id,description,kind='expense',category='other',currency='ZAR')=>({
   id,description,kind,category,amount:119.75,date:'2026-11-25',
@@ -155,6 +156,26 @@ test('new manual entries and imported-document suggestions use the selected regi
   const spanishCredit={...outgoing,label:'NOMINA NOVIEMBRE',direction:'incoming'};
   assert.equal(suggestDocumentClassification(spanishCredit,'ES')?.category,'salary');
   assert.equal(preparedDocumentReview({...doc,lines:[spanishCredit]},0,'ES')?.category,'salary');
+});
+test('protected document importer remains narrow while saved ledger can review extra categories',()=>{
+  const pet={label:'Pet food shop',date:'2026-11-21',direction:'outgoing',
+    amount:35.8,semanticRole:'transaction'};
+  const proposed=suggestDocumentClassification(pet,'ZA');
+  assert.deepEqual(proposed,{kind:'expense',category:'unsorted'},
+    'new category not allowed by protected doc posting requires later saved-ledger review');
+  const doc={id:'synthetic-pet',label:'Test statement',format:'csv',
+    importedAt:'2026-11-24T00:00:00Z',lines:[pet]};
+  assert.equal(preparedDocumentReview(doc,0,'ZA')?.category,'other');
+});
+test('stored-ledger approval supports new categories without editing protected import rules',()=>{
+  assert.equal(allowedSavedCategory('expense','shopping'),true);
+  assert.equal(allowedSavedCategory('expense','pets'),true);
+  assert.equal(allowedSavedCategory('expense','cash'),false);
+  assert.equal(allowedSavedCategory('income','shopping'),false);
+  assert.equal(allowedSavedCategory('transfer','investments'),true);
+  assert.equal(allowedSavedCategory('debt-payment','personal-loan'),true);
+  assert.equal(allowedDocumentCategories('expense').includes('shopping'),false,
+    'financial-core import allowlist must remain untouched');
 });
 test('all category proposal amounts retain their original currency',()=>{
   const rows=[row('zar','Bank account service fee','expense','other','ZAR'),

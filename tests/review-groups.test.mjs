@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {groupedDocumentReview} from '../artifacts/market-compass/src/lib/reviewGroups.ts';
+import {reviewInbox} from '../artifacts/market-compass/src/lib/reviewInbox.ts';
 const doc=(id,importedAt,needsReview,approved=0)=>({id,label:id,format:'pdf',importedAt,
   needsReview,approved,reviewable:needsReview+approved,undated:0,referenceOnly:0,
   otherCurrencyUnverified:true});
@@ -35,6 +36,19 @@ test('Source-dated statements group by reporting period rather than upload date'
   assert.equal(groups[2].month,'Imported 2026-11');
 });
 
+test('unmodified document parser can group real extracted dated rows without new schema',()=>{
+ const document={id:'dated-source',label:'Synthetic statement',format:'csv',
+   importedAt:'2026-11-23T10:00:00Z',lines:[
+     {label:'Groceries',amount:95.12,date:'2026-09-26',semanticRole:'transaction',direction:'outgoing'},
+     {label:'Utility',amount:51.04,date:'2026-10-25',semanticRole:'transaction',direction:'outgoing'}
+   ]};
+ const inbox=reviewInbox([document],[]);
+ const groups=groupedDocumentReview(inbox.items);
+ assert.equal(groups.length,1);
+ assert.equal(groups[0].month,'2026-09 to 2026-10');
+ assert.equal(groups[0].basis,'source-period');
+ assert.equal(groups[0].needsReview,2);
+});
 test('Invalid source date evidence is not trusted as a reporting period',()=>{
   const groups=groupedDocumentReview([
     {...doc('invalid','2026-11-04T00:00:00Z',2),

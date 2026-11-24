@@ -3,6 +3,7 @@ import {isReviewableLine} from './reviewInbox.ts';
 import type {LocalFinanceDocument} from './localFinanceDocs.ts';
 import {suggestKnownSpendCategory,type ExpenseKind,type ExpenseCategory} from './monthlyExpenses.ts';
 import {regionalSalaryNarration} from './regionalSpendRules.ts';
+import {allowedDocumentCategories} from './reviewedDocumentLedger.ts';
 
 export type PreparedReview={
  date:string;kind:ExpenseKind;category:ExpenseCategory;
@@ -28,7 +29,7 @@ export function preparedDocumentReview(
    }else{
      kind='expense';
      const regionCategory=suggestKnownSpendCategory('expense',label,region);
-     category=regionCategory!=='unsorted'?regionCategory:
+     category=regionCategory!=='unsorted'&&allowedDocumentCategories('expense').includes(regionCategory)?regionCategory:
        /\b(?:rent|housing|landlord)\b/.test(label)?'housing':
        /\b(?:grocery|groceries|supermarket|food store)\b/.test(label)?'groceries':
        /\b(?:petrol|diesel|fuel|transport|uber)\b/.test(label)?'transport':

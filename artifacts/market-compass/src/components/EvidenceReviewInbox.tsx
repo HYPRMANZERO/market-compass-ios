@@ -52,7 +52,7 @@ export default function EvidenceReviewInbox({documents,entries,currency,currency
    </p>}
    {summary.documents>0&&<details className="mt-3 rounded-xl border border-border px-3 py-3" aria-label="Grouped document review by source period">
      <summary className="cursor-pointer text-[12px] font-semibold">Review groups · financial periods</summary>
-     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Source dates come from explicit document periods or dated excerpts. Undated files are grouped separately by import month. A source period or as-of date is not proof that a payment occurred; approval remains in Spend.</p>
+     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Source groups use dated transaction excerpts when available. Undated files are grouped separately by import month. Reporting periods and as-of references are not proof that a payment occurred; approval remains in Spend.</p>
      <div className="mt-3 space-y-2">{groupedDocumentReview(summary.items).map(group=><details key={group.month} className="rounded-xl bg-muted/40 p-3">
        <summary className="cursor-pointer text-[12px] font-semibold">{group.month} · {group.documents.length} files · {group.needsReview} excerpts to check</summary>
        <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{group.basis==='source-period'?'Source-dated history (not a posting date)':group.basis==='as-of'?'As-of reference (not a transaction date)':group.basis==='imported'?'Imported in this month; source period unavailable':'Source and import dates unavailable'}</p>

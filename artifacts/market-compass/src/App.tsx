@@ -11,9 +11,8 @@ import PersonalTaskBoard from '@/components/PersonalTaskBoard';
 import { normalizePersonalTasks, type PersonalTask } from '@/lib/personalTasks';
 import { currentAssistantEdition } from '@/lib/assistantEdition';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
-import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
+import {applySavedCategoryChanges,allowedSavedCategory} from '@/lib/savedCategoryReview';
 import {expenseCategoryNeedsSorting} from '@/lib/monthlyExpenses';
-import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
@@ -1179,7 +1178,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           onManualCategorize={(entryId,category)=>setData(old=>{
             const original=(old.expenseEntries??[]).find(item=>item.id===entryId);
             if(!original||!expenseCategoryNeedsSorting(original.category)||
-               !allowedDocumentCategories(original.kind).includes(category))return old;
+               !allowedSavedCategory(original.kind,category))return old;
             return {...old,expenseEntries:old.expenseEntries.map(item=>item.id===entryId?{...item,category}:item)};
           })}/>
         <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>

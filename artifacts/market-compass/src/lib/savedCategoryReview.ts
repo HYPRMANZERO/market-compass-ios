@@ -102,6 +102,21 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
  return null;
 }
 
+/** Saved, already-approved transactions may use a wider category taxonomy
+ * than a new financial-document approval. The parser's protected category
+ * allowlist remains unchanged; this review only relabels stored ledger items.
+ */
+export function allowedSavedCategory(kind:ExpenseKind,category:ExpenseCategory):boolean{
+ if(category==='other'||category==='unsorted')return false;
+ if(kind==='income')return ['salary','side-income'].includes(category);
+ if(kind==='debt-payment')
+   return ['car','credit-card','personal-loan','housing','education'].includes(category);
+ if(kind==='transfer')return ['savings','cash','investments'].includes(category);
+ if(kind==='expense')
+   return !['salary','side-income','personal-loan','savings','cash','investments'].includes(category);
+ return false;
+}
+
 /** Paginate a deterministic snapshot, including the final partial page. */
 export function categoryReviewPage<T>(items:readonly T[],requestedPage:number,pageSize=8){
  const safeSize=Number.isInteger(pageSize)&&pageSize>0&&pageSize<=100?pageSize:8;

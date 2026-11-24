@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {CheckCircle2,ChevronLeft,ChevronRight,Filter,RotateCcw,ShieldCheck} from 'lucide-react';
 import type {ExpenseCategory,ExpenseEntry} from '@/lib/monthlyExpenses';
 import {EXPENSE_CATEGORIES,EXPENSE_KINDS,expenseCategoryNeedsSorting} from '@/lib/monthlyExpenses';
-import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
+import {allowedSavedCategory} from '@/lib/savedCategoryReview';
 import {
   scanSavedCategories,categoryReviewPage,type SavedCategoryScan,type SavedCategorySuggestion
 } from '@/lib/savedCategoryReview';
@@ -73,7 +73,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
   };
   const saveManual=(entry:ExpenseEntry)=>{
     const category=manualChoices[entry.id];
-    if(!category||!allowedDocumentCategories(entry.kind).includes(category)){
+    if(!category||!allowedSavedCategory(entry.kind,category)){
       setNotice('Choose a valid category first.');return;
     }
     try{
@@ -156,7 +156,7 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
                   aria-label={'Manual category for '+maskDocumentPII(entry.description)}
                   className="mt-1 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-[16px]">
                   <option value="">Choose category</option>
-                  {EXPENSE_CATEGORIES.filter(c=>c.value!=='other'&&c.value!=='unsorted'&&allowedDocumentCategories(entry.kind).includes(c.value))
+                  {EXPENSE_CATEGORIES.filter(c=>c.value!=='other'&&c.value!=='unsorted'&&allowedSavedCategory(entry.kind,c.value))
                     .map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </label>

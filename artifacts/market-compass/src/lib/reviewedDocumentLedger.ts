@@ -26,9 +26,9 @@ const allowedKinds=new Set<ExpenseKind>(['income','expense','debt-payment','tran
 const categoryValues=new Set<ExpenseCategory>(EXPENSE_CATEGORIES.map(c=>c.value));
 const validCategories:Record<ExpenseKind,ExpenseCategory[]>={
   income:['salary','side-income','unsorted'],
-  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','dining','pets','personal-care','taxes','education','childcare','travel','shopping','entertainment','donations','business','car','credit-card','other','unsorted'],
-  'debt-payment':['car','credit-card','personal-loan','housing','education','other','unsorted'],
-  transfer:['savings','cash','investments','other','unsorted']
+  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','car','credit-card','other','unsorted'],
+  'debt-payment':['car','credit-card','housing','other','unsorted'],
+  transfer:['savings','other','unsorted']
 };
 export function allowedDocumentCategories(kind:ExpenseKind):ExpenseCategory[]{
   return validCategories[kind]??[];
@@ -50,21 +50,21 @@ export function documentRowBlockReason(doc:LocalFinanceDocument,line:LocalFinanc
 
 /** Source direction and ledger treatment are separate. Transfers and reversals
  * need their own evidence before they can affect income or expense totals. */
-export function suggestDocumentClassification(line:LocalFinanceLine,region='ZA'):
+export function suggestDocumentClassification(line:LocalFinanceLine):
   Pick<ReviewedLedgerDecision,'kind'|'category'>|null{
   if(line.direction==='unclassified')return null;
   const description=line.label.toLowerCase();
   if(/\b(?:own account|between my accounts|internal transfer|transfer to savings)\b/.test(description))
-    return {kind:'transfer',category:suggestKnownSpendCategory('transfer',description,region)};
+    return {kind:'transfer',category:suggestKnownSpendCategory('transfer',description)};
   if(/\b(?:refund|reversal|reversed|chargeback|transfer|payment from|payshap|eft)\b/.test(description)&&
      !/\b(?:fee|fees|salary|payroll|wages)\b/.test(description))return null;
   if(line.direction==='incoming')return {kind:'income',
-    category:suggestKnownSpendCategory('income',description,region)};
+    category:suggestKnownSpendCategory('income',description)};
   // A source debit can be contractual debt repayment, not living expenses.
   // Confirm the suggested type before posting; no lender balance is changed.
   if(/\b(?:car (?:loan|instalment|installment|repayment)|vehicle finance|credit card (?:repayment|payment)|card repayment)\b/.test(description))
-    return {kind:'debt-payment',category:suggestKnownSpendCategory('debt-payment',description,region)};
-  return {kind:'expense',category:suggestKnownSpendCategory('expense',description,region)};
+    return {kind:'debt-payment',category:suggestKnownSpendCategory('debt-payment',description)};
+  return {kind:'expense',category:suggestKnownSpendCategory('expense',description)};
 }
 export function documentAppliedIndices(doc:LocalFinanceDocument,existing:ExpenseEntry[]):Set<number>{
   const ids=new Set(existing.map(e=>e.id));
