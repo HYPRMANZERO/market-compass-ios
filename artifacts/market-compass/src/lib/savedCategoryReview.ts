@@ -18,6 +18,14 @@ export type SavedCategoryScan={
 const result=(kind:ExpenseKind,category:ExpenseCategory,reason:string)=>({kind,category,reason});
 type Proposal=ReturnType<typeof result>;
 const status=/\b(?:refund(?:ed)?|revers(?:al|ed)|chargeback|disput(?:e|ed)|failed|declined|pending|cancelled|quotation|request to pay|mandate approved|mandate request|unpaid|unsuccessful)\b/;
+// A posted *fee for* a failed POS transaction is still a bank fee. Do not
+// mistake the declined purchase for a completed charge, or classify reversals.
+const explicitBankFee=/\b(?:fee (?:electronic|pos|debit|atm|account|service|transaction)|pos (?:declined|failed) (?:insuff|insufficient) funds fee|insuff(?:icient)? funds fee|electronic account (?:payment )?fee)\b/;
+const feeStatusReversal=/\b(?:refund(?:ed)?|revers(?:al|ed)|chargeback|disput(?:e|ed)|pending|cancelled|quotation|mandate approved|mandate request)\b/;
+const postedFailedPosFee=/\bfee\b.*\b(?:pos|card)\b.*\b(?:declined|failed)\b.*\b(?:insuff|insufficient)\b/;
+const virtualCardLoad=/\b(?:value loaded to virtual card|load(?:ed|ing)? (?:to |onto )?(?:my |own )?(?:virtual|prepaid) card|top up (?:my |own )?(?:virtual|prepaid) card|prepaid card top up)\b/;
+const absaVehicleFinance=/\babsa vf\b/;
+const rentReference=/\brent\s+(?:ib |eft |bank )?(?:payment|transfer|paid|ib)\b|\brent\b.*\b(?:payment to|rent due)\b/;
 const ownTransfer=/\b(?:own account transfer|transfer (?:to|from) (?:my |own )?savings|internal transfer|savings (?:pocket|transfer)|move to savings|transfer to investment account|transfer to brokerage account)\b/;
 const investmentTransfer=/\b(?:transfer to investment account|transfer to brokerage account|transfer to trading account|investments savings transfer)\b/;
 const cashWithdrawal=/\b(?:atm cash withdrawal|cash withdrawal from atm|atm withdrawal|cash withdrawn from atm)\b/;
@@ -40,7 +48,7 @@ const genericMethod=/^(?:(?:pos|card|debit card|contactless|merchant|point of sa
 
 function classify(entry:ExpenseEntry,region:string):Proposal|null{
  const basic=normalizeFinancialNarration(entry.description);
- if(!basic||status.test(basic))return null;
+ if(!basic||(status.test(basic)&&!(postedFailedPosFee.test(basic)&&!feeStatusReversal.test(basic))))return null;
  const match=(pattern:RegExp)=>pattern.test(basic);
  const own=match(ownTransfer);
  if(entry.kind==='income'){
@@ -61,7 +69,7 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
    if(match(creditCard))return result('debt-payment','credit-card','Explicit credit-card repayment');
    if(match(mortgage))return result('debt-payment','housing','Explicit home-loan/mortgage repayment');
    if(match(studentLoan))return result('debt-payment','education','Explicit education-loan repayment');
-   if(match(carFinance)&&match(debtWord))return result('debt-payment','car','Explicit vehicle-finance instalment');
+   if((match(carFinance)||(region==='ZA'&&match(absaVehicleFinance)))&&match(debtWord))return result('debt-payment','car','Explicit vehicle-finance instalment');
    if(match(personalLoan)&&match(personalLoanDebit))
      return result('debt-payment','personal-loan','Explicit personal loan repayment');
    if(region==='ZA'&&match(/\bcapfin\b/)&&match(/\b(?:debi check|debit check|debit order|repayment|instalment|installment|payment)\b/))
@@ -73,7 +81,7 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
  if(match(mortgage))return result('debt-payment','housing','Explicit mortgage repayment');
  if(match(studentLoan))return result('debt-payment','education','Explicit education-loan repayment');
  if(match(creditCard))return result('debt-payment','credit-card','Explicit credit-card repayment');
- if(match(carFinance)&&match(debtWord))return result('debt-payment','car','Explicit vehicle-finance repayment');
+ if((match(carFinance)||(region==='ZA'&&match(absaVehicleFinance)))&&match(debtWord))return result('debt-payment','car','Explicit vehicle-finance repayment; check the bank debit cleared');
  if(match(personalLoan)&&match(personalLoanDebit))
    return result('debt-payment','personal-loan','Explicit personal loan repayment');
  if(region==='ZA'&&match(/\bcapfin\b/)&&match(/\b(?:debi check|debit check|debit order|repayment|instalment|installment|payment)\b/))
@@ -83,6 +91,9 @@ function classify(entry:ExpenseEntry,region:string):Proposal|null{
    // Ambiguous providers are deliberately left for manual review.
    return null;
  }
+ if(match(explicitBankFee))return result('expense','fees','Explicit bank account or unsuccessful POS fee; this does not imply the declined purchase succeeded');
+ if(match(rentReference))return result('expense','housing','Rent specified in bank payment narration');
+ if(match(virtualCardLoad))return result('transfer','card-load','Funds loaded to a virtual/prepaid card; verify ownership before excluding from spending');
  // A fee on an ATM withdrawal is an expense; an actual cash withdrawal is
  // a transfer to physical cash. Do not bundle either with unspecified ATM text.
  const category=matchRegionalCategory(basic,region);
@@ -111,7 +122,7 @@ export function allowedSavedCategory(kind:ExpenseKind,category:ExpenseCategory):
  if(kind==='income')return ['salary','side-income'].includes(category);
  if(kind==='debt-payment')
    return ['car','credit-card','personal-loan','housing','education'].includes(category);
- if(kind==='transfer')return ['savings','cash','investments'].includes(category);
+ if(kind==='transfer')return ['savings','cash','investments','card-load'].includes(category);
  if(kind==='expense')
    return !['salary','side-income','personal-loan','savings','cash','investments'].includes(category);
  return false;
