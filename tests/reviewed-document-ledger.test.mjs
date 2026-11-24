@@ -89,7 +89,10 @@ test('the iPhone interface offers explicit consent, saved excerpt and Spend inte
  assert.match(imported,/<ReviewedDocumentLedger/);
  assert.match(app,/onApplyEntries=\{approved=>setData\(/);
  assert.doesNotMatch(component,/fetch\(|sendBeacon|postMessage\(/);
- assert.deepEqual(allowedDocumentCategories('income'),['salary','side-income','unsorted']);
+ assert.deepEqual(allowedDocumentCategories('income'),['salary','side-income','dividends','interest','unsorted']);
+ assert.deepEqual(allowedDocumentCategories('transfer'),['savings','investments','other','unsorted']);
+ // New income categories still require an explicit, dated bank-credit review;
+ // the document importer cannot automatically post a declared dividend.
 });
 
 test('unknown descriptions remain Unsorted with optional review and never auto-post',()=>{

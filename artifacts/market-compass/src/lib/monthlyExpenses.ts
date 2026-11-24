@@ -1,7 +1,8 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 import {matchRegionalCategory,regionalSalaryNarration} from './regionalSpendRules.ts';
+import {classifyInvestmentNarration} from './investmentNarration.ts';
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
-export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'card-load' | 'savings' | 'other' | 'unsorted';
+export type ExpenseCategory = 'salary' | 'side-income' | 'dividends' | 'interest' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'card-load' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
   id: string;
   date: string;
@@ -29,6 +30,7 @@ export const DEFAULT_EXPENSE_SETTINGS: ExpenseSettings = {
 };
 export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'salary',label:'Salary'},{value:'side-income',label:'Other income'},
+  {value:'dividends',label:'Dividends received'},{value:'interest',label:'Interest earned'},
   {value:'car',label:'Car installment'},{value:'credit-card',label:'Credit card repayment'},{value:'personal-loan',label:'Personal loan repayment'},
   {value:'housing',label:'Housing / board'},{value:'groceries',label:'Groceries and food'},
   {value:'transport',label:'Fuel and transport'},{value:'utilities',label:'Utilities'},
@@ -40,9 +42,9 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'childcare',label:'Childcare'},{value:'travel',label:'Travel and holidays'},
   {value:'shopping',label:'Shopping and retail'},{value:'entertainment',label:'Entertainment'},
   {value:'donations',label:'Charity and donations'},{value:'business',label:'Business expenses'},
-  {value:'cash',label:'Cash withdrawal'},{value:'investments',label:'Investment transfers'},
+  {value:'cash',label:'Cash withdrawal'},{value:'investments',label:'Investments / brokerage funding'},
   {value:'card-load',label:'Prepaid / virtual card loads'},
-  {value:'savings',label:'Savings transfer'},{value:'other',label:'Other expense'},
+  {value:'savings',label:'Savings / deposits'},{value:'other',label:'Other expense'},
   {value:'unsorted',label:'Unsorted · needs category'},
 ];
 export const EXPENSE_KINDS: {value:ExpenseKind;label:string}[] = [
@@ -55,6 +57,8 @@ export const EXPENSE_KINDS: {value:ExpenseKind;label:string}[] = [
  * These suggestions never write to the ledger until the owner approves.
  */
 export function suggestKnownSpendCategory(kind:ExpenseKind,description:string,region='ZA'):ExpenseCategory{
+  const investment=classifyInvestmentNarration(kind,description,region);
+  if(investment&&investment.kind===kind)return investment.category;
   const text=description.toLowerCase().replace(/\s+/g,' ');
   if(kind==='income'){
     if(regionalSalaryNarration(description,region))return 'salary';
@@ -181,6 +185,14 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
       (e.kind==='expense'||e.kind==='debt-payment')).reduce((a,e)=>a+e.amount,0),
   })).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
   // Payment-app totals only represent manually recorded outflows, not bank feeds.
+  const byIncomeCategory=EXPENSE_CATEGORIES.map(c=>({
+    category:c.value,label:c.label,
+    amount:within.filter(e=>e.kind==='income'&&e.category===c.value).reduce((a,e)=>a+e.amount,0),
+  })).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
+  const byTransferCategory=EXPENSE_CATEGORIES.map(c=>({
+    category:c.value,label:c.label,
+    amount:within.filter(e=>e.kind==='transfer'&&e.category===c.value).reduce((a,e)=>a+e.amount,0),
+  })).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount);
   const byPaymentMethod=Object.values(within.filter(e=>e.kind==='expense'||e.kind==='debt-payment')
     .reduce<Record<string,{app:string;amount:number;count:number}>>((acc,e)=>{
       const key=e.paidVia.trim().toLowerCase();
@@ -204,7 +216,7 @@ export function cycleAnalysis(entries:ExpenseEntry[], cycleStart:string, currenc
     .filter((e,i,arr)=>arr.findIndex(x=>(x.accountLabel||x.category)===(e.accountLabel||e.category))===i)
     .map(e=>({account:e.accountLabel||e.category,balance:e.remainingBalance!,date:e.date}));
   return {cycle:salaryCycle(cycleStart),count:within.length,income,expenses,debtPayments,transfers,outflow,
-    recordedDifference:income-outflow,budget,percent,byCategory,byPaymentMethod,flags,latestBalances,
+    recordedDifference:income-outflow,budget,percent,byCategory,byIncomeCategory,byTransferCategory,byPaymentMethod,flags,latestBalances,
     unsortedCount:unsorted.length,unsortedOutflow,unsortedIncome};
 }
 

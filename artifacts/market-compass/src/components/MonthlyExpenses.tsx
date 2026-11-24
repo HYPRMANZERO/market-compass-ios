@@ -4,6 +4,7 @@ import { localDate } from '@/lib/dailyBackup';
 import SalaryPush from './SalaryPush';
 import {Link} from 'wouter';
 import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
+import {allowedSavedCategory} from '@/lib/savedCategoryReview';
 import {privateTailnetOrigin} from '@/lib/privateTailnetUrl';
 import {buildSpendCoachingRequest} from '@/lib/spendAiGuidance';
 import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
@@ -334,7 +335,8 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
           </label>
           <label className="text-[12px] font-semibold">Category
             <select className={field} value={category} onChange={e=>setCategory(e.target.value as ExpenseCategory)}>
-              {EXPENSE_CATEGORIES.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
+              {EXPENSE_CATEGORIES.filter(x=>expenseCategoryNeedsSorting(x.value)||allowedSavedCategory(kind,x.value)||x.value===category)
+                .map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
             </select>
           </label>
           {category==='unsorted'&&suggestedManualCategory!=='unsorted'&&
@@ -415,6 +417,16 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
       <div className="mt-3 space-y-2">
         {guidance.map((item,i)=><p key={i} className="flex items-start gap-2 text-[12px] leading-5"><CircleAlert size={16} className="mt-0.5 shrink-0 text-muted-foreground"/>{item}</p>)}
       </div>
+      {analysis.byIncomeCategory.length>0&&<div className="mt-4 border-t border-border pt-3" aria-label="Recorded income categories">
+        <h3 className="text-[12px] font-semibold">Income sources (salary, dividends and interest)</h3>
+        <div className="mt-2 space-y-2">{analysis.byIncomeCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Only income already recorded in your workspace. Declared dividends and accrued interest are not counted as received cash.</p>
+      </div>}
+      {analysis.byTransferCategory.length>0&&<div className="mt-4 border-t border-border pt-3" aria-label="Recorded savings and investment transfers">
+        <h3 className="text-[12px] font-semibold">Savings and investment movements</h3>
+        <div className="mt-2 space-y-2">{analysis.byTransferCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Recorded transfers, not portfolio gains or verified investment value. Confirm beneficiary ownership before approving suggestions.</p>
+      </div>}
       {analysis.byCategory.length>0&&<div className="mt-4 border-t border-border pt-3">
         <h3 className="text-[12px] font-semibold">Largest categories (excluding transfers)</h3>
         <div className="mt-2 space-y-2">{analysis.byCategory.map(x=><div key={x.category} className="flex justify-between gap-3 text-[12px]"><span>{x.label}</span><strong>{cash(x.amount,currency)}</strong></div>)}</div>

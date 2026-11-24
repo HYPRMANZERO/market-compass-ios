@@ -25,10 +25,10 @@ export const documentLedgerEntryId=(documentId:string,lineIndex:number)=>
 const allowedKinds=new Set<ExpenseKind>(['income','expense','debt-payment','transfer']);
 const categoryValues=new Set<ExpenseCategory>(EXPENSE_CATEGORIES.map(c=>c.value));
 const validCategories:Record<ExpenseKind,ExpenseCategory[]>={
-  income:['salary','side-income','unsorted'],
-  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','car','credit-card','other','unsorted'],
+  income:['salary','side-income','dividends','interest','unsorted'],
+  expense:['housing','groceries','transport','utilities','insurance','fees','subscriptions','health','car','credit-card','taxes','other','unsorted'],
   'debt-payment':['car','credit-card','housing','other','unsorted'],
-  transfer:['savings','other','unsorted']
+  transfer:['savings','investments','other','unsorted']
 };
 export function allowedDocumentCategories(kind:ExpenseKind):ExpenseCategory[]{
   return validCategories[kind]??[];
