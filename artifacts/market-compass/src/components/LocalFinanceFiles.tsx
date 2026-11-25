@@ -8,6 +8,9 @@ import {classifyDocument,maskDocumentPII} from '@/lib/documentIntelligence';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {documentAppliedIndices} from '@/lib/reviewedDocumentLedger';
 import {importFinanceBatch} from '@/lib/batchFinanceImport';
+import {
+  importRecoveryAdvice,safeImportFailures,type ImportRecoveryFailure
+} from '@/lib/documentImportRecovery';
 import {buildPayrollHistory} from '@/lib/earningsHistory';
 import {
   extractLocalFinanceDocument,validateLocalFinanceDocument,
@@ -55,6 +58,9 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
   const [reviewIndex,setReviewIndex]=useState(0);
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
+  // Only ordinal positions and generic failure codes, never filenames,
+  // passwords, raw parser exceptions or document bytes.
+  const [recoveryFailures,setRecoveryFailures]=useState<ImportRecoveryFailure[]>([]);
   const safe=documents.map(validateLocalFinanceDocument)
     .filter((x):x is LocalFinanceDocument=>x!==null);
   const [batchProgress,setBatchProgress]=useState({file:0,total:0});
@@ -70,7 +76,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       return undefined;
     }
     setPreview(null);setRemaining([]);setReviewIndex(0);setBatchCount(0);
-    setFeedback('');setError('');
+    setFeedback('');setError('');setRecoveryFailures([]);
     setReading(true);
     setProgress({page:0,total:0,stage:'reading'});
     setBatchProgress({file:0,total:files.length});
@@ -91,6 +97,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       setPreview(result.drafts[0]??null);
       setRemaining(result.drafts.slice(1));
       setBatchCount(result.drafts.length);
+      setRecoveryFailures(safeImportFailures(result.failures));
       const notes=[result.drafts.length+' ready for individual owner review'];
       if(result.duplicateCount)notes.push(result.duplicateCount+' duplicate(s) skipped');
       if(result.failedCount)notes.push(result.failedCount+' file(s) could not be read');
@@ -101,7 +108,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         'No documents are ready. Check whether PDFs require the shared local password and select those files again.');
       return result;
     }catch(e){
-      setError(e instanceof Error?e.message:'Batch processing failed locally; nothing was saved.');
+      setError('Batch processing stopped. Check that the selected files are readable and retry. Nothing was automatically recorded.');
+      setRecoveryFailures([]);
       return undefined;
     }finally{
       temporaryPassword='';
@@ -247,6 +255,28 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       {remaining.length>0&&<button type="button" onClick={()=>{setPreview(null);setRemaining([]);setFeedback('Remaining batch discarded; no additional documents saved.');}}
         className="min-h-11 w-full rounded-xl border border-border px-4 text-[12px] font-medium">Discard remaining previews</button>}
     </section>}
+    {recoveryFailures.length>0&&<details className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3"
+      aria-label="Unimported document recovery guidance" open>
+      <summary className="min-h-9 cursor-pointer text-[12px] font-semibold">
+        {recoveryFailures.length} document(s) need attention
+      </summary>
+      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+        Listed by selection position only. No file names, passwords, contents or parser errors
+        are stored in this report. The originals remain on your device.
+      </p>
+      <ul className="mt-2 space-y-2">
+        {recoveryFailures.map((failure,i)=>{
+          const advice=importRecoveryAdvice(failure.code);
+          return <li key={i} className="rounded-lg border border-border bg-card px-3 py-2 text-[11px] leading-5">
+            <strong>Selected file {failure.index}: {advice.label}</strong>
+            <p className="text-muted-foreground">{advice.nextStep}</p>
+          </li>;
+        })}
+      </ul>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Retry only the affected files. Previously reviewed documents and saved Spend entries were not reset.
+      </p>
+    </details>}
     {error&&<p role="alert" className="mt-2 text-[12px] text-destructive">{error}</p>}
     {feedback&&<p role="status" className="mt-2 text-[12px] text-muted-foreground">{feedback}</p>}
     <HistoricalEarnings documents={safe} entries={ledgerEntries}/>
