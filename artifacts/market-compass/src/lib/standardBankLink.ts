@@ -32,11 +32,14 @@ export function validStandardBankRedirect(value:unknown):string|null{
   if(typeof value!=='string'||value.length>4000)return null;
   try{
     const url=new URL(value);
+    const state=url.searchParams.getAll('state'),challenge=url.searchParams.getAll('code_challenge');
+    const method=url.searchParams.getAll('code_challenge_method'),responseType=url.searchParams.getAll('response_type');
     if(url.protocol!=='https:'||!BANK_HOST.test(url.hostname)||url.username||url.password||
-       url.port||url.hash||url.pathname==='/'||!url.searchParams.has('state')||
-       !url.searchParams.has('code_challenge')||
-       url.searchParams.get('code_challenge_method')!=='S256'||
-       url.searchParams.get('response_type')!=='code')return null;
+       url.port||url.hash||url.pathname==='/'||
+       state.length!==1||!/^[-_A-Za-z0-9]{32,128}$/.test(state[0])||
+       challenge.length!==1||!/^[-_A-Za-z0-9]{43}$/.test(challenge[0])||
+       method.length!==1||method[0]!=='S256'||
+       responseType.length!==1||responseType[0]!=='code')return null;
     return url.href;
   }catch{return null;}
 }
@@ -93,7 +96,8 @@ export async function standardBankApi(
   if(action==='connect'){
     if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Unverified bank authorization URL.');
     const url=validStandardBankRedirect((raw as Record<string,unknown>).authorizationUrl);
-    if(!url)throw Error('Bank did not provide a verified authorization redirect.');
+    if(!url || new URL(url).searchParams.get('redirect_uri')!==origin+'/bank/oauth/standard-bank/callback')
+      throw Error('Bank did not provide a verified authorization redirect.');
     return {authorizationUrl:url};
   }
   return parseBankLinkStatus(raw);
