@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
+import {conflictingApprovedCategory} from '@/lib/approvedPayeeCategory';
 import {matchingApprovedEntriesForDocumentLine} from '@/lib/ledgerIntegrity';
 import {isReviewableLine} from '@/lib/reviewInbox';
 import {timeContextLabel} from '@/lib/documentTimeContext';
@@ -42,11 +43,17 @@ export default function ReviewedDocumentLedger({
   const preparedCandidates=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
       item.proposal!==null&&!applied.has(item.index));
+  const categoryConflicts=new Map<number,NonNullable<ReturnType<typeof conflictingApprovedCategory>>>();
+  for(const {index,proposal} of preparedCandidates){
+    const history=conflictingApprovedCategory(
+      entries,document.lines[index].label,proposal.kind,currency,proposal.category);
+    if(history)categoryConflicts.set(index,history);
+  }
   const checkedDuplicates=separateRepeatedDocumentChoices(document,entries,preparedCandidates.map(({index,proposal})=>({
     lineIndex:index,date:proposal.date,kind:proposal.kind,category:proposal.category
   })));
   const safePreparedIds=new Set(checkedDuplicates.accepted.map(choice=>choice.lineIndex));
-  const prepared=preparedCandidates.filter(({index})=>safePreparedIds.has(index));
+  const prepared=preparedCandidates.filter(({index})=>safePreparedIds.has(index)&&!categoryConflicts.has(index));
   const selectPrepared=()=>{
     if(!canApply)return;
     setDraft(old=>{
@@ -63,7 +70,7 @@ export default function ReviewedDocumentLedger({
     setDraft(old=>{
       const proposed=preparedDocumentReview(document,index);
       const previous:ReviewRow=old[index]??{
-        checked:false,date:line.date??'',kind:proposed?.kind??'',category:proposed?.category??''
+        checked:false,date:line.date??'',kind:proposed?.kind??'',category:categoryConflicts.has(index)?'':proposed?.category??''
       };
       return {...old,[index]:{...previous,...fields}};
     });
@@ -149,6 +156,7 @@ export default function ReviewedDocumentLedger({
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
         const possibleRepeat=matchingApprovedEntriesForDocumentLine(line,entries,currency).length>0;
+        const categoryConflict=categoryConflicts.get(index);
         const referenceOnly=line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
           line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||
           (document.documentKind&&document.documentKind!=='unclassified'&&line.semanticRole!=='transaction');
@@ -158,7 +166,7 @@ export default function ReviewedDocumentLedger({
         const unusable=line.amount===null||line.amount===0||!line.date||Boolean(referenceOnly)||oldBankRow;
         const proposal=preparedDocumentReview(document,index);
         const row=draft[index]??{
-          checked:false,date:line.date??'',kind:proposal?.kind??'',category:proposal?.category??''
+          checked:false,date:line.date??'',kind:proposal?.kind??'',category:categoryConflicts.has(index)?'':proposal?.category??''
         };
         const options=row.kind?allowedDocumentCategories(row.kind):[];
         return <div key={index} className={`rounded-xl border bg-background p-3 ${row.checked ? 'border-primary/40 shadow-sm' : 'border-border'}`}>
@@ -176,6 +184,12 @@ export default function ReviewedDocumentLedger({
           </label>
           {possibleRepeat&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
             Possible duplicate of a saved transaction. Compare the source before approving this row.
+          </p>}
+          {categoryConflict&&!already&&!unusable&&<p role="status"
+            className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            Category needs review: {categoryConflict.count} previously approved matching entries
+            used {categoryConflict.category}. The new import suggests a different category.
+            Excluded from bulk Prepare; choose the category yourself before recording.
           </p>}
           {line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">Transaction date extracted from file: <strong className="text-foreground">{line.date}</strong> · no date entry needed</p>}
           {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No individual transaction date extracted. Kept as document-period evidence; no date entry required or allowed for posting.</p>}
