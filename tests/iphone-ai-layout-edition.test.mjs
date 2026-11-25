@@ -26,13 +26,13 @@ test('Agent stays read-only, always on, with no misleading checkbox toggle',()=>
   assert.doesNotMatch(ai,/checked=\{agentMode\}/);
   assert.match(ai,/payload\.answerSource\s*!==\s*'private-desktop-model'/);
 });
-test('Mobile AI panel uses bounded chat and a horizontally scrollable two-card dock',()=>{
+test('Mobile AI panel uses bounded chat and a full-width vertical tool stack',()=>{
   assert.match(ai,/mc-chat-panel flex min-h-\[min\(55dvh,500px\)\]/);
   assert.match(ai,/mc-chat-log min-h-\[min\(27dvh,250px\)\]/);
-  assert.match(ai,/mc-assistant-dock flex min-w-0 max-w-full/);
-  assert.match(css,/width:clamp\(142px,43vw,188px\)/);
+  assert.match(ai,/mc-assistant-dock flex min-w-0 w-full flex-col items-stretch/);
+  assert.match(css,/width:100%;flex:0 0 auto/);
   assert.match(css,/\.mc-assistant-dock-card\[open\]/);
-  assert.match(css,/max-height:min\(62dvh,580px\)/);
+  assert.match(css,/max-height:none/);
   assert.match(css,/\.mc-assistant-dock-card:not\(\[open\]\)/);
 });
 test('iPhone safe-area padding and native bottom navigation are preserved',()=>{

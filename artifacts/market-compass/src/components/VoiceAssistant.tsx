@@ -841,10 +841,10 @@ export default function VoiceAssistant({
       </div>
     </section>
 
-    <div className="mc-assistant-dock flex min-w-0 max-w-full snap-x snap-mandatory items-start gap-2.5 overflow-x-auto pb-2" aria-label="AI tools and connections">
+    <div className="mc-assistant-dock flex min-w-0 w-full flex-col items-stretch gap-3 pb-2" aria-label="AI tools and connections">
 
 
-    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary>
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary>
     <section className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
@@ -887,7 +887,7 @@ export default function VoiceAssistant({
       </p>
     </section></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[13px] font-bold">Financial sources</summary>
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[13px] font-bold">Financial sources</summary>
     <section className="mt-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
@@ -982,7 +982,7 @@ export default function VoiceAssistant({
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
     </section></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary>
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary>
     <section className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -994,7 +994,7 @@ export default function VoiceAssistant({
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
     </section></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-4 shadow-sm">
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
