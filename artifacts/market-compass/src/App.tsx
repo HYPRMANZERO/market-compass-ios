@@ -27,7 +27,8 @@ import BankCarousel from '@/components/BankCarousel';
 import {currentAssistantEdition} from '@/lib/assistantEdition';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
-import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
+import {applySavedCategoryChanges,allowedSavedCategory} from '@/lib/savedCategoryReview';
+import {expenseCategoryNeedsSorting} from '@/lib/monthlyExpenses';
 import FinancialPulse from '@/components/FinancialPulse';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
@@ -1217,8 +1218,15 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
         <LedgerIntegrityPanel entries={ledger} currency={data.currency}/>
-        <SavedCategoryReview entries={ledger} currency={data.currency}
-          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
+        <SavedCategoryReview entries={ledger} currency={data.currency} region={selectedRegion(data.region)}
+          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(
+            old.expenseEntries??[],approved,selectedRegion(old.region))}))}
+          onManualCategorize={(entryId,category)=>setData(old=>{
+            const original=(old.expenseEntries??[]).find(item=>item.id===entryId);
+            if(!original||!expenseCategoryNeedsSorting(original.category)||
+               !allowedSavedCategory(original.kind,category))return old;
+            return {...old,expenseEntries:old.expenseEntries.map(item=>item.id===entryId?{...item,category}:item)};
+          })}/>
         <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending categories...</p>}><SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/></Suspense>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
