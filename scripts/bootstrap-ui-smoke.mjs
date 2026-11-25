@@ -249,33 +249,57 @@ try{
     if(!link)throw Error('Assistant route missing');link.click();
   });
   await expect('Conversation','mobile assistant screen');
-  // All assistant panels must stack vertically across the full available
-  // iPhone width. No horizontal carousel or 270px cards.
+  // Chat occupies the available iPhone viewport. Auxiliary controls must be
+  // accessible in the modal instead of shrinking the conversation.
+  const compact=await js(function(){
+    const chat=document.querySelector('[aria-label="AI chat interface"]');
+    const open=document.querySelector('button[aria-label="Open Compass options"]');
+    const header=document.querySelector('.mc-mobile-header');
+    const log=document.querySelector('[role="log"][aria-label="AI conversation"]');
+    return {
+      chatHeight:chat?.getBoundingClientRect().height??0,
+      logHeight:log?.getBoundingClientRect().height??0,
+      hasOptions:!!open,
+      toolbarAbsent:!header,
+      horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1
+    };
+  });
+  assert.equal(compact.toolbarAbsent,true,'AI view should not waste height on main mobile header');
+  assert.ok(compact.chatHeight>400,'AI conversation must fill most of iPhone screen');
+  assert.ok(compact.logHeight>130,'chat messages need usable scroll area');
+  assert.equal(compact.hasOptions,true,'options opener must remain available');
+  assert.equal(compact.horizontalOverflow,false,'AI screen must not overflow on iPhone');
+  await js(function(){document.querySelector('button[aria-label="Open Compass options"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Compass options open');
   const dock=await js(function(){
-    const host=document.querySelector('.mc-assistant-dock');
+    const dialog=document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+    const host=dialog?.querySelector('.mc-assistant-dock');
     const cards=[...host?.children||[]];
-    const personal=host?.querySelector('[aria-label="Compass Personal productivity tools"]');
+    const personal=dialog?.querySelector('[aria-label="Compass Personal productivity tools"]');
+    const rect=dialog?.getBoundingClientRect();
     const width=host?.getBoundingClientRect().width||0;
     return {
       vertical:host?getComputedStyle(host).flexDirection==='column':false,
-      width,
       panels:cards.length,
-      ordered:cards.every((card,i)=>i===0||
-        card.getBoundingClientRect().top>=cards[i-1].getBoundingClientRect().bottom-1),
       fullWidth:cards.every(card=>Math.abs(card.getBoundingClientRect().width-width)<4),
       hasPersonal:!!personal,
-      xOverflow:document.documentElement.scrollWidth>innerWidth+1,
-      personalSummaryWidth:personal?.querySelector('summary')?.getBoundingClientRect().width||0
+      personalSummaryWidth:personal?.querySelector('summary')?.getBoundingClientRect().width||0,
+      bankStatus:dialog?.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
+      dialogFits:!!rect&&rect.width<=innerWidth+1&&rect.height<=innerHeight+1,
+      horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1
     };
   });
-  assert.equal(dock.vertical,true,'AI tool panels must stack vertically');
-  assert.ok(dock.panels>=4,'all assistant panels remain reachable');
-  assert.equal(dock.ordered,true,'AI tool panels must appear one below another');
-  assert.equal(dock.fullWidth,true,'AI tool panels must use full available width');
-  assert.equal(dock.hasPersonal,true,'Personal tool desk must remain accessible');
-  assert.ok(dock.personalSummaryWidth>250,'Personal header must not be squeezed');
-  assert.equal(dock.xOverflow,false,'AI tool panels must not overflow phone width');
-  console.log('PASS: stacked full-width Personal tool desk and assistant panels at iPhone width');
+  assert.equal(dock.vertical,true,'options contents should stack vertically');
+  assert.ok(dock.panels>=4,'all options remain reachable');
+  assert.equal(dock.fullWidth,true,'options cards should use full modal width');
+  assert.equal(dock.hasPersonal,true,'Personal tool desk must remain in the modal');
+  assert.ok(dock.personalSummaryWidth>250,'Personal tool summary must not be squeezed');
+  assert.ok(dock.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
+  assert.equal(dock.dialogFits,true,'options sheet must fit inside iPhone viewport');
+  assert.equal(dock.horizontalOverflow,false,'options should not cause sideways scrolling');
+  await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
+  await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Compass options close');
+  console.log('PASS: full-height Personal chat and accessible full-width options sheet');
   const before=await js(function(){
     const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
     const log=document.querySelector('[role="log"][aria-label="AI conversation"]');
@@ -287,7 +311,6 @@ try{
       fontSize:input?getComputedStyle(input).fontSize:null,
       actions:[submit?.getBoundingClientRect().width,mic?.getBoundingClientRect().width],
       count:log?.querySelectorAll('.mc-chat-bubble').length??0,
-      bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
       noOverflow:document.documentElement.scrollWidth<=innerWidth+1
     };
   });
@@ -296,7 +319,6 @@ try{
   assert.equal(before.fontSize,'16px','iPhone composer must not zoom on focus');
   assert.ok(before.actions.every(n=>n>=44),'voice/send tap targets at least 44px');
   assert.equal(before.noOverflow,true,'no horizontal overflow on AI tab');
-  assert.ok(before.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
   const setQuestion=async value=>{
     assert.equal(await js(function(value){
       const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
@@ -346,16 +368,22 @@ try{
   assert.equal(after.count,before.count+2,'Enter sends exactly once, with one local response');
   assert.ok(after.text.includes('What is my total debt?'));
   assert.equal(after.input,'','sent question clears input');
+  await js(function(){document.querySelector('button[aria-label="Open Compass options"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'options reopen for clearing chat');
   await js(function(){
-    const button=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Clear');
-    if(!button)throw Error('Clear conversation missing');
+    const button=[...document.querySelectorAll('[role="dialog"][aria-label="Compass AI options"] button')]
+      .find(x=>x.textContent.trim()==='Clear chat');
+    if(!button)throw Error('Clear chat action missing from options');
     button.click();
   });
+  await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'options closed after clear');
   await expect('Conversation cleared. Ask a new question below.','compact empty chat state');
   // The original Personal edition must persist tasks in the same encrypted
   // workspace as finances, not in plaintext browser storage.
+  await js(function(){document.querySelector('button[aria-label="Open Compass options"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'options opened for Personal tasks');
   await js(function(){
-    const planner=document.querySelector('details[aria-label="Encrypted Personal task planner"]');
+    const planner=document.querySelector('[role="dialog"][aria-label="Compass AI options"] details[aria-label="Encrypted Personal task planner"]');
     if(!planner)throw Error('Personal task planner missing');
     planner.open=true;
     const input=planner.querySelector('input[aria-label="New Personal task"]');
@@ -389,7 +417,8 @@ try{
   await until(()=>js(function(){
     return document.querySelector('[aria-label="Saved Personal tasks"] [aria-label="Mark task unfinished"]')!==null;
   }),'Personal task complete');
-  console.log('PASS: original Personal task creation, completion and encrypted-vault-only storage');
+  await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
+  console.log('PASS: Personal tasks remain accessible inside options and encrypted-vault-only');
   console.log('PASS: responsive AI bubbles and composer; Enter/Shift+Enter/IME and compact empty state');
   console.log('PUBLIC BOOTSTRAP UI SMOKE PASS (synthetic localhost; not real iPhone)');
 }catch(error){
