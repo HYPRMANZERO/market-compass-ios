@@ -530,18 +530,23 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
    viewport. Attach the assistant to what is actually visible when its composer
    is focused, and let the chat log (not the entire page) absorb the resize. */
 @media(max-width:1023px){
-  html.mc-chat-input-focused .mc-mobile-tabbar,
-  html.mc-chat-input-focused .mc-ionic-footer{
+  /* Dismissing the keyboard can leave the textarea focused in iOS Safari.
+     Restore the navigation as soon as the visible viewport expands. */
+  html.mc-chat-keyboard-open .mc-mobile-tabbar,
+  html.mc-chat-keyboard-open .mc-ionic-footer{
     display:none !important;
   }
-  html.mc-chat-input-focused .mc-mobile-content.mc-assistant-page{
+  html.mc-chat-keyboard-open .mc-mobile-content.mc-assistant-page{
     height:var(--mc-chat-visible-height,100dvh) !important;
     min-height:0 !important;
     padding-bottom:0 !important;
   }
   html.mc-chat-keyboard-open .mc-mobile-content.mc-assistant-page{
-    position:fixed !important;
-    top:var(--mc-chat-visible-top,0px) !important;
+    /* iOS 26 can pan fixed-position inputs while the keyboard animates.
+       Absolute coordinates follow visualViewport.pageTop without WebKit's
+       sticky/fixed viewport drift; ion-app is the positioned ancestor. */
+    position:absolute !important;
+    top:var(--mc-chat-visible-page-top,0px) !important;
     left:0 !important;
     right:0 !important;
     height:var(--mc-chat-visible-height,100dvh) !important;
