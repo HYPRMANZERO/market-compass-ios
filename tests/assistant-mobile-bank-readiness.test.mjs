@@ -18,12 +18,16 @@ test('AI composer handles Enter to send, Shift+Enter newline and IME composition
 });
 test('chat bubbles and fields have accessible, non-crowded mobile layout',async()=>{
   const ui=await source();
-  assert.match(ui,/mc-assistant-composer grid grid-cols-\[minmax\(0,1fr\)_44px_44px\]/);
+  assert.match(ui,/mc-assistant-composer grid grid-cols-\[48px_minmax\(0,1fr\)_48px\]/);
+  assert.match(ui,/aria-label="Open Compass actions"/);
+  assert.match(ui,/aria-haspopup="dialog" aria-expanded=\{optionsOpen\}/);
+  assert.match(ui,/role="group" aria-label="Compass voice controls"/);
+  assert.match(ui,/query\.trim\(\)&&!listening\?/);
   assert.match(ui,/mc-chat-bubble/);
   assert.doesNotMatch(ui,/min-h-\[160px\] space-y-3 overflow-y-auto/);
   assert.match(ui,/messages\.length===0 && !busy/);
   assert.match(ui,/aria-label="Send question"/);
-  assert.match(ui,/aria-label=\{listening \? 'Stop listening' : 'Speak a question'\}/);
+  assert.match(ui,/aria-label=\{listening\s*\?\s*'Stop listening'\s*:\s*'Speak a question'\}/);
 });
 test('bank connection view never pretends OAuth is active or asks for credentials',async()=>{
   const ui=await source();
