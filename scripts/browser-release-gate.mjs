@@ -563,27 +563,46 @@ async function main(){
       if(!link)throw Error('Assistant tab missing');link.click();
     });
     await expectText(tab,'Conversation','assistant chat');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+    }),'Finance quick actions sheet opens');
+    const financeMenu=await tab.invoke(function(){
+      return {
+        actions:[...document.querySelectorAll('[aria-label="Compass quick actions"] button')]
+          .map(x=>x.getAttribute('aria-label')),
+        bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent
+      };
+    });
+    assert.deepEqual(financeMenu.actions,['Encrypted Vault','Add document','Scan saved payments',
+      'Source status','Debt planning','Spend review','Markets','Voice controls','AI permissions'],
+      'Finance options must not include any Personal-only actions');
+    assert.ok(financeMenu.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
+    await waitFor(()=>tab.invoke(function(){
+      return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+    }),'Finance quick actions sheet closes');
+    console.log('PASS: Finance-only actions are visible with no Personal-only shortcuts');
     const beforeChat=await tab.invoke(function(){
       const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       const send=document.querySelector('button[aria-label="Send question"]');
+      const plus=document.querySelector('button[aria-label="Open Compass actions"]');
       const mic=document.querySelector('button[aria-label="Speak a question"]');
       return {
-        present:!!input&&!!send&&!!mic,
+        present:!!input&&!!plus&&!!mic&&!send,
         width:input?.getBoundingClientRect().width??0,
         font:input?getComputedStyle(input).fontSize:null,
         micWidth:mic?.getBoundingClientRect().width??0,
-        sendWidth:send?.getBoundingClientRect().width??0,
+        plusWidth:plus?.getBoundingClientRect().width??0,
         bubbles:document.querySelectorAll('.mc-chat-bubble').length,
-        bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
         overflow:document.documentElement.scrollWidth>innerWidth+1
       };
     });
     assert.equal(beforeChat.present,true,'chat input and buttons present');
     assert.ok(beforeChat.width>=155,'iPhone text input cannot be crowded out');
     assert.equal(beforeChat.font,'16px','no Safari keyboard focus zoom');
-    assert.ok(beforeChat.micWidth>=44&&beforeChat.sendWidth>=44,'accessible send/voice buttons');
+    assert.ok(beforeChat.micWidth>=44&&beforeChat.plusWidth>=44,'accessible microphone and plus buttons');
     assert.equal(beforeChat.overflow,false,'AI tab must not horizontally overflow');
-    assert.ok(beforeChat.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
     if(process.env.MC_TEST_ASSISTANT_SCREENSHOT){
       const shot=await tab.command('Page.captureScreenshot',{
         format:'png',captureBeyondViewport:false,fromSurface:true
@@ -625,15 +644,23 @@ async function main(){
     });
     assert.equal(afterChat.bubbles,beforeChat.bubbles+2,'send exactly once');
     assert.equal(afterChat.input,'','clear sent question');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+    }),'Options open for clearing chat');
     await tab.invoke(function(){
-      const btn=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Clear');
-      if(!btn)throw Error('Clear button missing');btn.click();
+      const btn=[...document.querySelectorAll('[role="dialog"][aria-label="Compass AI options"] button')]
+        .find(x=>x.textContent.trim()==='Clear chat');
+      if(!btn)throw Error('Clear chat button missing from modal');btn.click();
     });
+    await waitFor(()=>tab.invoke(function(){
+      return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+    }),'Options close after clear');
     await expectText(tab,'Conversation cleared. Ask a new question below.','compact clear state');
     console.log('PASS: iPhone chat bubbles and compact composer; Enter, Shift+Enter, IME and Clear');
 
-    // Jarvis source audit: only offer a click-through HTTPS link for explicit
-    // website commands; no browser navigation or Windows program is launched.
+    // Finance-only policy: legacy website shortcuts must not bypass edition
+    // restrictions through a local deterministic assistant handler.
     await tab.invoke(function(){
       const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')
@@ -641,23 +668,22 @@ async function main(){
       field.dispatchEvent(new Event('input',{bubbles:true}));
     });
     await waitFor(()=>tab.invoke(function(){
-      return !document.querySelector('button[aria-label="Send question"]').disabled;
-    }),'Jarvis-derived command ready');
+      const send=document.querySelector('button[aria-label="Send question"]');
+      return !!send&&!send.disabled;
+    }),'finance-only personal command entered');
     await tab.invoke(function(){
       const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
     });
-    const jarvisLink=await waitFor(()=>tab.invoke(function(){
-      const anchor=document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
-      if(!anchor)return null;
-      return {href:anchor.getAttribute('href'),target:anchor.getAttribute('target'),
-        rel:anchor.getAttribute('rel'),text:anchor.closest('.mc-chat-bubble')?.innerText};
-    }),'safe Jarvis browser shortcut');
-    assert.equal(jarvisLink.href,'https://www.youtube.com/');
-    assert.equal(jarvisLink.target,'_blank');
-    assert.ok(jarvisLink.rel.includes('noopener')&&jarvisLink.rel.includes('noreferrer'));
-    assert.ok(jarvisLink.text.includes('not opened a website automatically'));
-    console.log('PASS: Jarvis-style Compass command offers an explicit safe HTTPS link, no auto-launch');
+    const policy=await waitFor(()=>tab.invoke(function(){
+      const latest=[...document.querySelectorAll('.mc-chat-bubble')].map(el=>el.textContent||'');
+      return latest.find(text=>text.includes('Compass Financial Advisor handles finance only'))||null;
+    }),'finance-only Personal shortcut refusal');
+    assert.ok(policy.includes('Compass Personal'));
+    assert.equal(await tab.invoke(function(){
+      return !!document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
+    }),false,'Finance must not produce a Personal-only website link');
+    console.log('PASS: Finance rejects Personal-only browser shortcuts while preserving secure chat');
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));
