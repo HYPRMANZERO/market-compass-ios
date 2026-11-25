@@ -41,7 +41,7 @@ test('mobile overview uses Bootstrap columns for meaningful, consented account d
     /aria-label="Quick actions"/,
     /href="\/assistant"/
   ])assert.match(ui,expected);
-  assert.match(ui,/Manual entry · Not bank connected/);
+  assert.match(ui,/Manual balance · Not bank synced/);
   assert.match(ui,/maskDocumentPII\(account\.name\.trim\(\)\)/);
   assert.match(ui,/<FinancialSpaceHero/);
   const hero=await source('components/FinancialSpaceHero.tsx');
