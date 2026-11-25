@@ -34,10 +34,13 @@ import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
-import MonthlyExpenses from '@/components/MonthlyExpenses';
-import SpendingPortfolio from '@/components/SpendingPortfolio';
+// MonthlyExpenses loads only on its route.
+// SpendingPortfolio loads only on its route.
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
+
+const SpendingPortfolio=lazy(()=>import('@/components/SpendingPortfolio'));
+const MonthlyExpenses=lazy(()=>import('@/components/MonthlyExpenses'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -1214,7 +1217,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         </Suspense>
         <SavedCategoryReview entries={ledger} currency={data.currency}
           onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
-        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
+        <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending categories...</p>}><SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/></Suspense>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
@@ -1227,7 +1230,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
             ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
           }:old)}/>
-        <MonthlyExpenses
+        <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending history...</p>}><MonthlyExpenses
           entries={ledger}
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
           desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
@@ -1244,7 +1247,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           }))}
           onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
           onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
-        />
+        /></Suspense>
       </>}
       {section==='plan'&&<>
         <HistoricalRecurringInsights documents={docs} entries={ledger} currency={data.currency}/>
