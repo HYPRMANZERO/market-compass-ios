@@ -22,6 +22,13 @@ test('All auxiliary settings and legacy panels are hidden behind an accessible o
   assert.match(chat,/aria-label="Close Compass options"/);
   assert.match(chat,/event\.key==='Escape'\)setOptionsOpen\(false\)/);
   assert.match(chat,/auxiliaryPanel&&<section aria-label="Additional Compass tools"/);
+  assert.match(chat,/const sendFromOptions=\(idea:string\)=>\{setOptionsOpen\(false\);submit\(idea\);\}/);
+  assert.match(chat,/const importFromOptions=\(\)=>\{setOptionsOpen\(false\);if\(onImportDocuments\)/);
+  assert.match(chat,/onClick=\{importFromOptions\}/);
+  assert.match(chat,/onClick=\{\(\)=>sendFromOptions\(idea\)\}/);
+  if(chat.includes('<PersonalToolDeck onAsk=')){
+    assert.match(chat,/<PersonalToolDeck onAsk=\{sendFromOptions\} onImportDocuments=\{importFromOptions\}/);
+  }
   assert.match(chat,/Private memory/);
   assert.match(chat,/Financial sources/);
   assert.match(app,/auxiliaryPanel=\{<div className="space-y-3">/);
