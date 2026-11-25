@@ -32,7 +32,7 @@ test('the composer plus and header open the same short inline drawer, never an o
 });
 test('composer, settings and finance rights survive the layout change',()=>{
  assert.match(chat,/mc-chat-composer-wrap border-t/);
- assert.match(chat,/mc-assistant-composer grid grid-cols-\[48px_minmax\(0,1fr\)_48px\]/);
+ assert.match(chat,/mc-assistant-composer grid grid-cols-\[52px_minmax\(0,1fr\)_52px\]/);
  assert.match(chat,/handleComposerKeyDown/);
  assert.match(chat,/Speak a question|Send question/);
  assert.match(chat,/CompassQuickActions edition=\{currentAssistantEdition\(\)\}/);
@@ -41,4 +41,14 @@ test('composer, settings and finance rights survive the layout change',()=>{
  assert.match(chat,/Financial sources/);
  assert.match(home,/aria-label="Saved debt accounts"/);
  assert.match(home,/Debt planning · not bank-connected/);
+});
+
+
+test('the status-bar seam and action controls remain flush',()=>{
+ assert.match(css,/background:linear-gradient\(to bottom,/);
+ assert.match(css,/hsl\(165,24%,20%\) calc\(env\(safe-area-inset-top,0px\) \+ 11px\)/);
+ assert.match(css,/grid-template-columns:52px minmax\(0,1fr\) 52px/);
+ assert.match(css,/width:52px/);
+ assert.match(css,/height:52px/);
+ assert.match(css,/.mc-assistant-page .mc-assistant-composer > button:first-child/);
 });
