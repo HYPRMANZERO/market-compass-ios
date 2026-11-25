@@ -585,3 +585,39 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     touch-action:pan-y;
   }
 }
+
+/* The AI route is one viewport, not a document-scrolling page. The original
+   Ionic shell enables scrolling globally for other routes, so override that
+   behavior throughout this route, not only when the keyboard is visible. */
+@media(max-width:1023px){
+  html.mc-assistant-route,
+  html.mc-assistant-route.plt-pwa{
+    height:100% !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+    overscroll-behavior:none !important;
+  }
+  html.mc-assistant-route body{
+    position:fixed !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100dvh !important;
+    min-height:0 !important;
+    max-height:100dvh !important;
+    overflow:hidden !important;
+    overscroll-behavior:none !important;
+  }
+  html.mc-assistant-route #root,
+  html.mc-assistant-route ion-app.mc-ionic-app{
+    height:100% !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+  html.mc-assistant-route .mc-chat-log{
+    min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    touch-action:pan-y;
+  }
+}
