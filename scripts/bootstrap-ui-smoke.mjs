@@ -236,7 +236,7 @@ try{
   assert.ok(row);assert.equal(row.open,true);
   assert.match(row.name,/\[redacted number\]/);
   assert.ok(!row.name.includes('123456789012'));
-  assert.match(row.source,/Not bank connected/);
+  assert.match(row.source,/Manual balance · Not bank synced/);
   assert.ok(row.balance.includes('1')&&row.balance.includes('840'));
   assert.match(row.details,/18\.5%/);
   console.log('PASS: manual banking account, masked identifier, rate, amount and provenance');

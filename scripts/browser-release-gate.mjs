@@ -528,7 +528,10 @@ async function main(){
     assert.equal(accountUi?.expanded,true,'per-account details must expand');
     assert.ok(accountUi?.details?.includes('18.5%'),
       'account details must preserve owner-entered APR');
-    assert.match(accountUi?.source??'',/Not bank connected/);
+    assert.match(accountUi?.source??'',/Manual balance · Not bank synced/);
+    assert.match(accountUi?.details??'',/owner-entered planning figure/);
+    assert.match(accountUi?.details??'',/Latest linked transaction: Not recorded/);
+    assert.match(accountUi?.details??'',/not a live bank feed/);
     const privateLabels=await tab.invoke(function(){
       return [...document.querySelectorAll('.mc-account-label strong')].map(element=>element.textContent);
     });
