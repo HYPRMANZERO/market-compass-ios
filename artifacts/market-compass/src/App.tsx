@@ -6,7 +6,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import VoiceAssistant from '@/components/VoiceAssistant';
+// Load the private AI conversation only when the AI route mounts.
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
 import LocalFinanceFiles from '@/components/LocalFinanceFiles';
 import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
@@ -37,6 +37,7 @@ import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsight
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import SpendingPortfolio from '@/components/SpendingPortfolio';
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
+const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -1289,7 +1290,7 @@ function Assistant({ data, setData, onImportDocuments }: {
     })(),
   };
   return <>
-    <VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
+    <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Preparing Compass AI?</p>}><VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
       onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))}
       queuedReadOnlyQuestions={Array.isArray(data.offlineAgentQuestions)?data.offlineAgentQuestions:[]}
       onQueueReadOnlyQuestion={question=>{
@@ -1304,7 +1305,7 @@ function Assistant({ data, setData, onImportDocuments }: {
       }}
       onRemoveQueuedReadOnlyQuestion={id=>setData(old=>({
         ...old,offlineAgentQuestions:removeOfflineQuestion(old.offlineAgentQuestions??[],id)
-      }))} />
+      }))} /></Suspense>
     {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
       <summary className="cursor-pointer text-[12px] font-semibold">Earlier saved instructions · {data.queue.length}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These records came from the original command interpreter and remain encrypted in your vault. They are not active instructions, payments or trades.</p>
