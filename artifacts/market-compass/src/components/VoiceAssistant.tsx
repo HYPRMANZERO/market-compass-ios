@@ -1156,7 +1156,7 @@ export default function VoiceAssistant({
         </section>
     )}
       <div className="mc-chat-composer-wrap border-t border-border p-3">
-        <form className="mc-assistant-composer grid grid-cols-[48px_minmax(0,1fr)_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+        <form className="mc-assistant-composer grid grid-cols-[52px_minmax(0,1fr)_52px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <button type="button" aria-label="Open Compass actions" aria-controls="mc-chat-tools-drawer" aria-expanded={optionsOpen}
             onClick={()=>setOptionsOpen(open=>!open)} className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] border border-border bg-background text-foreground">
             <Plus size={24} aria-hidden="true"/>

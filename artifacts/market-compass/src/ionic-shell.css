@@ -492,3 +492,36 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     min-height:380px;
   }
 }
+
+/* Mobile chat seam and composer-control alignment, both editions.
+   The inset above the Compass identity belongs to the dark header, not
+   the page canvas. Keep the inline + tools drawer unchanged. */
+@media (max-width:1023px) {
+  .mc-mobile-content.mc-assistant-page {
+    background:linear-gradient(to bottom,
+      hsl(165,24%,20%) 0,
+      hsl(165,24%,20%) calc(env(safe-area-inset-top,0px) + 11px),
+      #fffefa calc(env(safe-area-inset-top,0px) + 11px));
+  }
+  .mc-assistant-page .mc-assistant-composer {
+    grid-template-columns:52px minmax(0,1fr) 52px;
+    align-items:end;
+  }
+  .mc-assistant-page .mc-assistant-composer > button {
+    box-sizing:border-box;
+    width:52px;
+    height:52px;
+    min-width:52px;
+    min-height:52px;
+    border-radius:14px;
+    align-self:end;
+  }
+  .mc-assistant-page .mc-assistant-composer > button:first-child {
+    background:#f5f4f0;
+    border:1px solid #d8d9d2;
+  }
+  .mc-assistant-page .mc-composer-input {
+    box-sizing:border-box;
+    min-height:52px;
+  }
+}
