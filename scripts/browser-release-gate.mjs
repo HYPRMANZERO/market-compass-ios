@@ -671,6 +671,35 @@ async function main(){
       'composer must remain visible immediately above keyboard');
     assert.ok(keyboard.composerWidth>320,'composer retains width on keyboard resize');
     assert.equal(keyboard.overflow,false,'keyboard cannot introduce horizontal scroll');
+    // Regression: dragging beyond the conversation limit must NOT pan the
+    // outer document and reveal a previously hidden header behind the chat.
+    const scrollBoundary=await tab.invoke(async function(){
+      const html=document.documentElement;
+      const body=document.body;
+      const log=document.querySelector('.mc-chat-log');
+      const before=window.scrollY;
+      const style=getComputedStyle(body);
+      const root=getComputedStyle(html);
+      const chat=log?getComputedStyle(log):null;
+      window.scrollTo(0,999999);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      return {
+        bodyFixed:style.position==='fixed',
+        bodyHidden:style.overflowY==='hidden',
+        rootHidden:root.overflowY==='hidden',
+        scrollBefore:before,
+        scrollAfter:window.scrollY,
+        chatOverflow:chat?.overflowY,
+        chatTouchAction:chat?.touchAction
+      };
+    });
+    assert.equal(scrollBoundary.bodyFixed,true,'keyboard must freeze outer document to prevent iPhone rubber-band header reveal');
+    assert.equal(scrollBoundary.bodyHidden,true,'keyboard must clip the body behind the conversation');
+    assert.equal(scrollBoundary.rootHidden,true,'keyboard must clip the document root behind the conversation');
+    assert.equal(scrollBoundary.chatOverflow,'auto','messages remain individually scrollable');
+    assert.equal(scrollBoundary.chatTouchAction,'pan-y','message gestures remain vertical');
+    assert.ok(Math.abs(scrollBoundary.scrollBefore-scrollBoundary.scrollAfter)<=1,
+      'dragging outside chat must not scroll the outer document: '+JSON.stringify(scrollBoundary));
     await tab.command('Emulation.setDeviceMetricsOverride',{
       width:390,height:844,deviceScaleFactor:3,mobile:true
     });
@@ -800,17 +829,30 @@ async function main(){
       const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
     });
-    const jarvisLink=await waitFor(()=>tab.invoke(function(){
-      const anchor=document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
-      if(!anchor)return null;
-      return {href:anchor.getAttribute('href'),target:anchor.getAttribute('target'),
-        rel:anchor.getAttribute('rel'),text:anchor.closest('.mc-chat-bubble')?.innerText};
-    }),'safe Jarvis browser shortcut');
-    assert.equal(jarvisLink.href,'https://www.youtube.com/');
-    assert.equal(jarvisLink.target,'_blank');
-    assert.ok(jarvisLink.rel.includes('noopener')&&jarvisLink.rel.includes('noreferrer'));
-    assert.ok(jarvisLink.text.includes('not opened a website automatically'));
-    console.log('PASS: Jarvis-style Compass command offers an explicit safe HTTPS link, no auto-launch');
+    if(process.env.VITE_MC_EDITION==='finance'){
+      // The finance-only edition must not inherit Personal web shortcuts.
+      const financeReply=await waitFor(()=>tab.invoke(function(){
+        if(document.querySelectorAll('.mc-chat-bubble').length<2)return null;
+        return {
+          hasPersonalShortcut:!!document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]'),
+          bubbles:document.querySelectorAll('.mc-chat-bubble').length
+        };
+      }),'finance-only assistant handles non-financial command without Personal shortcut');
+      assert.equal(financeReply.hasPersonalShortcut,false,'Financial Advisor must not expose Personal web shortcuts');
+      console.log('PASS: Finance edition declines Personal browser shortcut');
+    }else{
+      const jarvisLink=await waitFor(()=>tab.invoke(function(){
+        const anchor=document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
+        if(!anchor)return null;
+        return {href:anchor.getAttribute('href'),target:anchor.getAttribute('target'),
+          rel:anchor.getAttribute('rel'),text:anchor.closest('.mc-chat-bubble')?.innerText};
+      }),'safe Jarvis browser shortcut');
+      assert.equal(jarvisLink.href,'https://www.youtube.com/');
+      assert.equal(jarvisLink.target,'_blank');
+      assert.ok(jarvisLink.rel.includes('noopener')&&jarvisLink.rel.includes('noreferrer'));
+      assert.ok(jarvisLink.text.includes('not opened a website automatically'));
+      console.log('PASS: Personal assistant offers explicit safe HTTPS link, no auto-launch');
+    }
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));

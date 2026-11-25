@@ -553,12 +553,35 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     max-height:var(--mc-chat-visible-height,100dvh) !important;
     z-index:45;
   }
-  html.mc-chat-keyboard-open,
+  /* iOS rubber-band scrolling ignores overflow-y:hidden on an auto-height
+     document. Freeze the outer document only while the chat keyboard is open;
+     the conversation remains the sole vertical scroll container. Without this,
+     overscrolling the chat exposes the hidden page/header behind it. */
+  html.mc-chat-keyboard-open{
+    height:100% !important;
+    overflow:hidden !important;
+    overscroll-behavior:none !important;
+  }
   html.mc-chat-keyboard-open body{
-    overflow-y:hidden !important;
-    overscroll-behavior-y:none !important;
+    position:fixed !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100dvh !important;
+    min-height:0 !important;
+    max-height:100dvh !important;
+    overflow:hidden !important;
+    overscroll-behavior:none !important;
+  }
+  html.mc-chat-keyboard-open #root,
+  html.mc-chat-keyboard-open ion-app.mc-ionic-app{
+    height:100% !important;
+    min-height:0 !important;
+    overflow:hidden !important;
   }
   html.mc-chat-keyboard-open .mc-chat-log{
+    overflow-y:auto;
     overscroll-behavior-y:contain;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
   }
 }
