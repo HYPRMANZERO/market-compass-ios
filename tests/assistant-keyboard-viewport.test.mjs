@@ -43,3 +43,16 @@ test('composer follows viewport pageTop; tabs return even if iOS keeps focus',()
   assert.match(css,/html\.mc-chat-keyboard-open \.mc-chat-log/);
   assert.doesNotMatch(css,/\.mc-chat-composer-wrap\s*\{[^}]*position:fixed/);
 });
+test('keyboard freezes the outer iPhone document but not message scrolling',()=>{
+  const html=css.match(/html\.mc-chat-keyboard-open\s*\{([^}]+)\}/)?.[1]??'';
+  const body=css.match(/html\.mc-chat-keyboard-open body\s*\{([^}]+)\}/)?.[1]??'';
+  const chat=css.match(/html\.mc-chat-keyboard-open \.mc-chat-log\s*\{([^}]+)\}/)?.[1]??'';
+  assert.match(html,/overflow:\s*hidden\s*!important/);
+  assert.match(body,/position:\s*fixed\s*!important/);
+  assert.match(body,/height:\s*100dvh\s*!important/);
+  assert.match(body,/overflow:\s*hidden\s*!important/);
+  assert.match(css,/html\.mc-chat-keyboard-open #root,\s*html\.mc-chat-keyboard-open ion-app\.mc-ionic-app\s*\{[^}]*overflow:\s*hidden\s*!important/s);
+  assert.match(chat,/overflow-y:\s*auto/);
+  assert.match(chat,/touch-action:\s*pan-y/);
+  assert.doesNotMatch(css,/html\.mc-chat-input-focused body\s*\{/);
+});
