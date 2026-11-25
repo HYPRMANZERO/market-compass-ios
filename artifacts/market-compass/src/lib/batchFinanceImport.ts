@@ -4,10 +4,11 @@
  */
 import {extractLocalFinanceDocument,MAX_FINANCE_FILES,MAX_FINANCE_FILE_BYTES,
  type LocalFinanceDocument} from './localFinanceDocs.ts';
+import {classifyImportFailure,type ImportRecoveryFailure} from './documentImportRecovery.ts';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES,type PdfProgress} from './localPdfText.ts';
 export type BatchImportSummary={
   drafts:LocalFinanceDocument[];duplicateCount:number;failedCount:number;
-  passwordRequiredCount:number;oversizeCount:number;
+  passwordRequiredCount:number;oversizeCount:number;failures:ImportRecoveryFailure[];
 };
 export type BatchReadOptions={
  existing:readonly LocalFinanceDocument[];label:string;password:string;
@@ -21,17 +22,23 @@ export async function importFinanceBatch(files:readonly File[],options:BatchRead
  if(capacity<=0)throw Error('Your encrypted document summary capacity is full.');
  const ids=new Set(options.existing.map(x=>x.id));
  const result:BatchImportSummary={drafts:[],duplicateCount:0,failedCount:0,
-  passwordRequiredCount:0,oversizeCount:0};
+  passwordRequiredCount:0,oversizeCount:0,failures:[]};
  const reader=options.pdfReader??extractLocalPdfText;
  for(let i=0;i<files.length;i++){
   options.signal?.throwIfAborted();
-  if(result.drafts.length>=capacity){result.failedCount+=files.length-i;break;}
+  if(result.drafts.length>=capacity){
+   for(let j=i;j<files.length;j++)result.failures.push({index:j+1,code:'capacity'});
+   result.failedCount+=files.length-i;break;
+  }
   const file=files[i];
   options.progress?.({file:i+1,total:files.length,page:0,pages:0,stage:'reading'});
   const pdf=/\.pdf$/i.test(file.name);
   const validExt=/\.(pdf|csv|txt|json)$/i.test(file.name);
   if(!validExt||!file.size||file.size>(pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES)){
-   result.oversizeCount++;result.failedCount++;continue;
+   const code=!validExt?'format':!file.size?'empty':'size';
+   result.failures.push({index:i+1,code});
+   if(code==='size')result.oversizeCount++;
+   result.failedCount++;continue;
   }
   try{
    // Keep a single PDF in memory at once; do not access a folder or path.
@@ -57,8 +64,9 @@ export async function importFinanceBatch(files:readonly File[],options:BatchRead
   }catch(error){
    if(options.signal?.aborted)throw Error('Batch import cancelled; nothing was saved.');
    result.failedCount++;
-   if(error instanceof Error&&/password|encrypted/i.test(error.message))
-     result.passwordRequiredCount++;
+   const code=classifyImportFailure(error);
+   result.failures.push({index:i+1,code});
+   if(code==='password')result.passwordRequiredCount++;
   }
  }
  return result;
