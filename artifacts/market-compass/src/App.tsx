@@ -458,6 +458,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     </aside>
 
     <main className="min-w-0">
+      {path!=='/assistant'&&(
       <IonHeader className="mc-mobile-header sticky top-0 z-30 lg:hidden" role="banner">
         <IonToolbar className="mc-ionic-toolbar">
         <div className="flex min-h-[49px] items-center gap-3">
@@ -472,6 +473,8 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         </div>
         </IonToolbar>
       </IonHeader>
+      )}
+      {path==='/assistant'&&<div aria-hidden="true" className="fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top,0px)] bg-[hsl(165,24%,20%)] lg:hidden"/>}
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
         <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
         <div className="flex items-center gap-4">
@@ -498,7 +501,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             </div>
           </section>
         </div>,document.body)}
-      <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
+      <div className={'mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9 '+(path==='/assistant'?'pt-[calc(8px+env(safe-area-inset-top,0px))]':'pt-4')}>{children}</div>
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
@@ -1321,7 +1324,7 @@ function Assistant({ data, setData, onImportDocuments }: {
       }}
       onRemoveQueuedReadOnlyQuestion={id=>setData(old=>({
         ...old,offlineAgentQuestions:removeOfflineQuestion(old.offlineAgentQuestions??[],id)
-      }))} /></Suspense>
+      }))} auxiliaryPanel={<div className="space-y-3">
     {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
       <summary className="cursor-pointer text-[12px] font-semibold">Earlier saved instructions · {data.queue.length}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These records came from the original command interpreter and remain encrypted in your vault. They are not active instructions, payments or trades.</p>
@@ -1332,6 +1335,7 @@ function Assistant({ data, setData, onImportDocuments }: {
           className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground"><Trash2 size={16}/></button>
       </div>)}</div>
     </details>}
+    </div>} /></Suspense>
   </>;
 }
 
