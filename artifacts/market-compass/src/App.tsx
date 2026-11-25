@@ -15,7 +15,7 @@ import {applySavedCategoryChanges,allowedSavedCategory} from '@/lib/savedCategor
 import {expenseCategoryNeedsSorting} from '@/lib/monthlyExpenses';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
-import LocalFinanceFiles from '@/components/LocalFinanceFiles';
+
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
@@ -43,6 +43,7 @@ import IncomeAllocation from '@/components/IncomeAllocation';
 // SpendingPortfolio loads only on its route.
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
+const LocalFinanceFiles=lazy(()=>import('@/components/LocalFinanceFiles'));
 const SolanaTrackingBar=lazy(()=>import('@/components/SolanaTrackingBar'));
 
 const SpendingPortfolio=lazy(()=>import('@/components/SpendingPortfolio'));
@@ -528,6 +529,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
   onImportDocuments:()=>void; onRecoverVault:()=>void; onAddAccount:()=>void;
 }) {
   const [,navigate] = useLocation();
+  const [homeImporterOpen,setHomeImporterOpen]=useState(false);
   const openDrafts = data.drafts.filter((draft) => draft.status === 'pending').length;
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
@@ -553,7 +555,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
       <FinancialSpaceHero currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
         onViewAccounts={()=>navigate('/debt')}/>
     </div>
-    <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
+    <details id="mc-home-upload" onToggle={event=>setHomeImporterOpen(event.currentTarget.open)} className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Upload size={20}/></span>
         <span className="min-w-0 flex-1">
@@ -569,7 +571,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
           Review dated PDF, CSV, TXT and transaction JSON evidence locally.
           Only approved transaction rows update your salary-cycle ledger.
         </p>
-        <LocalFinanceFiles documents={docs}
+        {homeImporterOpen && <Suspense fallback={<p role="status" className="rounded-xl bg-card px-4 py-3 text-[12px] text-muted-foreground">Opening the local document importer...</p>}><LocalFinanceFiles documents={docs}
           onAdd={document=>setData(old=>({
             ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
           }))}
@@ -580,7 +582,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
-        />
+        /></Suspense>}
       </div>
     </details>
     <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
@@ -1158,7 +1160,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
             and choose Review and add to Spend to classify real entries.
           </p>
         </div>
-        <LocalFinanceFiles
+        <Suspense fallback={<p role="status" className="rounded-xl bg-card px-4 py-3 text-[12px] text-muted-foreground">Opening the local document importer...</p>}><LocalFinanceFiles
           documents={docs}
           onAdd={document=>setData(old=>({
             ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
@@ -1171,7 +1173,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           region={selectedRegion(data.region)}
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
-        />
+        /></Suspense>
         <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
           currency={data.currency}
           onCreate={account=>setData(old=>({...old,accounts:[
@@ -1432,7 +1434,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
           <button type="button" aria-label="Close document importer" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border"><X size={19}/></button>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
-          <LocalFinanceFiles
+          <Suspense fallback={<p role="status" className="rounded-xl bg-card px-4 py-3 text-[12px] text-muted-foreground">Opening the local document importer...</p>}><LocalFinanceFiles
             documents={data.localFinanceDocuments??[]}
             onAdd={document=>setData(old=>({...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)}))}
             onRemove={id=>setData(old=>({...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)}))}
@@ -1440,7 +1442,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
             currency={data.currency}
             currencyReviewRequired={data.currencyReviewRequired}
             onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
-          />
+          /></Suspense>
         </div>
       </section>
     </div>}
