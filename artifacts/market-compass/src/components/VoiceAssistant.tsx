@@ -3,6 +3,8 @@ import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Refresh
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
+import { personalSessionActive,type PersonalTailnetSession } from '@/lib/personalTailnetAuto';
+import { approvedPersonalHosts,acquireAvailablePersonalNode } from '@/lib/personalTailnetFailover';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
@@ -113,6 +115,20 @@ export default function VoiceAssistant({
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
   const financeEdition = currentAssistantEdition() === 'finance';
+  // An independently protected standby can take over if HYPRBOX is down.
+  // Both origins are validated private HTTPS .ts.net endpoints. No keys or
+  // owner data are embedded in the GitHub Pages build.
+  const tailnetHosts = !financeEdition && publicPagesEdition
+    ? approvedPersonalHosts(import.meta.env.VITE_MC_PERSONAL_TAILNET_ORIGIN,
+      import.meta.env.VITE_MC_PERSONAL_TAILNET_FALLBACK_ORIGIN,settings.url)
+    : [];
+  const tailnetHostKey=tailnetHosts.join('|');
+  const preferredTailnet=tailnetHosts[0]||null;
+  const [personalTailnetSession,setPersonalTailnetSession]=useState<PersonalTailnetSession|null>(null);
+  const [personalTailnetStatus,setPersonalTailnetStatus]=useState<'checking'|'connected'|'offline'>('checking');
+  const [tailnetRetryNonce,setTailnetRetryNonce]=useState(0);
+  const tailnetConnected=tailnetHosts.includes(personalTailnetSession?.origin||'') &&
+    personalSessionActive(personalTailnetSession,personalTailnetSession?.origin||null);
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
@@ -120,7 +136,7 @@ export default function VoiceAssistant({
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [agentMode, setAgentMode] = useState(false);
+  const agentMode = true; // Private model is always invoked through bounded read-only agent.
   const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
   const [ownerBudget, setOwnerBudget] = useState<OwnerBudgetView | null>(null);
@@ -140,7 +156,7 @@ export default function VoiceAssistant({
   const messageSerial = useRef(0);
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
-  const connected = settings.enabled && connection === 'connected';
+  const connected = tailnetConnected || (settings.enabled && connection === 'connected');
   const add = (source: Message['source'], text: string, link?:Message['link']) => setMessages(old => [...old, {
     id: crypto.randomUUID(), source, text, ...(link?{link}:{}),
   }].slice(-35));
@@ -179,6 +195,42 @@ export default function VoiceAssistant({
     try { microphone.current?.abort(); } catch { /* Recognition already stopped. */ }
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   }, []);
+
+  // Personal is always on when a private Tailscale Serve endpoint is reachable.
+  // No login toggle, API secret, persistent browser bearer or background job.
+  useEffect(()=>{
+    if(!tailnetHosts.length)return;
+    let live=true,checking=false,renewAt=0;
+    async function check(){
+      if(!live||checking||document.visibilityState==='hidden')return;
+      if(!navigator.onLine){
+        setPersonalTailnetSession(null);setPersonalTailnetStatus('offline');return;
+      }
+      if(Date.now()+90000<renewAt)return;
+      checking=true;setPersonalTailnetStatus(previous=>previous==='connected'?previous:'checking');
+      try{
+        const session=await acquireAvailablePersonalNode(tailnetHosts);
+        if(live){
+          renewAt=session.expiresAt;
+          setPersonalTailnetSession(session);setPersonalTailnetStatus('connected');
+        }
+      }catch{
+        if(live){renewAt=0;setPersonalTailnetSession(null);setPersonalTailnetStatus('offline');}
+      }finally{checking=false;}
+    }
+    const visible=()=>{if(document.visibilityState==='visible')void check();};
+    const online=()=>{renewAt=0;void check();};
+    const offline=()=>{renewAt=0;setPersonalTailnetSession(null);setPersonalTailnetStatus('offline');};
+    void check();
+    const interval=window.setInterval(()=>{if(document.visibilityState==='visible')void check();},30000);
+    document.addEventListener('visibilitychange',visible);
+    window.addEventListener('online',online);window.addEventListener('offline',offline);
+    return ()=>{
+      live=false;window.clearInterval(interval);
+      document.removeEventListener('visibilitychange',visible);
+      window.removeEventListener('online',online);window.removeEventListener('offline',offline);
+    };
+  },[tailnetHostKey,tailnetRetryNonce]);
 
   // Reconnect after every vault unlock, and on visibility/network changes.
   // A failed connection does not discard or disable the encrypted settings.
@@ -516,8 +568,10 @@ export default function VoiceAssistant({
   }
 
   async function askDesktop(prompt: string, id: number, queuedId?:string) {
-    const url = privateTailnetOrigin(settings.url);
-    if (!url || !settings.token || !connected) return;
+    const useTailnet=tailnetConnected && personalTailnetSession!==null;
+    const url = useTailnet ? personalTailnetSession.origin : privateTailnetOrigin(settings.url);
+    const bearer = useTailnet ? personalTailnetSession.token : settings.token;
+    if (!url || !bearer || !connected) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 130000); // Local Qwen 4B CPU inference may need up to ~2 minutes.
     try {
@@ -547,12 +601,11 @@ export default function VoiceAssistant({
         expenseSummary: context.expenseSummary,
         documentFacts,
       } : undefined;
-      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
-      const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
-      const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
+      const useAgent = agentMode; // The local model always handles online queries via read-only agent.
+      const response = await fetch(url + (useTailnet ? '/api/personal/agent/run' : '/api/agent/run'), {
         method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
       });
       const payload: unknown = await response.json();
@@ -605,8 +658,8 @@ export default function VoiceAssistant({
         add('local', 'Compass took too long to answer on the private desktop. No action was executed. Please retry when the model is ready.');
         return;
       }
-      setConnection('offline');
-      setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
+      if(useTailnet){setPersonalTailnetSession(null);setTailnetRetryNonce(n=>n+1);}
+      else{setConnection('offline');setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);}
       add('local', 'The desktop AI is temporarily unavailable. Offline questions about your saved debt plan and markets still work.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
@@ -718,12 +771,12 @@ export default function VoiceAssistant({
     if (!busy && query.trim()) submit(query);
   }
 
-  return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
-    <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> {financeEdition?'Compass Financial Advisor':'Compass Personal'}</span>
+  return <div className="mc-assistant min-w-0 max-w-full space-y-3" data-testid="voice-assistant">
+    <section className="flex min-h-[56px] items-center justify-between gap-2 rounded-[16px] bg-[hsl(165,24%,20%)] px-3 py-2 text-white" aria-label="Compass model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> {financeEdition?'Compass Advisor':'Compass AI'}</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage || 'Compass private desktop connection status'}>
         <span className={connected ? 'h-2 w-2 shrink-0 rounded-full bg-emerald-400' : connection === 'checking' ? 'h-2 w-2 shrink-0 rounded-full bg-amber-300' : 'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
-        {connected ? 'Compass connected' : connection === 'checking' ? 'Connecting' : settings.enabled ? 'Offline · auto reconnect' : 'Local commands'}
+        {connected ? 'Compass connected' : personalTailnetStatus === 'checking' && preferredTailnet ? 'Connecting privately' : preferredTailnet || settings.enabled ? 'Private link unavailable' : 'Local commands'}
       </span>
       <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
         onClick={() => {
@@ -736,7 +789,7 @@ export default function VoiceAssistant({
       </button>
     </section>
 
-    <section className="flex min-h-[min(64dvh,650px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
+    <section className="mc-chat-panel flex min-h-[min(55dvh,500px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm sm:min-h-[min(64dvh,650px)]" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
@@ -744,18 +797,16 @@ export default function VoiceAssistant({
         }}><X size={14} className="mr-1 inline"/>Clear</button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <label className="flex min-h-8 items-center gap-2 text-[12px] font-semibold">
-          <input type="checkbox" checked={agentMode} disabled={busy}
-            onChange={event => { setAgentMode(event.target.checked); setLastAgent(null); }}
-            aria-label="Enable read-only agent mode"/>
-          <span>Agent mode <span className="font-normal text-muted-foreground">· up to 3 read-only tools</span></span>
-        </label>
+        <span className="flex min-h-8 items-center gap-2 text-[12px] font-semibold" aria-label="Read-only agent mode always active">
+          <ShieldCheck size={16} className="text-primary" aria-hidden="true"/>
+          Agent mode on <span className="font-normal text-muted-foreground">· always active · up to 3 read-only tools</span>
+        </span>
         <details className="max-w-full text-[11px] text-muted-foreground">
           <summary className="cursor-pointer">Safety and permissions</summary>
           <p className="max-w-[340px] py-2 leading-5">Financial sources can be reviewed, not edited. Reminders and expense entries remain drafts; trading and payments are disabled. Your unlocked vault is not shared with HYPRBOX unless you separately enable sharing below.</p>
         </details>
       </div>
-      <div className="mc-chat-log min-h-[min(40dvh,340px)] max-h-[min(62dvh,650px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-[min(27dvh,250px)] max-h-[min(48dvh,540px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:min-h-[min(40dvh,340px)] sm:max-h-[min(62dvh,650px)] sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
@@ -845,8 +896,8 @@ export default function VoiceAssistant({
 
 
 
-    <div className="mc-assistant-dock flex flex-col items-stretch gap-3 pb-3" aria-label="AI tools and connections">
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[12px] font-bold">Private memory</summary><div className="mt-2">
+    <div className="mc-assistant-dock flex min-w-0 w-full flex-col items-stretch gap-3 pb-2" aria-label="AI tools and connections">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary><div className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
         <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
@@ -888,7 +939,7 @@ export default function VoiceAssistant({
       </p>
     </div></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[12px] font-bold">Financial sources</summary><div className="mt-2">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[13px] font-bold">Financial sources</summary><div className="mt-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
         <button type="button" onClick={() => setSourceRefresh(n => n + 1)} disabled={!connected || sourceLoading}
@@ -984,7 +1035,7 @@ export default function VoiceAssistant({
 
     {financeEdition ? <FinanceFocusDeck onAsk={submit} onImportDocuments={onImportDocuments}/> :
       <PersonalToolDeck onAsk={submit} onImportDocuments={onImportDocuments}/>}
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[12px] font-bold">Suggested questions</summary><div className="mt-2">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary><div className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         {(financeEdition?financeIdeas:personalIdeas).map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
@@ -995,13 +1046,16 @@ export default function VoiceAssistant({
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
     </div></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm">
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
-        Configure once per encrypted vault. Market Compass reconnects after unlocking, when this screen is opened, and when this device comes back online. No need to re-enter the address or token each time.
+        Compass Personal connects automatically through the pinned Tailscale Serve address when HYPRBOX is online and this device is joined to the tailnet. Agent mode is always active. Legacy manual connections are retained for migration.
       </p>
+      {!financeEdition && publicPagesEdition && <p role="status" className="mt-2 text-[12px] leading-5 text-muted-foreground">
+        {tailnetConnected?'Private Personal agent connected through Tailscale.':preferredTailnet?'Private model needs an owner-authorized Tailscale connection on this iPhone. Internet access alone is not enough. Reconnection retries when the private network becomes reachable.':'Tailscale host provisioning pending. The original PWA remains usable offline.'}
+      </p>}
       <div role="status" className="mt-3 rounded-xl bg-muted/70 p-3 text-[12px] leading-5">
         <div className="flex items-center gap-2 font-semibold"><span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : connection === 'checking' ? 'bg-amber-500' : 'bg-muted-foreground'}`}/>
           {connected ? 'Desktop model available' : connection === 'checking' ? 'Checking desktop…' : settings.enabled ? 'Desktop temporarily unavailable' : 'Desktop connection not active'}
@@ -1011,7 +1065,7 @@ export default function VoiceAssistant({
       {publicPagesEdition && (
         <p role="note" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] leading-5">
           <strong>This is Compass Personal, the original GitHub Pages PWA ({window.location.hostname}).</strong>
-          {' '}For standalone Compass AI on a desktop or laptop, join your authorized private tailnet, enter the desktop's Tailscale Serve HTTPS address (*.ts.net) and your separately issued private AI token below, then save the connection. This public site never receives an embedded server token.
+          {' '}Compass automatically uses HYPRBOX over private Tailscale Serve when its approved HTTPS address is configured and your device joins the tailnet. No model operator token is included in this public app. A legacy manual token connection remains available below for compatibility.
           {' '}You can install this PWA from your browser's Install app menu. The private ngrok PWA has a different encrypted vault; export a password-encrypted backup before moving any records.
         </p>
       )}

@@ -65,6 +65,9 @@ jobs:
           PORT: '5173'
           BASE_PATH: '/market-compass-ios/'
           NODE_ENV: production
+          # Only public hostname strings. Never commit access tokens or edge proofs.
+          VITE_MC_PERSONAL_TAILNET_ORIGIN: ${{ vars.MC_PERSONAL_TAILNET_ORIGIN || 'https://hyprbox.taila14c4b.ts.net' }}
+          VITE_MC_PERSONAL_TAILNET_FALLBACK_ORIGIN: ${{ vars.MC_PERSONAL_TAILNET_FALLBACK_ORIGIN || 'https://hyprslap.taila14c4b.ts.net' }}
         run: pnpm --filter @workspace/market-compass run build
 
       - name: Package offline application shell for iPhone, laptop and desktop

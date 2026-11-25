@@ -10,18 +10,20 @@ test('original Ionic assistant keeps a compact Compass header and maximizes conv
   const css=await readFile(cssUrl,'utf8');
   assert.match(src,/aria-label="Compass model connection"/);
   assert.match(src,/Compass connected/);
-  assert.match(src,/min-h-\[min\(64dvh,650px\)\]/);
-  assert.match(src,/max-h-\[min\(62dvh,650px\)\]/);
+  assert.match(src,/min-h-\[min\(55dvh,500px\)\]/);
+  assert.match(src,/max-h-\[min\(48dvh,540px\)\]/);
   assert.doesNotMatch(src,/>Just ask\.</);
   assert.match(css,/\.mc-assistant-dock\{display:flex;flex-direction:column/);
-  assert.match(css,/\.mc-assistant-dock-card\{width:100%;max-width:100%/);
-  assert.match(css,/\.mc-assistant-dock-card > summary\{min-height:48px/);
+  assert.match(css,/\.mc-assistant-dock-card\{box-sizing:border-box;width:100%/);
+  assert.match(css,/\.mc-assistant-dock-card > summary\{min-height:40px/);
 });
 
 test('original PWA preserves vault and voice safety instead of importing ngrok-only assistant',async()=>{
   const src=await readFile(uiUrl,'utf8');
   assert.match(src,/privateTailnetOrigin\(settings\.url\)/);
-  assert.match(src,/Enable read-only agent mode/);
+  assert.match(src,/const agentMode = true/);
+  assert.match(src,/Read-only agent mode always active/);
+  assert.doesNotMatch(src,/aria-label="Enable read-only agent mode"/);
   assert.match(src,/Agent mode/);
   assert.match(src,/Read-only agent mode|read-only/);
   assert.match(src,/Turn on spoken replies/);
