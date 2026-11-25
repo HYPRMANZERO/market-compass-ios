@@ -742,6 +742,9 @@ export default function VoiceAssistant({
     };
   },[optionsOpen]);
 
+  const sendFromOptions=(idea:string)=>{setOptionsOpen(false);submit(idea);};
+  const importFromOptions=()=>{setOptionsOpen(false);if(onImportDocuments)onImportDocuments();else onNavigate('/expenses');};
+
   return <div className="mc-assistant flex h-[calc(100dvh-116px-env(safe-area-inset-top,0px))] min-h-0 min-w-0 max-w-full flex-col gap-2 lg:h-[calc(100dvh-156px)]" data-testid="voice-assistant">
     <section className="flex min-h-12 items-center gap-2 rounded-[15px] bg-[hsl(165,24%,20%)] px-3 py-1.5 text-white" aria-label="Compass model connection">
       <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold"><BrainCircuit size={19} className="shrink-0 text-[hsl(43,65%,74%)]" aria-hidden="true"/>{publicPagesEdition?'Compass Personal':'Compass Advisor'}</span>
@@ -944,7 +947,7 @@ export default function VoiceAssistant({
           Planned: provider approval, consent expiry and revocation, dated sync, duplicate checks,
           and explicit review before saving transactions. Missing bank data is unknown, not R0.
         </p>
-        <button type="button" onClick={()=>onImportDocuments ? onImportDocuments() : onNavigate('/expenses')}
+        <button type="button" onClick={importFromOptions}
           className="mt-3 min-h-11 rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
           Import a statement now <ArrowRight size={13} className="ml-1 inline"/>
         </button>
@@ -1018,7 +1021,7 @@ export default function VoiceAssistant({
     <section className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
-        {ideas.map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
+        {ideas.map(idea => <button key={idea} type="button" onClick={()=>sendFromOptions(idea)} disabled={busy}
           className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-left text-[12px] font-medium disabled:opacity-40">
           {idea}<ArrowRight size={13} className="ml-1 inline"/>
         </button>)}
