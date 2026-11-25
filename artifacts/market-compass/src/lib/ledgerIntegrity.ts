@@ -55,15 +55,25 @@ export function approvedLedgerIntegrity(
   const possibleDuplicates:PossibleDuplicateGroup[]=[];
   for(const rows of groups.values()){
     if(rows.length<2)continue;
-    // Two explicitly linked, different accounts may have independently valid
-    // transactions. Unknown account provenance remains a potential collision.
-    const distinctKnown=new Set(rows.map(x=>x.debtAccountId).filter(Boolean));
-    if(distinctKnown.size>1&&rows.every(x=>x.debtAccountId))continue;
-    const reference=rows[0];
-    possibleDuplicates.push({
-      date:reference.date,kind:reference.kind,amount:reference.amount,
-      description:maskDocumentPII(reference.description),count:rows.length
-    });
+    // Separate known accounts so a legitimate match in a second account
+    // cannot hide repeats within the first. Unknown provenance stays ambiguous.
+    const byAccount=new Map<string,ExpenseEntry[]>();
+    let hasUnknown=false;
+    for(const row of rows){
+      if(!row.debtAccountId){hasUnknown=true;continue;}
+      const bucket=byAccount.get(row.debtAccountId)??[];
+      bucket.push(row);
+      byAccount.set(row.debtAccountId,bucket);
+    }
+    const candidates=hasUnknown?[rows]:Array.from(byAccount.values());
+    for(const candidate of candidates){
+      if(candidate.length<2)continue;
+      const reference=candidate[0];
+      possibleDuplicates.push({
+        date:reference.date,kind:reference.kind,amount:reference.amount,
+        description:maskDocumentPII(reference.description),count:candidate.length
+      });
+    }
   }
   possibleDuplicates.sort((a,b)=>b.date.localeCompare(a.date)||
     b.count-a.count||a.description.localeCompare(b.description));

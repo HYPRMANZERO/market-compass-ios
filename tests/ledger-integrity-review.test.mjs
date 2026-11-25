@@ -29,6 +29,22 @@ test('different dates, amounts or bank accounts are not silently conflated',()=>
   ];
   assert.equal(approvedLedgerIntegrity(rows,'ZAR').possibleDuplicates.length,0);
 });
+test('a matching second account cannot conceal a repeated entry within the first account',()=>{
+  const rows=[
+    entry('a1','2026-11-02',80,'Same merchant','expense',{debtAccountId:'account-a'}),
+    entry('a2','2026-11-02',80,'Same merchant','expense',{debtAccountId:'account-a'}),
+    entry('b1','2026-11-02',80,'Same merchant','expense',{debtAccountId:'account-b'})
+  ];
+  const report=approvedLedgerIntegrity(rows,'ZAR');
+  assert.equal(report.approvedCount,3);
+  assert.deepEqual(report.possibleDuplicates.map(g=>g.count),[2]);
+  assert.doesNotMatch(JSON.stringify(report),/account-[ab]/);
+});
+test('two independent within-account repeat groups stay separate',()=>{
+  const rows=['a','b'].flatMap(account=>[1,2].map(i=>
+    entry(account+i,'2026-11-02',80,'Same merchant','expense',{debtAccountId:account})));
+  assert.deepEqual(approvedLedgerIntegrity(rows,'ZAR').possibleDuplicates.map(g=>g.count),[2,2]);
+});
 test('unknown account provenance is warning-only, not an automatic merge',()=>{
   const rows=[entry('a','2026-11-02',80,'Petrol station'),
     entry('b','2026-11-02',80,'PETROL STATION','expense',{debtAccountId:'linked'})];
