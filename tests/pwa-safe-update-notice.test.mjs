@@ -24,6 +24,6 @@ test('refresh is user controlled, preserves vault, and can be deferred',()=>{
 });
 test('query placeholder respects Personal and Finance use cases',()=>{
   assert.match(assistant,/placeholder=\{financeEdition\s*\?/);
-  assert.match(assistant,/Ask about debt or your budget/);
-  assert.match(assistant,/Ask Compass about anything/);
+  assert.match(assistant,/Ask Compass about finances/);
+  assert.match(assistant,/Message Compass/);
 });
