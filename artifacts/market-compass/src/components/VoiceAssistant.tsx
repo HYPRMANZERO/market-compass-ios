@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type {ReactNode} from 'react';
 import {createPortal} from 'react-dom';
-import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
+import CompassQuickActions from '@/components/CompassQuickActions';
+import {isPersonalOnlyAction,type CompassActionId} from '@/lib/compassActionMenu';
+import { ArrowRight, Plus, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
@@ -892,6 +894,49 @@ export default function VoiceAssistant({
 
   const sendFromOptions=(idea:string)=>{setOptionsOpen(false);submit(idea);};
   const importFromOptions=()=>{setOptionsOpen(false);if(onImportDocuments)onImportDocuments();else onNavigate('/expenses');};
+  const showOptionDetails=(selector:string)=>{
+    const section=document.querySelector<HTMLDetailsElement>(selector);
+    if(!section)return;
+    section.open=true;
+    window.requestAnimationFrame(()=>section.scrollIntoView({behavior:'smooth',block:'nearest'}));
+  };
+  const runCompassAction=(id:CompassActionId)=>{
+    // Interface checks are not authorization: the gateway enforces edition scope.
+    if(currentAssistantEdition()==='finance'&&isPersonalOnlyAction(id))return;
+    const go=(href:string)=>{setOptionsOpen(false);onNavigate(href);};
+    switch(id){
+      case 'vault':
+        go('/');
+        window.requestAnimationFrame(()=>{
+          const el=document.getElementById('mc-backup-controls') as HTMLDetailsElement|null;
+          if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'});}
+        });
+        break;
+      case 'document':
+      case 'scan-files': importFromOptions();break;
+      case 'scan-payments':
+      case 'spend-review': go('/expenses');break;
+      case 'debt-plan':go('/debt');break;
+      case 'markets':go('/markets');break;
+      case 'source-status':showOptionDetails('details[aria-label="Private financial sources"]');break;
+      case 'memory':showOptionDetails('details[aria-label="Encrypted desktop conversation memory"]');break;
+      case 'tasks':showOptionDetails('details[aria-label="Encrypted Personal task planner"]');break;
+      case 'research':showOptionDetails('details[aria-label="Compass Personal productivity tools"]');break;
+      case 'devices':{
+        const section=Array.from(document.querySelectorAll<HTMLDetailsElement>('details'))
+          .find(el=>el.querySelector('summary')?.textContent?.includes('Devices & private AI'));
+        if(section){section.open=true;window.requestAnimationFrame(()=>section.scrollIntoView({behavior:'smooth',block:'nearest'}));}
+        break;
+      }
+      case 'voice':{
+        document.querySelector('[aria-label="Compass voice controls"]')
+          ?.scrollIntoView({behavior:'smooth',block:'nearest'});
+        break;
+      }
+      case 'permissions':showOptionDetails('details[aria-label="AI safety and permissions"]');break;
+    }
+  };
+
 
   return <div className="mc-assistant flex h-[calc(100dvh-116px-env(safe-area-inset-top,0px))] min-h-0 min-w-0 max-w-full flex-col gap-2 lg:h-[calc(100dvh-156px)]" data-testid="voice-assistant">
     <section className="flex min-h-12 items-center gap-2 rounded-[15px] bg-[hsl(165,24%,20%)] px-3 py-1.5 text-white" aria-label="Compass model connection">
@@ -925,17 +970,25 @@ export default function VoiceAssistant({
         <div ref={bottom}/>
       </div>
       <div className="border-t border-border p-3">
-        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_48px_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+        <form className="mc-assistant-composer grid grid-cols-[48px_minmax(0,1fr)_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+          <button type="button" aria-label="Open Compass actions" aria-haspopup="dialog" aria-expanded={optionsOpen}
+            onClick={()=>setOptionsOpen(true)} className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] border border-border bg-background text-foreground">
+            <Plus size={24} aria-hidden="true"/>
+          </button>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
             <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask Compass about finances…" : "Message Compass…"} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
               aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[52px] w-full resize-none rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
-          <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'} style={{minWidth:48,minHeight:48}}
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
-            {listening ? <MicOff size={22}/> : <Mic size={23}/>}
-          </button>
-          <button type="submit" disabled={!query.trim() || busy} aria-label="Send question" style={{minWidth:48,minHeight:48}}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
+          {query.trim()&&!listening?
+            <button type="submit" disabled={busy} aria-label="Send question"
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40">
+              <Send size={19}/>
+            </button>:
+            <button type="button" onClick={toggleMic} disabled={!recognitionSupported||busy}
+              aria-pressed={listening} aria-label={listening?'Stop listening':'Speak a question'}
+              className={'grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 '+(listening?'animate-pulse bg-[hsl(5,60%,47%)]':'bg-[hsl(165,24%,25%)]')}>
+              {listening?<MicOff size={22}/>:<Mic size={23}/>}
+            </button>}
         </form>
         <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
         {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use your device keyboard microphone to dictate.</p>}
@@ -953,13 +1006,14 @@ export default function VoiceAssistant({
             <button type="button" autoFocus aria-label="Close Compass options" onClick={()=>setOptionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={20}/></button>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] pt-3">
+            <CompassQuickActions edition={currentAssistantEdition()} onAction={runCompassAction}/>
             <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
               <p className="flex items-center gap-2 font-semibold" aria-label="Read-only agent mode always active"><ShieldCheck size={16}/> Agent mode on · up to 3 read-only tools</p>
-              <details className="mt-2 text-[11px] text-muted-foreground"><summary className="min-h-8 cursor-pointer">Safety and permissions</summary>
+              <details aria-label="AI safety and permissions" className="mt-2 text-[11px] text-muted-foreground"><summary className="min-h-8 cursor-pointer">Safety and permissions</summary>
                 <p className="mt-1 leading-5">The assistant reviews approved sources. No transfers, payments or trades are executed. Sharing financial records with your private model requires separate permission.</p>
               </details>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div role="group" aria-label="Compass voice controls" className="grid grid-cols-2 gap-2">
               <button type="button" aria-label={settings.speakReplies?'Turn off spoken replies':'Turn on spoken replies'} aria-pressed={settings.speakReplies}
                 disabled={!speakingSupported} onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
                 className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border px-2 text-[12px] font-semibold disabled:opacity-40">
@@ -1163,12 +1217,12 @@ export default function VoiceAssistant({
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
     </div></details>
 
-    {financeEdition ? <FinanceFocusDeck onAsk={submit} onImportDocuments={onImportDocuments}/> :
-      <PersonalToolDeck onAsk={sendFromOptions} onImportDocuments={importFromOptions}/>}
+    <FinanceFocusDeck onAsk={sendFromOptions} onImportDocuments={importFromOptions}/>
+    {!financeEdition&&<PersonalToolDeck onAsk={sendFromOptions} onImportDocuments={importFromOptions}/>}
     <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary><div className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
-        {(financeEdition?financeIdeas:personalIdeas).map(idea => <button key={idea} type="button" onClick={()=>sendFromOptions(idea)} disabled={busy}
+        {(financeEdition?financeIdeas:[...new Set([...personalIdeas,...financeIdeas])]).map(idea => <button key={idea} type="button" onClick={()=>sendFromOptions(idea)} disabled={busy}
           className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-left text-[12px] font-medium disabled:opacity-40">
           {idea}<ArrowRight size={13} className="ml-1 inline"/>
         </button>)}
