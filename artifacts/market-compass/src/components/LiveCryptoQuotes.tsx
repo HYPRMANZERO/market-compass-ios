@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {canDisplayQuoteInCurrency} from '@/lib/quoteCurrencyDisplay';
 import {
   CRYPTO_REFRESH_MS,fetchLiveCryptoQuotes,type CryptoMarketSnapshot
 } from '@/lib/liveCryptoQuotes';
@@ -66,7 +67,11 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
     };
   },[refresh,dataSaver]);
 
-  const stale=snapshot && Date.now()-Date.parse(snapshot.providerAsOf)>15*60_000;
+  // Do not reinterpret previously retrieved ZAR amounts as USD (or the reverse).
+  // A currency switch under Data Saver keeps provenance but hides mismatched prices.
+  const quoteCurrencyMismatch=snapshot!==null&&!canDisplayQuoteInCurrency(snapshot,selected);
+  const displayedSnapshot=canDisplayQuoteInCurrency(snapshot,selected)?snapshot:null;
+  const stale=displayedSnapshot && Date.now()-Date.parse(displayedSnapshot.providerAsOf)>15*60_000;
   return <section className="mb-5 overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
     aria-label="Live crypto market provider quotes" data-testid="live-crypto-quotes">
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
@@ -82,16 +87,19 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
         {busy?'Fetching…':'Refresh quotes'}
       </button>
     </div>
-    {error&&<p role="status" className="mx-4 mt-3 rounded-lg border border-border bg-muted/40 p-3 text-[12px] leading-5">
-      {error} {snapshot?'Previously retrieved quotes remain visible below with their original timestamps.':'No sample, guessed or cached-as-live prices will be shown.'}
+    {quoteCurrencyMismatch&&<p role="status" className="mx-4 mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-[12px] leading-5 text-amber-950">
+      Saved quote currency {snapshot?.currency} differs from selected {selected}. No quote prices are shown; refresh quotes for {selected}. No currency conversion was performed.
     </p>}
-    {snapshot?<>
+    {error&&<p role="status" className="mx-4 mt-3 rounded-lg border border-border bg-muted/40 p-3 text-[12px] leading-5">
+      {error} {displayedSnapshot?'Previously retrieved quotes remain visible below with their original timestamps.':'No sample, guessed or cached-as-live prices will be shown.'}
+    </p>}
+    {displayedSnapshot?<>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 text-[11px] sm:px-5">
-        <div><strong>{snapshot.source}</strong> · Latest quote {utc(snapshot.providerAsOf)}</div>
+        <div><strong>{displayedSnapshot.source}</strong> · Latest quote {utc(displayedSnapshot.providerAsOf)}</div>
         <div className="font-semibold">{selected} · {dataSaver?'Data Saver: previously retrieved, not refreshed':stale?'Stale, refresh required':'Recent provider snapshot'}</div>
       </div>
       <div className="divide-y divide-border">
-        {snapshot.quotes.map(coin=><div key={coin.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-[12px] sm:grid-cols-[minmax(0,1.3fr)_minmax(100px,.7fr)_minmax(100px,.7fr)_minmax(100px,.7fr)] sm:px-5">
+        {displayedSnapshot.quotes.map(coin=><div key={coin.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-[12px] sm:grid-cols-[minmax(0,1.3fr)_minmax(100px,.7fr)_minmax(100px,.7fr)_minmax(100px,.7fr)] sm:px-5">
           <div className="min-w-0">
             <p className="truncate font-semibold">{coin.rank}. {coin.name} <span className="text-muted-foreground">{coin.symbol}</span></p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">Updated {utc(coin.asOf)}</p>
@@ -115,8 +123,8 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
         </div>)}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-[10px] leading-5 text-muted-foreground sm:px-5">
-        <span>Market data retrieved {utc(snapshot.retrievedAt)} · Not wallet holdings, verified balances, executable prices or investment advice.</span>
-        <a href={snapshot.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Provider</a>
+        <span>Market data retrieved {utc(displayedSnapshot.retrievedAt)} · Not wallet holdings, verified balances, executable prices or investment advice.</span>
+        <a href={displayedSnapshot.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Provider</a>
       </div>
     </>:<div className="p-4 text-[12px] leading-5 text-muted-foreground sm:p-5">
       {busy?'Retrieving current public market data…':'No verified current cryptocurrency quotes are available. Historical candles remain accessible below.'}
