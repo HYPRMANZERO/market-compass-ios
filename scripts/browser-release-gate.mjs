@@ -658,7 +658,7 @@ async function main(){
       };
     });
     assert.equal(keyboard.navHidden,true,'bottom tabbar must hide while keyboard is active');
-    assert.equal(keyboard.pageMode,'fixed','assistant attaches to visual viewport when typing');
+    assert.equal(keyboard.pageMode,'absolute','chat follows the visible page viewport without WebKit fixed-position drift');
     assert.ok(keyboard.pageBottom!==null &&
       Math.abs(keyboard.visibleBottom-keyboard.pageBottom)<=4,
       'assistant must meet keyboard top: '+JSON.stringify(keyboard));
@@ -671,6 +671,23 @@ async function main(){
     await tab.command('Emulation.setDeviceMetricsOverride',{
       width:390,height:844,deviceScaleFactor:3,mobile:true
     });
+    // iOS Done/gesture may dismiss the keyboard without blurring the textarea.
+    // Navigation and chat height must recover before any blur event.
+    await waitFor(()=>tab.invoke(function(){
+      const root=document.documentElement;
+      const nav=document.querySelector('.mc-mobile-tabbar');
+      return root.classList.contains('mc-chat-input-focused') &&
+        !root.classList.contains('mc-chat-keyboard-open') &&
+        nav && getComputedStyle(nav).display!=='none';
+    }),'tabs restore while textarea still focused after keyboard dismissal');
+    const retainedFocus=await tab.invoke(function(){
+      const page=document.querySelector('.mc-assistant-page');
+      const nav=document.querySelector('.mc-mobile-tabbar');
+      return {mode:getComputedStyle(page).position,
+        gap:nav.getBoundingClientRect().top-page.getBoundingClientRect().bottom};
+    });
+    assert.notEqual(retainedFocus.mode,'absolute','assistant must leave keyboard positioning on dismiss');
+    assert.ok(Math.abs(retainedFocus.gap)<=5,'no retained-focus strip after keyboard dismissal: '+JSON.stringify(retainedFocus));
     await tab.invoke(function(){
       document.querySelector('textarea[aria-describedby="mc-composer-hint"]')?.blur();
     });
