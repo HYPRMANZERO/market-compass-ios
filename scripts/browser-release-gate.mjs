@@ -627,6 +627,27 @@ async function main(){
     assert.ok(beforeChat.micWidth>=44&&beforeChat.plusWidth>=44,'accessible plus/voice buttons');
     assert.ok(Math.abs(beforeChat.plusHeight-beforeChat.micHeight)<=1,'matching plus and microphone heights');
     assert.equal(beforeChat.overflow,false,'AI tab must not horizontally overflow');
+    // The document must be locked on the AI route even with the keyboard CLOSED.
+    // Home and Spend still rely on ordinary document scrolling.
+    const chatOnly=await tab.invoke(async function(){
+      const html=document.documentElement;
+      const log=document.querySelector('.mc-chat-log');
+      const rootStyle=getComputedStyle(html);
+      const bodyStyle=getComputedStyle(document.body);
+      const before=window.scrollY;
+      window.scrollTo(0,99999);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      return {route:html.classList.contains('mc-assistant-route'),
+        rootOverflow:rootStyle.overflowY,bodyPosition:bodyStyle.position,
+        bodyOverflow:bodyStyle.overflowY,chatOverflow:log?getComputedStyle(log).overflowY:null,
+        before,after:window.scrollY};
+    });
+    assert.equal(chatOnly.route,true,'assistant-only document lock is installed');
+    assert.equal(chatOnly.rootOverflow,'hidden','assistant viewport cannot root-scroll');
+    assert.equal(chatOnly.bodyPosition,'fixed','assistant page must remain stationary');
+    assert.equal(chatOnly.bodyOverflow,'hidden','assistant has no second scroll layer');
+    assert.equal(chatOnly.chatOverflow,'auto','only AI messages scroll by default');
+    assert.ok(Math.abs(chatOnly.before-chatOnly.after)<=1,'AI document cannot pan while keyboard is closed: '+JSON.stringify(chatOnly));
     // Synthetic approximation of iPhone keyboard visualViewport contraction.
     // A real Safari keyboard still needs physical-device confirmation.
     await tab.invoke(function(){

@@ -15,9 +15,22 @@ export function isChatKeyboardVisible(
     restingViewportHeight-visibleViewportHeight>=140;
 }
 
+export function shouldBlockChatTouchScroll(
+  scrollHost:{scrollTop:number;scrollHeight:number;clientHeight:number}|null,
+  direction:number,
+):boolean {
+  if(!scrollHost || scrollHost.scrollHeight<=scrollHost.clientHeight+1)return true;
+  if(direction>0&&scrollHost.scrollTop<=0)return true;
+  if(direction<0&&scrollHost.scrollTop+scrollHost.clientHeight>=scrollHost.scrollHeight-1)return true;
+  return false;
+}
+
 export function installAssistantKeyboardViewport():()=>void {
   const root=document.documentElement;
   const visual=window.visualViewport;
+  // The AI screen is a viewport-bound application surface, not a long page.
+  // Scope the lock to this route; other pages still scroll normally.
+  root.classList.add('mc-assistant-route');
   let baseline=Math.max(window.innerHeight,visual?.height??window.innerHeight);
   let baselineWidth=Math.round(visual?.width??window.innerWidth);
   let focused=document.activeElement instanceof Element &&
@@ -93,6 +106,27 @@ export function installAssistantKeyboardViewport():()=>void {
       if(!focused)window.scrollTo(0,0);
     },250);
   };
+  // WebKit can rubber-band the document even when CSS overflow is hidden.
+  // Keep touch gestures inside the conversation (or a deliberately opened
+  // tools/menu drawer). Do not interfere with taps, pinches or other routes.
+  let touchScrollHost:HTMLElement|null=null;
+  let touchY=0;
+  const onTouchStart=(event:TouchEvent)=>{
+    if(window.innerWidth>=1024||event.touches.length!==1){touchScrollHost=null;return;}
+    touchY=event.touches[0].clientY;
+    touchScrollHost=event.target instanceof Element
+      ?event.target.closest<HTMLElement>('.mc-chat-log, .mc-chat-actions-drawer, .mc-composer-input, .mc-quick-menu-panel')
+      :null;
+  };
+  const onTouchMove=(event:TouchEvent)=>{
+    if(window.innerWidth>=1024||event.touches.length!==1||!event.cancelable)return;
+    const nextY=event.touches[0].clientY;
+    const direction=nextY-touchY;
+    touchY=nextY;
+    if(shouldBlockChatTouchScroll(touchScrollHost,direction))event.preventDefault();
+  };
+  document.addEventListener('touchstart',onTouchStart,{passive:true});
+  document.addEventListener('touchmove',onTouchMove,{passive:false});
   document.addEventListener('focusin',onFocus);
   document.addEventListener('focusout',onBlur);
   visual?.addEventListener('resize',schedule);
@@ -105,13 +139,15 @@ export function installAssistantKeyboardViewport():()=>void {
     window.clearTimeout(restoreTimer);
     for(const timer of settleTimers)window.clearTimeout(timer);
     settleTimers.clear();
+    document.removeEventListener('touchstart',onTouchStart);
+    document.removeEventListener('touchmove',onTouchMove);
     document.removeEventListener('focusin',onFocus);
     document.removeEventListener('focusout',onBlur);
     visual?.removeEventListener('resize',schedule);
     visual?.removeEventListener('scroll',schedule);
     window.removeEventListener('resize',schedule);
     window.removeEventListener('pageshow',schedule);
-    root.classList.remove('mc-chat-input-focused','mc-chat-keyboard-open');
+    root.classList.remove('mc-chat-input-focused','mc-chat-keyboard-open','mc-assistant-route');
     root.style.removeProperty('--mc-chat-visible-height');
     root.style.removeProperty('--mc-chat-visible-top');
     root.style.removeProperty('--mc-chat-visible-page-top');

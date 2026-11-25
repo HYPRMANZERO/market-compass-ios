@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {isChatKeyboardVisible} from '../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts';
+import {isChatKeyboardVisible,shouldBlockChatTouchScroll} from '../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts';
 const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 const app=read('../artifacts/market-compass/src/App.tsx');
 const css=read('../artifacts/market-compass/src/ionic-shell.css');
@@ -24,7 +24,8 @@ test('only the assistant route installs viewport monitoring; cleanup is mandator
   assert.match(module,/visual\?\.addEventListener\('resize',schedule\)/);
   assert.match(module,/visual\?\.addEventListener\('scroll',schedule\)/);
   assert.match(module,/window\.addEventListener\('pageshow',schedule\)/);
-  assert.match(module,/root\.classList\.remove\('mc-chat-input-focused','mc-chat-keyboard-open'\)/);
+  assert.match(module,/root\.classList\.add\('mc-assistant-route'\)/);
+  assert.match(module,/root\.classList\.remove\('mc-chat-input-focused','mc-chat-keyboard-open','mc-assistant-route'\)/);
   assert.match(module,/window\.scrollTo\(0,0\)/);
 });
 test('composer follows viewport pageTop; tabs return even if iOS keeps focus',()=>{
@@ -55,4 +56,36 @@ test('keyboard freezes the outer iPhone document but not message scrolling',()=>
   assert.match(chat,/overflow-y:\s*auto/);
   assert.match(chat,/touch-action:\s*pan-y/);
   assert.doesNotMatch(css,/html\.mc-chat-input-focused body\s*\{/);
+});
+
+test('AI route locks document in both editions, not just while keyboard is visible',()=>{
+  const html=css.match(/html\.mc-assistant-route\.plt-pwa\s*\{([^}]+)\}/)?.[1]??'';
+  const body=css.match(/html\.mc-assistant-route body\s*\{([^}]+)\}/)?.[1]??'';
+  const chat=css.match(/html\.mc-assistant-route \.mc-chat-log\s*\{([^}]+)\}/)?.[1]??'';
+  assert.match(html,/overflow:\s*hidden\s*!important/);
+  assert.match(body,/position:\s*fixed\s*!important/);
+  assert.match(body,/overflow:\s*hidden\s*!important/);
+  assert.match(chat,/overflow-y:\s*auto/);
+  const module=read('../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts');
+  assert.match(module,/document\.addEventListener\('touchstart',onTouchStart,\{passive:true\}\)/);
+  assert.match(module,/document\.addEventListener\('touchmove',onTouchMove,\{passive:false\}\)/);
+  assert.match(module,/document\.removeEventListener\('touchmove',onTouchMove\)/);
+});
+
+test('touches scroll messages but cannot rubber-band past either edge',()=>{
+  assert.equal(shouldBlockChatTouchScroll(null,15),true);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:0,scrollHeight:500,clientHeight:500},-10),true);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:0,scrollHeight:1000,clientHeight:500},10),true);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:0,scrollHeight:1000,clientHeight:500},-10),false);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:250,scrollHeight:1000,clientHeight:500},10),false);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:250,scrollHeight:1000,clientHeight:500},-10),false);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:500,scrollHeight:1000,clientHeight:500},-10),true);
+  assert.equal(shouldBlockChatTouchScroll({scrollTop:500,scrollHeight:1000,clientHeight:500},10),false);
+});
+
+test('new assistant replies scroll only chat log, never the document',()=>{
+  const voice=read('../artifacts/market-compass/src/components/VoiceAssistant.tsx');
+  assert.match(voice,/ref=\{chatLog\} className="mc-chat-log/);
+  assert.match(voice,/log\.scrollTo\(\{top:log\.scrollHeight,behavior:'smooth'\}\)/);
+  assert.doesNotMatch(voice,/bottom\.current\?\.scrollIntoView/);
 });

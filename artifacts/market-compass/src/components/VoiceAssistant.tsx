@@ -173,7 +173,7 @@ export default function VoiceAssistant({
   const microphone = useRef<BrowserRecognition | null>(null);
   // Safari may release a short utterance before playback unless we hold a ref.
   const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
-  const bottom = useRef<HTMLDivElement | null>(null);
+  const chatLog = useRef<HTMLDivElement | null>(null);
   const messageSerial = useRef(0);
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
@@ -191,7 +191,9 @@ export default function VoiceAssistant({
   }, [settings.url, settings.token, settings.shareFinancialContext]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // scrollIntoView can also scroll the root document on iOS; only move messages.
+    const log=chatLog.current;
+    if(log)log.scrollTo({top:log.scrollHeight,behavior:'smooth'});
   }, [messages]);
 
   useEffect(() => {
@@ -955,7 +957,7 @@ export default function VoiceAssistant({
         <h2 className="text-[13px] font-bold">Conversation</h2>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck size={13} aria-hidden="true"/> Agent on · read only</span>
       </div>
-      <div className="mc-chat-log min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div ref={chatLog} className="mc-chat-log min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
@@ -968,7 +970,7 @@ export default function VoiceAssistant({
           </div>
         </div>)}
         {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for Compass…'}</div>}
-        <div ref={bottom}/>
+        <div aria-hidden="true"/>
       </div>
     {optionsOpen&&(
         <section id="mc-chat-tools-drawer" role="region" aria-label="Compass actions drawer"
