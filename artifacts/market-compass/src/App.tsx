@@ -1433,7 +1433,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
-    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Select a bank or provider to organize your account documents. Live bank connections are not enabled."/><BankCarousel onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
+    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Select a bank or provider to organize your account documents. Live bank connections are not enabled."/><BankCarousel desktopAi={data.desktopAi} onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
     {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 px-3 py-[max(20px,env(safe-area-inset-top))]" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
