@@ -266,7 +266,7 @@ try{
   // accessible in the modal instead of shrinking the conversation.
   const compact=await js(function(){
     const chat=document.querySelector('[aria-label="AI chat interface"]');
-    const open=document.querySelector('button[aria-label="Open Compass options"]');
+    const open=document.querySelector('button[aria-label="Toggle Compass tools"]');
     const header=document.querySelector('.mc-mobile-header');
     const log=document.querySelector('[role="log"][aria-label="AI conversation"]');
     return {
@@ -286,10 +286,11 @@ try{
   assert.ok(compact.logHeight>130,'chat messages need usable scroll area');
   assert.equal(compact.hasOptions,true,'options opener must remain available');
   assert.equal(compact.horizontalOverflow,false,'AI screen must not overflow on iPhone');
-  await js(function(){document.querySelector('button[aria-label="Open Compass options"]').click();});
-  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Compass options open');
+  await js(function(){document.querySelector('button[aria-label="Toggle Compass tools"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'Compass options open');
+  await js(function(){document.querySelector('details[aria-label="Additional Compass settings"]').open=true;});
   const dock=await js(function(){
-    const dialog=document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+    const dialog=document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
     const host=dialog?.querySelector('.mc-assistant-dock');
     const cards=[...host?.children||[]];
     const personal=dialog?.querySelector('[aria-label="Compass Personal productivity tools"]');
@@ -302,7 +303,7 @@ try{
       hasPersonal:!!personal,
       personalSummaryWidth:personal?.querySelector('summary')?.getBoundingClientRect().width||0,
       bankStatus:dialog?.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
-      dialogFits:!!rect&&rect.width<=innerWidth+1&&rect.height<=innerHeight+1,
+      dialogFits:!!rect&&rect.width<=innerWidth+1&&rect.height<=innerHeight*0.48,
       horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1
     };
   });
@@ -312,13 +313,13 @@ try{
   assert.equal(dock.hasPersonal,true,'Personal tool desk must remain in the modal');
   assert.ok(dock.personalSummaryWidth>250,'Personal tool summary must not be squeezed');
   assert.ok(dock.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
-  assert.equal(dock.dialogFits,true,'options sheet must fit inside iPhone viewport');
+  assert.equal(dock.dialogFits,true,'inline drawer stays shorter than half of iPhone viewport');
   assert.equal(dock.horizontalOverflow,false,'options should not cause sideways scrolling');
-  await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
-  await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Compass options close');
-  console.log('PASS: full-height Personal chat and accessible full-width options sheet');
+  await js(function(){document.querySelector('button[aria-label="Close Compass actions"]').click();});
+  await until(()=>js(function(){return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'Compass options close');
+  console.log('PASS: edge-to-edge Personal chat and inline tools drawer');
   await js(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
-  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Plus action menu opens');
+  await until(()=>js(function(){return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'Plus action menu opens');
   const actionLabels=await js(function(){
     return [...document.querySelectorAll('[aria-label="Compass quick actions"] button')].map(item=>item.getAttribute('aria-label'));
   });
@@ -328,8 +329,8 @@ try{
     'Device link / private network status']){
     assert.ok(actionLabels.includes(label),'Personal must include action '+label);
   }
-  await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
-  await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Plus action menu closes');
+  await js(function(){document.querySelector('button[aria-label="Close Compass actions"]').click();});
+  await until(()=>js(function(){return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'Plus action menu closes');
   console.log('PASS: Personal includes every Finance action plus Personal-only actions');
   const before=await js(function(){
     const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
@@ -400,22 +401,24 @@ try{
   assert.equal(after.count,before.count+2,'Enter sends exactly once, with one local response');
   assert.ok(after.text.includes('What is my total debt?'));
   assert.equal(after.input,'','sent question clears input');
-  await js(function(){document.querySelector('button[aria-label="Open Compass options"]').click();});
-  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'options reopen for clearing chat');
+  await js(function(){document.querySelector('button[aria-label="Toggle Compass tools"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'options reopen for clearing chat');
+  await js(function(){document.querySelector('details[aria-label="Additional Compass settings"]').open=true;});
   await js(function(){
-    const button=[...document.querySelectorAll('[role="dialog"][aria-label="Compass AI options"] button')]
+    const button=[...document.querySelectorAll('[role="region"][aria-label="Compass actions drawer"] button')]
       .find(x=>x.textContent.trim()==='Clear chat');
     if(!button)throw Error('Clear chat action missing from options');
     button.click();
   });
-  await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'options closed after clear');
+  await until(()=>js(function(){return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'options closed after clear');
   await expect('Conversation cleared. Ask a new question below.','compact empty chat state');
   // The original Personal edition must persist tasks in the same encrypted
   // workspace as finances, not in plaintext browser storage.
-  await js(function(){document.querySelector('button[aria-label="Open Compass options"]').click();});
-  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'options opened for Personal tasks');
+  await js(function(){document.querySelector('button[aria-label="Toggle Compass tools"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'options opened for Personal tasks');
+  await js(function(){document.querySelector('details[aria-label="Additional Compass settings"]').open=true;});
   await js(function(){
-    const planner=document.querySelector('[role="dialog"][aria-label="Compass AI options"] details[aria-label="Encrypted Personal task planner"]');
+    const planner=document.querySelector('[role="region"][aria-label="Compass actions drawer"] details[aria-label="Encrypted Personal task planner"]');
     if(!planner)throw Error('Personal task planner missing');
     planner.open=true;
     const input=planner.querySelector('input[aria-label="New Personal task"]');
@@ -449,7 +452,7 @@ try{
   await until(()=>js(function(){
     return document.querySelector('[aria-label="Saved Personal tasks"] [aria-label="Mark task unfinished"]')!==null;
   }),'Personal task complete');
-  await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
+  await js(function(){document.querySelector('button[aria-label="Close Compass actions"]').click();});
   console.log('PASS: Personal tasks remain accessible inside options and encrypted-vault-only');
   console.log('PASS: responsive AI bubbles and composer; Enter/Shift+Enter/IME and compact empty state');
   console.log('PUBLIC BOOTSTRAP UI SMOKE PASS (synthetic localhost; not real iPhone)');

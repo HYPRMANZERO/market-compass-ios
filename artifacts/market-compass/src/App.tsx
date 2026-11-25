@@ -453,7 +453,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             </div>
           </section>
         </div>,document.body)}
-      <div className={'mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9 '+(path==='/assistant'?'pt-[calc(8px+env(safe-area-inset-top,0px))]':'pt-4')}>{children}</div>
+      <div className={'mc-mobile-content min-w-0 '+(path==='/assistant'?'mc-assistant-page w-full px-0 pt-0 lg:mx-auto lg:max-w-[1440px] lg:px-11 lg:pt-4':'mx-auto max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9')}>{children}</div>
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
