@@ -1,6 +1,6 @@
 /** Offline, deterministic salary-cycle ledger. No banking access or fund movement. */
 export type ExpenseKind = 'income' | 'expense' | 'debt-payment' | 'transfer';
-export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'savings' | 'other';
+export type ExpenseCategory = 'salary' | 'side-income' | 'car' | 'credit-card' | 'personal-loan' | 'housing' | 'groceries' | 'transport' | 'utilities' | 'insurance' | 'fees' | 'subscriptions' | 'health' | 'dining' | 'pets' | 'personal-care' | 'taxes' | 'education' | 'childcare' | 'travel' | 'shopping' | 'entertainment' | 'donations' | 'business' | 'cash' | 'investments' | 'card-load' | 'savings' | 'other' | 'unsorted';
 export type ExpenseEntry = {
   id: string;
   date: string;
@@ -33,12 +33,23 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   {value:'transport',label:'Fuel and transport'},{value:'utilities',label:'Utilities'},
   {value:'insurance',label:'Insurance'},{value:'fees',label:'Bank and finance fees'},
   {value:'subscriptions',label:'Subscriptions and gym'},{value:'health',label:'Healthcare'},
+  {value:'dining',label:'Restaurants and coffee'},{value:'pets',label:'Pets and vet'},
+  {value:'personal-care',label:'Personal care'},
+  {value:'taxes',label:'Taxes and duties'},{value:'education',label:'Education'},
+  {value:'childcare',label:'Childcare'},{value:'travel',label:'Travel and holidays'},
+  {value:'shopping',label:'Shopping and retail'},{value:'entertainment',label:'Entertainment'},
+  {value:'donations',label:'Charity and donations'},{value:'business',label:'Business expenses'},
+  {value:'cash',label:'Cash withdrawal'},{value:'investments',label:'Investment transfers'},
+  {value:'card-load',label:'Prepaid / virtual card loads'},
   {value:'savings',label:'Savings transfer'},{value:'other',label:'Other expense'},
+  {value:'unsorted',label:'Unsorted · needs category'},
 ];
 export const EXPENSE_KINDS: {value:ExpenseKind;label:string}[] = [
   {value:'expense',label:'Expense'},{value:'debt-payment',label:'Debt repayment'},
   {value:'income',label:'Income received'},{value:'transfer',label:'Internal transfer (not spending)'},
 ];
+/** Legacy other and explicit unsorted records need optional owner review; never relabel silently. */
+export const expenseCategoryNeedsSorting=(category:ExpenseCategory)=>category==='unsorted'||category==='other';
 const pad=(n:number)=>String(n).padStart(2,'0');
 const iso=(year:number, monthIndex:number, day:number)=>String(year)+'-'+pad(monthIndex+1)+'-'+pad(day);
 function dateParts(date:string) {
