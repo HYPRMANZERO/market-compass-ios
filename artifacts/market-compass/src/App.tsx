@@ -57,6 +57,7 @@ import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
 import {loadMarketDataSaver,persistMarketDataSaver} from '@/lib/marketDataSaver';
 import {installAssistantKeyboardViewport} from '@/lib/assistantKeyboardViewport';
+import {installMobileViewportRecovery} from '@/lib/mobileViewportRecovery';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
 import { localMarketResearch } from '@/lib/marketResearch';
@@ -359,6 +360,9 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
+  // iOS can leave the tab bar above the visible screen bottom after the
+  // keyboard closes. Monitor the persistent shell, not just the chat route.
+  useEffect(()=>installMobileViewportRecovery(),[]);
   // Keep the AI composer in the iPhone's *visible* viewport while the
   // on-screen keyboard is active. Other routes retain normal document scroll.
   useEffect(()=>{
@@ -368,11 +372,20 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
   // iOS standalone PWAs can restore the previous tab's scroll offset after
   // React has already switched routes. Reset once now and once after paint.
   // This prevents the first hero/card from opening beneath the sticky header.
+  const previousRoute=useRef(path);
   useEffect(() => {
+    const leavingAssistant=previousRoute.current==='/assistant' && path!=='/assistant';
+    previousRoute.current=path;
     const reset = () => window.scrollTo(0, 0);
     reset();
     const frame = window.requestAnimationFrame(reset);
-    return () => window.cancelAnimationFrame(frame);
+    // The iPhone keyboard may still be animating after Wouter has switched
+    // routes. Reset its old document pan after WebKit finishes dismissing it.
+    const timers=leavingAssistant?[160,420].map(delay=>window.setTimeout(reset,delay)):[];
+    return () => {
+      window.cancelAnimationFrame(frame);
+      for(const timer of timers)window.clearTimeout(timer);
+    };
   }, [path]);
   useEffect(() => {
     if(!menuOpen)return;
@@ -465,7 +478,10 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       <div className={'mc-mobile-content min-w-0 '+(path==='/assistant'?'mc-assistant-page w-full px-0 pt-0 lg:mx-auto lg:max-w-[1440px] lg:px-11 lg:pt-4':'mx-auto max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9')}>{children}</div>
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
-      <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
+      <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden" onPointerDown={()=>{
+        const active=document.activeElement;
+        if(active instanceof HTMLElement && active.matches('textarea.mc-composer-input'))active.blur();
+      }}>
        <div className="mx-auto grid max-w-[550px] grid-cols-4 gap-1">
          {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
            const selected = href === path;
