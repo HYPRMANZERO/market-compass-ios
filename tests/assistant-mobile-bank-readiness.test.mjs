@@ -20,7 +20,7 @@ test('chat bubbles and fields have accessible, non-crowded mobile layout',async(
   const ui=await source();
   assert.match(ui,/mc-assistant-composer grid grid-cols-\[48px_minmax\(0,1fr\)_48px\]/);
   assert.match(ui,/aria-label="Open Compass actions"/);
-  assert.match(ui,/aria-haspopup="dialog" aria-expanded=\{optionsOpen\}/);
+  assert.match(ui,/aria-controls="mc-chat-tools-drawer" aria-expanded=\{optionsOpen\}/);
   assert.match(ui,/role="group" aria-label="Compass voice controls"/);
   assert.match(ui,/query\.trim\(\)&&!listening\?/);
   assert.match(ui,/mc-chat-bubble/);

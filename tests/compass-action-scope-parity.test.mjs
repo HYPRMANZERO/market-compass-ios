@@ -34,7 +34,7 @@ test('Finance does not offer any Personal-only functions',()=>{
 
 test('Both chat screens expose the same functional plus button and scoped modal actions',()=>{
   assert.match(voice,/aria-label="Open Compass actions"/);
-  assert.match(voice,/onClick=\{\(\)=>setOptionsOpen\(true\)\}/);
+  assert.match(voice,/onClick=\{\(\)=>setOptionsOpen\(open=>!open\)\}/);
   assert.match(voice,/CompassQuickActions edition=\{currentAssistantEdition\(\)\} onAction=\{runCompassAction\}/);
   assert.match(voice,/if\(currentAssistantEdition\(\)==='finance'&&isPersonalOnlyAction\(id\)\)return/);
   assert.match(voice,/case 'source-status':showOptionDetails/);
