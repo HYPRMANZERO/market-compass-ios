@@ -5,6 +5,10 @@ import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisP
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { personalSessionActive,type PersonalTailnetSession } from '@/lib/personalTailnetAuto';
 import { approvedPersonalHosts,acquireAvailablePersonalNode } from '@/lib/personalTailnetFailover';
+import {
+  approvedPersonalDevices,selectedPersonalHosts,probeApprovedPersonalDevices,
+  interpretPersonalDeviceCommand,type PersonalDeviceChoice,type PersonalDeviceStatus
+} from '@/lib/personalDeviceRoster';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
@@ -123,11 +127,24 @@ export default function VoiceAssistant({
       import.meta.env.VITE_MC_PERSONAL_TAILNET_FALLBACK_ORIGIN,settings.url)
     : [];
   const tailnetHostKey=tailnetHosts.join('|');
-  const preferredTailnet=tailnetHosts[0]||null;
+  // Only the harmless choice enum survives navigating away from the AI tab.
+  // No device address, bearer, private data or operator token is stored here.
+  const [deviceChoice,setDeviceChoice]=useState<PersonalDeviceChoice>(()=>{
+    try{
+      const saved=window.sessionStorage.getItem('mc-personal-device-choice-v1');
+      return saved==='primary'||saved==='standby'?saved:'auto';
+    }catch{return 'auto';}
+  });
+  const tailnetDevices=approvedPersonalDevices(tailnetHosts);
+  const tailnetConnectHosts=selectedPersonalHosts(tailnetHosts,deviceChoice);
+  const tailnetConnectKey=tailnetConnectHosts.join('|');
+  const [deviceStatuses,setDeviceStatuses]=useState<Record<string,PersonalDeviceStatus>>({});
+  const [deviceProbeNonce,setDeviceProbeNonce]=useState(0);
+  const preferredTailnet=tailnetConnectHosts[0]||null;
   const [personalTailnetSession,setPersonalTailnetSession]=useState<PersonalTailnetSession|null>(null);
   const [personalTailnetStatus,setPersonalTailnetStatus]=useState<'checking'|'connected'|'offline'>('checking');
   const [tailnetRetryNonce,setTailnetRetryNonce]=useState(0);
-  const tailnetConnected=tailnetHosts.includes(personalTailnetSession?.origin||'') &&
+  const tailnetConnected=tailnetConnectHosts.includes(personalTailnetSession?.origin||'') &&
     personalSessionActive(personalTailnetSession,personalTailnetSession?.origin||null);
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
@@ -156,7 +173,7 @@ export default function VoiceAssistant({
   const messageSerial = useRef(0);
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
-  const connected = tailnetConnected || (settings.enabled && connection === 'connected');
+  const connected = tailnetConnected || (deviceChoice==='auto' && settings.enabled && connection === 'connected');
   const add = (source: Message['source'], text: string, link?:Message['link']) => setMessages(old => [...old, {
     id: crypto.randomUUID(), source, text, ...(link?{link}:{}),
   }].slice(-35));
@@ -199,7 +216,7 @@ export default function VoiceAssistant({
   // Personal is always on when a private Tailscale Serve endpoint is reachable.
   // No login toggle, API secret, persistent browser bearer or background job.
   useEffect(()=>{
-    if(!tailnetHosts.length)return;
+    if(!tailnetConnectHosts.length)return;
     let live=true,checking=false,renewAt=0;
     async function check(){
       if(!live||checking||document.visibilityState==='hidden')return;
@@ -209,7 +226,7 @@ export default function VoiceAssistant({
       if(Date.now()+90000<renewAt)return;
       checking=true;setPersonalTailnetStatus(previous=>previous==='connected'?previous:'checking');
       try{
-        const session=await acquireAvailablePersonalNode(tailnetHosts);
+        const session=await acquireAvailablePersonalNode(tailnetConnectHosts);
         if(live){
           renewAt=session.expiresAt;
           setPersonalTailnetSession(session);setPersonalTailnetStatus('connected');
@@ -230,7 +247,61 @@ export default function VoiceAssistant({
       document.removeEventListener('visibilitychange',visible);
       window.removeEventListener('online',online);window.removeEventListener('offline',offline);
     };
-  },[tailnetHostKey,tailnetRetryNonce]);
+  },[tailnetConnectKey,tailnetRetryNonce]);
+
+  // Only pinned owner-authorized Compass Core peers are inspected. No LAN
+  // discovery. Session probe tokens are discarded; browser storage is untouched.
+  useEffect(()=>{
+    if(!tailnetHosts.length)return;
+    let live=true,checking=false;
+    async function checkDevices(){
+      if(!live||checking||document.visibilityState==='hidden')return;
+      if(!navigator.onLine){
+        setDeviceStatuses(Object.fromEntries(tailnetHosts.map(origin=>[origin,'unreachable' as const])));
+        return;
+      }
+      checking=true;
+      try{
+        const report=await probeApprovedPersonalDevices(tailnetHosts);
+        if(live)setDeviceStatuses(report);
+      }catch{
+        if(live)setDeviceStatuses({});
+      }finally{checking=false;}
+    }
+    const refresh=()=>{if(document.visibilityState==='visible')void checkDevices();};
+    void checkDevices();
+    const timer=window.setInterval(refresh,90000);
+    document.addEventListener('visibilitychange',refresh);
+    window.addEventListener('online',refresh);
+    return ()=>{
+      live=false;window.clearInterval(timer);
+      document.removeEventListener('visibilitychange',refresh);
+      window.removeEventListener('online',refresh);
+    };
+  },[tailnetHostKey,deviceProbeNonce]);
+
+  function selectPersonalDevice(choice:PersonalDeviceChoice):boolean{
+    if(financeEdition||!publicPagesEdition)return false;
+    if(!selectedPersonalHosts(tailnetHosts,choice).length){
+      setStatus('That device is not in the approved Compass Core roster.');
+      return false;
+    }
+    if(busy){
+      setStatus('Wait for the current AI response before switching devices.');
+      return false;
+    }
+    // Never carry a host-bound session token to a different selected device.
+    setPersonalTailnetSession(null);
+    setPersonalTailnetStatus('checking');
+    setDeviceChoice(choice);
+    try{window.sessionStorage.setItem('mc-personal-device-choice-v1',choice);}catch{/* memory-only fallback */}
+    setTailnetRetryNonce(n=>n+1);
+    setDeviceProbeNonce(n=>n+1);
+    setStatus(choice==='auto'
+      ?'Automatic private connection requested; checking authorized nodes.'
+      :'Checking the selected approved private AI device.');
+    return true;
+  }
 
   // Reconnect after every vault unlock, and on visibility/network changes.
   // A failed connection does not discard or disable the encrypted settings.
@@ -671,6 +742,36 @@ export default function VoiceAssistant({
     setQuery(''); setStatus('');
     add('owner', question);
     setLastAgent(null);
+    // Exact, explicit device requests are local routing choices, not arbitrary
+    // commands sent to a model or unauthenticated network scanners.
+    const deviceCommand=!financeEdition&&publicPagesEdition?
+      interpretPersonalDeviceCommand(question):null;
+    if(deviceCommand){
+      let message='';
+      if(deviceCommand.kind==='list'){
+        message=tailnetDevices.length
+          ?'Approved Compass Core devices: '+tailnetDevices.map(device=>
+            device.name+' ('+(tailnetConnected&&personalTailnetSession?.origin===device.origin
+              ?'connected':deviceStatuses[device.origin]==='ready'
+                ?'private AI ready':deviceStatuses[device.origin]==='unreachable'
+                  ?'unreachable or not authorized':'not yet checked')+')').join(', ')+
+            '. Say Connect to HYPRBOX, Connect to HYPRSLAP, or Use automatic failover.'
+          :'No approved Compass Core devices are configured.';
+      }else if(deviceCommand.kind==='reject'){
+        message='Only approved HYPRBOX and HYPRSLAP private AI endpoints can be selected. '+
+          'Compass cannot scan arbitrary local devices or connect without authorization.';
+      }else{
+        const allowed=selectPersonalDevice(deviceCommand.choice);
+        message=allowed
+          ?deviceCommand.choice==='auto'
+            ?'Automatic private AI failover selected. I will use the first authorized ready device.'
+            :'Attempting an authorized private AI connection to '+
+              (tailnetDevices.find(x=>x.id===deviceCommand.choice)?.name||'the selected device')+
+              '. It is not connected until the model responds.'
+          :'That device is not available to select, or the current AI request is still running.';
+      }
+      add('local',message);setStatus(message);speak(message);return;
+    }
     // Jarvis's browser-safe shortcuts are deterministic and never invoke
     // server-side desktop actions. The user must explicitly tap an external link.
     const personal = !financeEdition ? interpretJarvisPersonalCommand(question) : null;
@@ -1047,12 +1148,49 @@ export default function VoiceAssistant({
     </div></details>
 
     <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm">
-      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
+      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> {financeEdition?'Compass AI · saved connection':'Devices & private AI'}
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
         Compass Personal connects automatically through the pinned Tailscale Serve address when HYPRBOX is online and this device is joined to the tailnet. Agent mode is always active. Legacy manual connections are retained for migration.
       </p>
+      {!financeEdition&&publicPagesEdition&&<section aria-label="Approved Compass Core devices"
+        className="mt-3 space-y-2 rounded-xl border border-border bg-muted/25 p-3">
+        <h3 className="text-[12px] font-bold">Devices on Compass Core</h3>
+        <p className="text-[11px] leading-5 text-muted-foreground">
+          Only preapproved private AI nodes are listed, not every device on your LAN.
+          Your iPhone must join the owner-authorized Tailscale network.
+          Selecting a device never grants control of its files or settings.
+        </p>
+        <button type="button" disabled={busy||tailnetDevices.length===0}
+          aria-pressed={deviceChoice==='auto'}
+          onClick={()=>selectPersonalDevice('auto')}
+          className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold disabled:opacity-40">
+          Automatic: primary, then approved standby {deviceChoice==='auto'?'(selected)':''}
+        </button>
+        {tailnetDevices.map(device=><div key={device.id}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background p-3">
+          <div className="min-w-0 flex-1">
+            <strong className="block break-words text-[12px]">{device.name} ? {device.role}</strong>
+            <span role="status" className="mt-1 block text-[11px] text-muted-foreground">
+              {tailnetConnected&&personalTailnetSession?.origin===device.origin
+                ?'Connected and model verified'
+                :deviceStatuses[device.origin]==='ready'?'Private AI ready; not selected'
+                  :deviceStatuses[device.origin]==='unreachable'
+                    ?'Unreachable, offline or access denied':'Checking private availability'}
+            </span>
+          </div>
+          <button type="button" disabled={busy} aria-pressed={deviceChoice===device.id}
+            onClick={()=>selectPersonalDevice(device.id)}
+            className="min-h-11 rounded-xl border border-primary/30 bg-primary/10 px-3 text-[11px] font-bold text-primary disabled:opacity-40">
+            {deviceChoice===device.id?'Selected':'Connect'}
+          </button>
+        </div>)}
+        <button type="button" onClick={()=>setDeviceProbeNonce(n=>n+1)}
+          className="min-h-10 rounded-xl border border-border px-3 text-[11px] font-semibold">
+          Check device status
+        </button>
+      </section>}
       {!financeEdition && publicPagesEdition && <p role="status" className="mt-2 text-[12px] leading-5 text-muted-foreground">
         {tailnetConnected?'Private Personal agent connected through Tailscale.':preferredTailnet?'Private model needs an owner-authorized Tailscale connection on this iPhone. Internet access alone is not enough. Reconnection retries when the private network becomes reachable.':'Tailscale host provisioning pending. The original PWA remains usable offline.'}
       </p>}

@@ -36,6 +36,7 @@ import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
+import LedgerIntegrityPanel from '@/components/LedgerIntegrityPanel';
 import IncomeAllocation from '@/components/IncomeAllocation';
 // MonthlyExpenses loads only on its route.
 // SpendingPortfolio loads only on its route.
@@ -1177,6 +1178,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
+        <LedgerIntegrityPanel entries={ledger} currency={data.currency}/>
         <SavedCategoryReview entries={ledger} currency={data.currency} region={selectedRegion(data.region)}
           onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(
             old.expenseEntries??[],approved,selectedRegion(old.region))}))}
