@@ -26,7 +26,9 @@ const cash=(value:number,code:string)=>{
   catch{return code+' '+value.toFixed(2);}
 };
 const readable=(date:string)=>new Date(date+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'});
-const suggestCategory=(kind:ExpenseKind):ExpenseCategory=>kind==='income'?'salary':kind==='debt-payment'?'credit-card':kind==='transfer'?'savings':'groceries';
+// Never silently guess a category for an owner's new transaction. Keep the
+// original kind/amount/date and let the owner classify in the review UI.
+const suggestCategory=(_kind:ExpenseKind):ExpenseCategory=>'unsorted';
 export default function MonthlyExpenses({entries,settings,currency,debtAccounts,desktopAi,onSave,onDelete,onSettingsChange}:Props){
   const today=localDate();
   const calendarUrl = new URL(import.meta.env.BASE_URL + 'salary-reminder.ics',window.location.origin).toString();
@@ -34,7 +36,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const [editingId,setEditingId]=useState('');
   const [date,setDate]=useState(today);
   const [kind,setKind]=useState<ExpenseKind>('expense');
-  const [category,setCategory]=useState<ExpenseCategory>('groceries');
+  const [category,setCategory]=useState<ExpenseCategory>('unsorted');
   const [description,setDescription]=useState('');
   const [paidVia,setPaidVia]=useState('');
   const [amount,setAmount]=useState('');
@@ -61,7 +63,7 @@ export default function MonthlyExpenses({entries,settings,currency,debtAccounts,
   const salaryDay=today.endsWith('-26');
   const salaryReminderDue=salaryDay&&!currentSalaryEntered;
   function reset(){
-    setEditingId('');setDate(today);setKind('expense');setCategory('groceries');setDescription('');
+    setEditingId('');setDate(today);setKind('expense');setCategory('unsorted');setDescription('');
     setPaidVia('');setAmount('');setLinkedDebtId('');setAccountLabel('');setRemaining('');setSyncDebt(false);setNote('');
   }
   function save(event:FormEvent<HTMLFormElement>){
