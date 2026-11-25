@@ -15,6 +15,7 @@ import BankCarousel from '@/components/BankCarousel';
 import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import EvidenceReviewInbox from '@/components/EvidenceReviewInbox';
 import {recurringPatterns} from '@/lib/historicalRecurring';
+import {accountLinkedEvidence} from '@/lib/accountLinkedEvidence';
 import {localDate} from '@/lib/dailyBackup';
 import type {ExpenseEntry,ExpenseSettings} from '@/lib/monthlyExpenses';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
@@ -188,13 +189,16 @@ export default function MobileOverview({
           const balance=entered(account.balance);
           const apr=entered(account.apr);
           const minimum=entered(account.minimumPayment);
-          const linked=entries.filter(e=>e.debtAccountId===account.id&&e.currency===currency&&Number.isFinite(e.amount)&&e.amount>0).sort((a,b)=>b.date.localeCompare(a.date));
+          // The linked transaction date is evidence of historical activity,
+          // never proof of when the separately entered account balance changed.
+          const evidence=accountLinkedEvidence(entries,account.id,currency,localDate());
+          const linked=evidence.recentEntries;
           return <details className="mc-account-row" key={account.id}>
             <summary aria-label={'Expand details for '+maskDocumentPII(account.name||'account')}>
               <span className="mc-account-avatar" aria-hidden="true"><WalletCards size={20}/></span>
               <span className="mc-account-label">
                 <strong>{maskDocumentPII(account.name.trim())||`Account ${index+1}`}</strong>
-                <small>Manual entry · Not bank connected</small>
+                <small>Manual balance · Not bank synced</small>
               </span>
               <span className="mc-account-right">
                 <strong>{balance===null?'Not entered':money(balance,currency)}</strong>
@@ -213,11 +217,18 @@ export default function MobileOverview({
               <div className="col-12 rounded-xl bg-muted/35 p-3">
                 <strong className="block text-[12px]">Linked transaction history</strong>
                 <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Owner-approved records linked explicitly to this account; not a live bank feed.</p>
+                <p className="mt-2 rounded-lg bg-background px-2.5 py-2 text-[11px] leading-5 text-muted-foreground">
+                  Balance: owner-entered planning figure, with no bank-confirmed as-of date.
+                  <span className="block">Latest linked transaction: <strong className="text-foreground">{evidence.latestTransactionDay??'Not recorded'}</strong> · historical activity only.</span>
+                </p>
+                {(evidence.futureDatedCount>0||evidence.invalidDatedCount>0||evidence.otherCurrencyCount>0)&&<p className="mt-2 text-[10px] leading-4 text-amber-700 dark:text-amber-300" role="status">
+                  Date/source review: {evidence.futureDatedCount} future-dated, {evidence.invalidDatedCount} invalid/incomplete, {evidence.otherCurrencyCount} different-currency linked row(s) excluded from this history view. Saved records are unchanged.
+                </p>}
                 {linked.length?<ul className="mt-2 divide-y divide-border">{linked.slice(0,5).map(item=><li key={item.id} className="flex items-start justify-between gap-2 py-2 text-[11px]">
                   <span className="min-w-0"><strong className="block break-words">{maskDocumentPII(item.description)}</strong><small className="text-muted-foreground">{item.date} · {item.kind}</small></span>
                   <strong className="shrink-0 tabular-nums">{money(item.amount,currency)}</strong>
                 </li>)}</ul>:<p className="mt-2 text-[11px] text-muted-foreground">No approved transactions linked to this account.</p>}
-                {linked.length>5&&<p className="mt-1 text-[10px] text-muted-foreground">Showing latest five. Open Spend for all linked records.</p>}
+                {evidence.approvedLinkedCount>5&&<p className="mt-1 text-[10px] text-muted-foreground">Showing latest five of {evidence.approvedLinkedCount} dated linked records. Open Spend for all approved history.</p>}
               </div>
               <div className="col-12">
                 <Link href="/debt">Edit repayment details <ArrowUpRight size={14} aria-hidden="true"/></Link>
