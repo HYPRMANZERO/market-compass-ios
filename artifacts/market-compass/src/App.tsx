@@ -37,6 +37,7 @@ import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import LedgerIntegrityPanel from '@/components/LedgerIntegrityPanel';
+import FinancialSourceStatusPanel from '@/components/FinancialSourceStatusPanel';
 import IncomeAllocation from '@/components/IncomeAllocation';
 // MonthlyExpenses loads only on its route.
 // SpendingPortfolio loads only on its route.
@@ -581,6 +582,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
     </details>
     <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
       currency={data.currency} settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}/></div>
+    <FinancialSourceStatusPanel entries={entries} documents={docs}/>
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
@@ -1178,6 +1180,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
+        <FinancialSourceStatusPanel entries={ledger} documents={docs}/>
         <LedgerIntegrityPanel entries={ledger} currency={data.currency}/>
         <SavedCategoryReview entries={ledger} currency={data.currency} region={selectedRegion(data.region)}
           onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(
