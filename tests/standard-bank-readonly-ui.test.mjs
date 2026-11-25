@@ -14,7 +14,7 @@ const READY={...STATUS,ready:true};
 const ACCOUNT={id:'acct-one',displayName:'Cheque account',last4:'4381',
   currency:'ZAR',balance:370.42,selected:false};
 const PKCE='A'.repeat(43);
-const AUTH='https://auth.standardbank.co.za/oauth/authorize?response_type=code&state=abc123&code_challenge='+PKCE+'&code_challenge_method=S256';
+const AUTH='https://auth.standardbank.co.za/oauth/authorize?response_type=code&state='+('s'.repeat(43))+'&code_challenge='+PKCE+'&code_challenge_method=S256&redirect_uri='+encodeURIComponent(ORIGIN+'/bank/oauth/standard-bank/callback');
 
 test('only the same protected finance origin with an enabled private client token may check bank status',()=>{
   assert.equal(eligibleFinanceBankOrigin(ORIGIN,SET,'finance'),true);
@@ -40,6 +40,9 @@ test('consent URLs require state, code challenge and PKCE rather than arbitrary 
   assert.equal(validStandardBankRedirect('https://www.standardbank.co.za/'),null);
   assert.equal(validStandardBankRedirect('https://auth.standardbank.co.za/oauth/authorize?state=1'),null);
   assert.equal(validStandardBankRedirect(AUTH.replace('code_challenge_method=S256','code_challenge_method=plain')),null);
+  assert.equal(validStandardBankRedirect(AUTH.replace('state='+('s'.repeat(43)),'state=abc')),null);
+  assert.equal(validStandardBankRedirect(AUTH.replace('code_challenge='+PKCE,'code_challenge=bad')),null);
+  assert.equal(validStandardBankRedirect(AUTH+'&state=duplicated'),null);
 });
 test('valid status confirms an offline partner connection without inventing accounts',()=>{
   const status=parseBankLinkStatus(STATUS);
@@ -107,6 +110,8 @@ test('official consent response must contain a validated bank authorization URL'
   const auth=await standardBankApi(ORIGIN,SET,'finance','connect',undefined,
     async()=>Response.json({authorizationUrl:AUTH}));
   assert.equal(auth.authorizationUrl,AUTH);
+  await assert.rejects(standardBankApi(ORIGIN,SET,'finance','connect',undefined,
+    async()=>Response.json({authorizationUrl:AUTH.replace(encodeURIComponent(ORIGIN+'/bank/oauth/standard-bank/callback'),encodeURIComponent('https://attacker.example/callback'))})),/verified/);
   await assert.rejects(standardBankApi(ORIGIN,SET,'finance','connect',undefined,
     async()=>Response.json({authorizationUrl:'https://attacker.example/redirect'})),/verified/);
 });
