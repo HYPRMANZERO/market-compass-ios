@@ -1,7 +1,7 @@
 import {Link} from 'wouter';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import type {ExpenseEntry,ExpenseSettings} from '@/lib/monthlyExpenses';
-import {DEFAULT_EXPENSE_SETTINGS,cycleAnalysis,salaryCycle} from '@/lib/monthlyExpenses';
+import {DEFAULT_EXPENSE_SETTINGS,cycleAnalysis,cycleEntries,salaryCycle} from '@/lib/monthlyExpenses';
 import type {PrivateBudget} from '@/components/DebtAdvisor';
 import {localDate} from '@/lib/dailyBackup';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
@@ -35,6 +35,9 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
   const cycle=salaryCycle(localDate());
   const stats=cycleAnalysis(safeEntries,cycle.start,currency,
     (settings??DEFAULT_EXPENSE_SETTINGS).cycleBudget);
+  const cycleLedger=cycleEntries(safeEntries,cycle.start,currency);
+  const hasRecordedIncome=cycleLedger.some(entry=>entry.kind==='income');
+  const hasRecordedOutflow=cycleLedger.some(entry=>entry.kind==='expense'||entry.kind==='debt-payment');
   const budgetFields=[
     {title:'Monthly income',value:budget?.monthlyIncome},
     {title:'Essential monthly costs',value:budget?.monthlyEssentials},
@@ -70,12 +73,12 @@ export default function HomeFinancialEvidence({documents,entries,settings,accoun
       </div>
       <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Current-cycle income</p>
-        <p className="mt-1 text-[17px] font-bold">{stats.count?money(stats.income,currency):'Not recorded'}</p>
+        <p className="mt-1 text-[17px] font-bold">{hasRecordedIncome?money(stats.income,currency):'Not recorded'}</p>
         <p className="text-[10px] text-muted-foreground">Recorded only · not bank-verified</p>
       </div>
       <div className="rounded-2xl border border-border bg-card p-3 tabular-nums sm:p-4">
         <p className="text-[11px] text-muted-foreground">Current-cycle outflows</p>
-        <p className="mt-1 text-[17px] font-bold">{stats.count?money(stats.expenses+stats.debtPayments,currency):'Not recorded'}</p>
+        <p className="mt-1 text-[17px] font-bold">{hasRecordedOutflow?money(stats.expenses+stats.debtPayments,currency):'Not recorded'}</p>
         <p className="text-[10px] text-muted-foreground">Expenses + repayments · no transfers</p>
       </div>
     </div>
