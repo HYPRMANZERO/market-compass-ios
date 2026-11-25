@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {extractLocalFinanceDocument} from '../artifacts/market-compass/src/lib/localFinanceDocs.ts';
-import {documentReconciliation} from '../artifacts/market-compass/src/lib/documentReconciliation.ts';
+import {documentReconciliation,assertDocumentApprovalDates} from '../artifacts/market-compass/src/lib/documentReconciliation.ts';
 import {preparedDocumentReview} from '../artifacts/market-compass/src/lib/reviewSuggestions.ts';
 import {applyReviewedDocumentToLedger} from '../artifacts/market-compass/src/lib/reviewedDocumentLedger.ts';
 
@@ -64,7 +64,7 @@ test('future-dated source movements cannot be bulk-selected or posted as histori
   assert.equal(report.futureDated,1);
   assert.equal(report.bulkSafeCount,0);
   const choice={lineIndex:0,...preparedDocumentReview(source,0)};
-  assert.throws(()=>applyReviewedDocumentToLedger(source,[],[choice],'ZAR',when),
+  assert.throws(()=>assertDocumentApprovalDates(source,[choice],when),
     /Future-dated transactions/);
 });
 test('consistent older category that conflicts with new suggestion needs approval',()=>{
@@ -88,8 +88,9 @@ test('one-off merchant category is not learned as a permanent rule',()=>{
 test('approval preserves source date and does not alter the original evidence',()=>{
   const source=doc(['20/11/2026,Synthetic groceries,225.00,']);
   const good={lineIndex:0,...preparedDocumentReview(source,0)};
-  assert.throws(()=>applyReviewedDocumentToLedger(source,[],[
-    {...good,date:'2026-10-20'}],'ZAR',when),/source transaction date must be preserved/);
+  assert.throws(()=>assertDocumentApprovalDates(source,[
+    {...good,date:'2026-10-20'}],when),/source transaction date must be preserved/);
+  assert.doesNotThrow(()=>assertDocumentApprovalDates(source,[good],when));
   const result=applyReviewedDocumentToLedger(source,[],[good],'ZAR',when);
   assert.equal(result[0].date,'2026-11-20');
   assert.equal(source.lines[0].date,'2026-11-20');
@@ -101,6 +102,7 @@ test('reviewer excludes flagged rows from BOTH bulk shortcuts and confirms overr
   assert.match(code,/clearFlaggedSelections/);
   assert.match(code,/!manualRisks\.length|manualRisks\.length>0/);
   assert.match(code,/ADDITIONAL RECONCILIATION REVIEW/);
+  assert.match(code,/assertDocumentApprovalDates\(document,decisions\)/);
   assert.match(code,/window\.confirm/);
   assert.doesNotMatch(code,/fetch\(|sendBeacon\(/);
 });

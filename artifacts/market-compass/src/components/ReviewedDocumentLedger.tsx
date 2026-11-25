@@ -1,7 +1,7 @@
 import {useMemo,useState} from 'react';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
-import {documentReconciliation} from '@/lib/documentReconciliation';
+import {documentReconciliation,assertDocumentApprovalDates} from '@/lib/documentReconciliation';
 import {localDate} from '@/lib/dailyBackup';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
@@ -107,6 +107,7 @@ export default function ReviewedDocumentLedger({
       category:draft[i].category as ExpenseCategory
     }));
     try{
+      assertDocumentApprovalDates(document,decisions);
       const revised=applyReviewedDocumentToLedger(document,entries,decisions,currency);
       if(manualRisks.length>0&&!window.confirm(
         'ADDITIONAL RECONCILIATION REVIEW: '+manualRisks.length+

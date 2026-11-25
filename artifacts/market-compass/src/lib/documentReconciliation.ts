@@ -9,7 +9,7 @@ import {maskDocumentPII} from './documentIntelligence.ts';
 import {sourceTimeContext} from './documentTimeContext.ts';
 import {preparedDocumentReview} from './reviewSuggestions.ts';
 import {conflictingApprovedCategory,type ApprovedPayeeCategory} from './approvedPayeeCategory.ts';
-import {documentAppliedIndices,documentRowBlockReason} from './reviewedDocumentLedger.ts';
+import {documentAppliedIndices,documentRowBlockReason,type ReviewedLedgerDecision} from './reviewedDocumentLedger.ts';
 import {matchingApprovedEntriesForDocumentLine} from './ledgerIntegrity.ts';
 
 export type DocumentReconciliationFinding={
@@ -53,6 +53,32 @@ const rowFingerprint=(line:LocalFinanceLine):string|null=>{
 function reviewable(document:LocalFinanceDocument,line:LocalFinanceLine):boolean{
   return !!line&&line.amount!==null&&Number.isFinite(line.amount)&&line.amount!==0&&
     !documentRowBlockReason(document,line);
+}
+/**
+ * Guard the actual PWA approval path without changing the protected finance
+ * parser or shared ledger core. Source dates are not user-editable during
+ * review, and scheduled future movements cannot enter completed Spend.
+ * Unverified rows remain saved as review evidence, never auto-posted.
+ */
+export function assertDocumentApprovalDates(
+  document:LocalFinanceDocument,
+  choices:ReadonlyArray<Pick<ReviewedLedgerDecision,'lineIndex'|'date'>>,
+  now=new Date()
+):void{
+  if(!(now instanceof Date)||!Number.isFinite(now.valueOf()))
+    throw Error('Invalid local approval date');
+  const today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),
+    String(now.getDate()).padStart(2,'0')].join('-');
+  for(const selected of choices){
+    if(!selected||!Number.isInteger(selected.lineIndex)||
+       selected.lineIndex<0||selected.lineIndex>=document.lines.length)
+      throw Error('Invalid source line selected for reconciliation.');
+    const source=document.lines[selected.lineIndex];
+    if(source.date!==null&&selected.date!==source.date)
+      throw Error('The source transaction date must be preserved. Re-import corrected evidence.');
+    if(validDay(selected.date)&&selected.date>today)
+      throw Error('Future-dated transactions cannot be recorded as completed historical Spend.');
+  }
 }
 export function documentReconciliation(
   document:LocalFinanceDocument,entries:readonly ExpenseEntry[],

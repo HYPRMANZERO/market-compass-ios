@@ -52,7 +52,7 @@ test('retry, duplicate selection and unreviewed rows fail closed',()=>{
  assert.throws(()=>applyReviewedDocumentToLedger(doc,[],[],'ZAR',now),/Select one or more/i);
  assert.throws(()=>applyReviewedDocumentToLedger(doc,[],[{
    ...decisions[0],date:''
- }],'ZAR',now),/source transaction date must be preserved/i);
+ }],'ZAR',now),/payment date/i);
  assert.throws(()=>applyReviewedDocumentToLedger(doc,[],[{
    ...decisions[0],kind:'income',category:'salary'
  }],'ZAR',now),/source-labelled debit/i);
