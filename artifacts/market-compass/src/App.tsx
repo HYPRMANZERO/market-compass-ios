@@ -53,6 +53,7 @@ import { approximateLocalValue, fetchFxReference, fxKey, type FxReference } from
 import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
 import {loadMarketDataSaver,persistMarketDataSaver} from '@/lib/marketDataSaver';
+import {installAssistantKeyboardViewport} from '@/lib/assistantKeyboardViewport';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
 import { localMarketResearch } from '@/lib/marketResearch';
@@ -407,6 +408,12 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
+  // Keep the AI composer in the iPhone's *visible* viewport while the
+  // on-screen keyboard is active. Other routes retain normal document scroll.
+  useEffect(()=>{
+    if(path!=='/assistant')return;
+    return installAssistantKeyboardViewport();
+  },[path]);
   // iOS standalone PWAs can restore the previous tab's scroll offset after
   // React has already switched routes. Reset once now and once after paint.
   // This prevents the first hero/card from opening beneath the sticky header.
