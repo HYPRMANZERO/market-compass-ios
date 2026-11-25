@@ -3,7 +3,8 @@ import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, Refresh
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
-import { personalTailnetOrigin,personalSessionActive,acquirePersonalTailnetSession,type PersonalTailnetSession } from '@/lib/personalTailnetAuto';
+import { personalSessionActive,type PersonalTailnetSession } from '@/lib/personalTailnetAuto';
+import { approvedPersonalHosts,acquireAvailablePersonalNode } from '@/lib/personalTailnetFailover';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
 import { chooseSpeechVoice, sortedEnglishVoices, speakingRate, voiceFriendlyText, DEVICE_DEFAULT_VOICE, type VoicePace } from '@/lib/speechVoices';
@@ -114,15 +115,20 @@ export default function VoiceAssistant({
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
   const financeEdition = currentAssistantEdition() === 'finance';
-  // One pinned public hostname, no browser-bundled bearer or OAuth proof.
-  // If the host is not yet configured in the public build, an existing
-  // encrypted .ts.net setting may provide it, without weakening validation.
-  const preferredTailnet = !financeEdition && publicPagesEdition
-    ? personalTailnetOrigin(import.meta.env.VITE_MC_PERSONAL_TAILNET_ORIGIN || settings.url)
-    : null;
+  // An independently protected standby can take over if HYPRBOX is down.
+  // Both origins are validated private HTTPS .ts.net endpoints. No keys or
+  // owner data are embedded in the GitHub Pages build.
+  const tailnetHosts = !financeEdition && publicPagesEdition
+    ? approvedPersonalHosts(import.meta.env.VITE_MC_PERSONAL_TAILNET_ORIGIN,
+      import.meta.env.VITE_MC_PERSONAL_TAILNET_FALLBACK_ORIGIN,settings.url)
+    : [];
+  const tailnetHostKey=tailnetHosts.join('|');
+  const preferredTailnet=tailnetHosts[0]||null;
   const [personalTailnetSession,setPersonalTailnetSession]=useState<PersonalTailnetSession|null>(null);
   const [personalTailnetStatus,setPersonalTailnetStatus]=useState<'checking'|'connected'|'offline'>('checking');
-  const tailnetConnected=personalSessionActive(personalTailnetSession,preferredTailnet);
+  const [tailnetRetryNonce,setTailnetRetryNonce]=useState(0);
+  const tailnetConnected=tailnetHosts.includes(personalTailnetSession?.origin||'') &&
+    personalSessionActive(personalTailnetSession,personalTailnetSession?.origin||null);
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
@@ -193,7 +199,7 @@ export default function VoiceAssistant({
   // Personal is always on when a private Tailscale Serve endpoint is reachable.
   // No login toggle, API secret, persistent browser bearer or background job.
   useEffect(()=>{
-    if(!preferredTailnet)return;
+    if(!tailnetHosts.length)return;
     let live=true,checking=false,renewAt=0;
     async function check(){
       if(!live||checking||document.visibilityState==='hidden')return;
@@ -203,7 +209,7 @@ export default function VoiceAssistant({
       if(Date.now()+90000<renewAt)return;
       checking=true;setPersonalTailnetStatus(previous=>previous==='connected'?previous:'checking');
       try{
-        const session=await acquirePersonalTailnetSession(preferredTailnet!);
+        const session=await acquireAvailablePersonalNode(tailnetHosts);
         if(live){
           renewAt=session.expiresAt;
           setPersonalTailnetSession(session);setPersonalTailnetStatus('connected');
@@ -224,7 +230,7 @@ export default function VoiceAssistant({
       document.removeEventListener('visibilitychange',visible);
       window.removeEventListener('online',online);window.removeEventListener('offline',offline);
     };
-  },[preferredTailnet]);
+  },[tailnetHostKey,tailnetRetryNonce]);
 
   // Reconnect after every vault unlock, and on visibility/network changes.
   // A failed connection does not discard or disable the encrypted settings.
@@ -652,8 +658,8 @@ export default function VoiceAssistant({
         add('local', 'Compass took too long to answer on the private desktop. No action was executed. Please retry when the model is ready.');
         return;
       }
-      setConnection('offline');
-      setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
+      if(useTailnet){setPersonalTailnetSession(null);setTailnetRetryNonce(n=>n+1);}
+      else{setConnection('offline');setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);}
       add('local', 'The desktop AI is temporarily unavailable. Offline questions about your saved debt plan and markets still work.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
