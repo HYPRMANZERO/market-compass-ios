@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
+import {matchingApprovedEntriesForDocumentLine} from '@/lib/ledgerIntegrity';
 import {isReviewableLine} from '@/lib/reviewInbox';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
@@ -41,6 +42,11 @@ export default function ReviewedDocumentLedger({
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
     !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0);
+  // A matching excerpt from another file or manual record is never silently
+  // merged. Exclude from bulk Prepare; owner may still inspect and select it.
+  const possibleDuplicateIndices=new Set(ready.filter(({line})=>
+    matchingApprovedEntriesForDocumentLine(line,entries,currency).length>0
+  ).map(({index})=>index));
   // Unreviewed movements are visible, but never included in approved Spend totals.
   const pendingCredits=ready.filter(({line})=>line.direction==='incoming')
     .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
@@ -59,7 +65,7 @@ export default function ReviewedDocumentLedger({
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
   const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i,region)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
-      item.proposal!==null&&!applied.has(item.index));
+      item.proposal!==null&&!applied.has(item.index)&&!possibleDuplicateIndices.has(item.index));
   const selectPrepared=()=>{
     if(!canApply)return;
     setDraft(old=>{
@@ -84,6 +90,7 @@ export default function ReviewedDocumentLedger({
       setError('Review the workspace currency first. This importer labels all extracted R amounts as ZAR and does not convert other currencies.');
       return;
     }
+    const similarCount=selected.filter(i=>possibleDuplicateIndices.has(i)).length;
     const decisions:ReviewedLedgerDecision[]=selected.map(i=>({
       lineIndex:i,date:draft[i].date,
       kind:draft[i].kind as ExpenseKind,
@@ -93,6 +100,7 @@ export default function ReviewedDocumentLedger({
       const revised=applyReviewedDocumentToLedger(document,entries,decisions,currency);
       if(!window.confirm(
         'Add '+decisions.length+' reviewed line(s) to your encrypted Spend ledger? '+
+        (similarCount>0?similarCount+' selected row(s) look like existing approved transactions. '+'Confirm these are not repeat imports before continuing. ':'')+
         'These are reviewed statement excerpts, not bank-reconciled transactions. '+
         'This will change recorded cycle totals and local Assistant summaries; it will NOT change Debt Plan balances, send data to HYPRBOX, or execute payments.'
       ))return;
@@ -138,6 +146,10 @@ export default function ReviewedDocumentLedger({
       {sourceTimeContext(document)?.asOf&&<p className="mt-1 text-muted-foreground">Historical document as of {sourceTimeContext(document)?.asOf} · not a current balance</p>}
       <p className="mt-1 text-muted-foreground">Reporting periods do not date individual undated transactions. No unapproved amounts affect Spend.</p>
     </div>
+    {possibleDuplicateIndices.size>0&&<p role="status" className="mt-3 rounded-xl border border-border bg-muted/45 p-3 text-[11px] leading-5">
+      {possibleDuplicateIndices.size} possible duplicate source row(s) match existing approved entries by date, amount and description.
+      They are excluded from bulk Prepare. Compare the original documents before selecting them manually. Nothing has been deleted or approved.
+    </p>}
     {prepared.length>0&&<button type="button" disabled={!canApply} onClick={selectPrepared}
       className="mt-3 min-h-11 w-full rounded-xl border border-primary/30 bg-primary/10 px-3 text-[12px] font-semibold disabled:opacity-40">
       Prepare {prepared.length} dated, source-labelled transaction(s) for one approval
@@ -155,6 +167,7 @@ export default function ReviewedDocumentLedger({
     <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
+        const possibleRepeat=possibleDuplicateIndices.has(index);
         const blocked=documentRowBlockReason(document,line);
         const unusable=line.amount===null||line.amount===0||Boolean(blocked);
         const row=draft[index]??initialRow(index);
@@ -175,6 +188,9 @@ export default function ReviewedDocumentLedger({
               </span>
             </span>
           </label>
+          {possibleRepeat&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            Possible duplicate of a saved transaction. Compare the source before approving this row.
+          </p>}
           {line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">Transaction date extracted from file: <strong className="text-foreground">{line.date}</strong> · no date entry needed</p>}
           {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No transaction date extracted from this row. The document period is not a substitute.</p>}
           {proposal&&!already&&!unusable&&<p className="mt-1 pl-6 text-[10px] text-muted-foreground">Prepared classification: {proposal.kind} · {proposal.category}. {proposal.explanation}. Confirm before recording.</p>}

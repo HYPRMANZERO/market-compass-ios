@@ -28,8 +28,15 @@ export async function acquireAvailablePersonalNode(
       // Service identity and active private-model health are verified at each
       // node. A network failure is only retried for this idempotent GET,
       // never for the potentially costly POST agent request.
-      const session=await acquirePersonalTailnetSession(host,fetchImpl);
-      if(session.origin===host)return session;
+      // A powered-off primary cannot leave the iPhone waiting indefinitely.
+      // Only the authenticated GET is timed out; no agent POST is replayed.
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),8000);
+      try{
+        const session=await acquirePersonalTailnetSession(host,
+          (url,options)=>fetchImpl(url,{...options,signal:controller.signal}));
+        if(session.origin===host)return session;
+      }finally{clearTimeout(timer);}
     }catch{/* Only known, pinned hosts are eligible for fallback. */}
   }
   throw Error('All private Compass AI nodes are unavailable.');
