@@ -4,7 +4,7 @@
  * No provider keys, account records or encrypted vault bytes are copied here.
  */
 import {personalTailnetOrigin,acquirePersonalTailnetSession,
-  type PersonalTailnetSession} from './personalTailnetAuto';
+  type PersonalTailnetSession} from './personalTailnetAuto.ts';
 
 export function approvedPersonalHosts(
   primary:unknown,fallback:unknown,legacy:unknown
