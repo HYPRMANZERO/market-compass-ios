@@ -252,16 +252,40 @@ try{
   // On slower CI runners, React content can appear before async CSS has settled.
   // Keep the full-size invariant; wait for actual rendered dimensions instead of
   // weakening the phone-height threshold or merely checking a class name.
-  await until(()=>js(function(){
-    const shell=document.querySelector('.mc-assistant');
-    const chat=document.querySelector('[aria-label="AI chat interface"]');
-    if(!shell||!chat||getComputedStyle(chat).display!=='flex')return false;
-    const available=shell.getBoundingClientRect().height;
-    const conversation=chat.getBoundingClientRect().height;
-    // CI's headless Edge can report a smaller visual viewport than Safari;
-    // verify that chat fills the actual viewport-sized parent, not a guessed pixel count.
-    return available>250&&conversation>=Math.max(180,available-110);
-  }),'viewport-filling AI chat layout',30000);
+  let latestChatLayout;
+  try{
+    await until(async()=>{
+      latestChatLayout=await js(function(){
+        const shell=document.querySelector('.mc-assistant');
+        const chat=document.querySelector('[aria-label="AI chat interface"]');
+        const log=document.querySelector('[aria-label="AI conversation"]');
+        const rect=(element)=>element?{
+          height:element.getBoundingClientRect().height,width:element.getBoundingClientRect().width,
+          display:getComputedStyle(element).display,
+          computedHeight:getComputedStyle(element).height,
+          overflow:getComputedStyle(element).overflowY,
+          flex:getComputedStyle(element).flex,
+        }:null;
+        return {
+          viewport:innerHeight,visualViewport:visualViewport?.height,
+          userAgent:navigator.userAgent,
+          shell:rect(shell),chat:rect(chat),log:rect(log),
+          main:rect(document.querySelector('.mc-mobile-content')),
+          body:rect(document.body),
+          chatCount:document.querySelectorAll('[aria-label="AI chat interface"]').length,
+          stylesheetCount:document.styleSheets.length
+        };
+      });
+      const shell=latestChatLayout?.shell;
+      const chat=latestChatLayout?.chat;
+      return !!shell&&!!chat&&chat.display==='flex'&&
+        shell.height>250&&chat.height>=Math.max(180,shell.height-110);
+    },'viewport-filling AI chat layout',30000);
+  }catch(error){
+    console.error('AI_CHAT_LAYOUT_DIAGNOSTICS:',JSON.stringify(latestChatLayout));
+    throw error;
+  }
+  console.log('AI_CHAT_LAYOUT_DIAGNOSTICS:',JSON.stringify(latestChatLayout));
   // Chat occupies the available iPhone viewport. Auxiliary controls must be
   // accessible in the modal instead of shrinking the conversation.
   const compact=await js(function(){
