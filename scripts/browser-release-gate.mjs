@@ -332,6 +332,77 @@ async function main(){
     await tab.invoke(function(){document.querySelector('[data-testid="bank-option-standard-bank"]')?.click();});
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[data-testid="selected-bank-options"]')?.textContent?.includes('Import');}),true,'selected bank must expose a local statement-import option');
     console.log('PASS: unlocked Ionic Home scrolls and bank carousel shows real selection options');
+    // Market Data Saver is opt-in and never changes encrypted finance records.
+    await tab.invoke(function(){
+      const markets=[...document.querySelectorAll('[aria-label="Mobile app tabs"] a')]
+        .find(a=>a.textContent?.includes('Markets'));
+      if(!markets)throw Error('Markets tab missing');markets.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('input[aria-label="Data Saver for market refreshes"]');
+    }),'Markets Data Saver checkbox');
+    const saverDefault=await tab.invoke(function(){
+      const box=document.querySelector('input[aria-label="Data Saver for market refreshes"]');
+      return {checked:box?.checked,stored:localStorage.getItem('compass-market-data-saver-v1')};
+    });
+    assert.equal(saverDefault.checked,false,'Data Saver must be off by default');
+    assert.equal(saverDefault.stored,null,'Data Saver requires explicit consent');
+    await tab.invoke(function(){
+      document.querySelector('input[aria-label="Data Saver for market refreshes"]').click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return document.querySelector('input[aria-label="Data Saver for market refreshes"]')?.checked &&
+        localStorage.getItem('compass-market-data-saver-v1')==='on';
+    }),'Data Saver saved on');
+    const audit=await tab.invoke(async function(){
+      const original=window.fetch;
+      const attempted=[];
+      window.fetch=function(resource,init){
+        const url=typeof resource==='string'?resource:(resource?.url||'');
+        if((url.startsWith('http://')||url.startsWith('https://'))&&!url.includes('127.0.0.1'))attempted.push(url);
+        return original.call(this,resource,init);
+      };
+      try{
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('online'));
+        const range=document.querySelector('select[data-testid="select-market-range"]');
+        if(!range)throw Error('Market lookback selector missing');
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')
+          .set.call(range,'1m');
+        range.dispatchEvent(new Event('change',{bubbles:true}));
+        await new Promise(resolve=>setTimeout(resolve,450));
+        return {
+          calls:attempted.length,
+          text:document.body.innerText.includes('Automatic crypto, SOL and FX refreshes are paused'),
+          manual:!!document.querySelector('button[aria-label="Refresh live cryptocurrency quotes"]')
+        };
+      }finally{window.fetch=original;}
+    });
+    assert.equal(audit.calls,0,'Data Saver must not automatically fetch markets after visibility/online/range change');
+    assert.equal(audit.text,true,'Data Saver must explain that quotes are paused');
+    assert.equal(audit.manual,true,'Manual crypto refresh must remain available');
+    await tab.invoke(function(){
+      document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){return !!document.querySelector('.mc-bs-quick-actions');}),'Home after Data Saver');
+    await tab.invoke(function(){
+      const markets=[...document.querySelectorAll('[aria-label="Mobile app tabs"] a')]
+        .find(a=>a.textContent?.includes('Markets'));
+      markets?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('input[aria-label="Data Saver for market refreshes"]');
+    }),'Markets reloaded with Data Saver');
+    assert.equal(await tab.invoke(function(){
+      return document.querySelector('input[aria-label="Data Saver for market refreshes"]')?.checked;
+    }),true,'Data Saver persists across navigation in this browser');
+    await tab.invoke(function(){
+      document.querySelector('input[aria-label="Data Saver for market refreshes"]').click();
+      document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){return !!document.querySelector('.mc-bs-quick-actions');}),'Home after saver reset');
+    console.log('PASS: explicit Market Data Saver pauses background fetches, persists, preserves manual buttons');
+
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Market Compass menu"]')?.click();});
     const menu=await waitFor(async()=>{
       const state=await tab.invoke(function(){

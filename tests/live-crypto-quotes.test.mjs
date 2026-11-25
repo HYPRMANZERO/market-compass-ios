@@ -86,7 +86,7 @@ test('ngrok private quote outage falls back to keyless provider with no authoriz
 test('Markets page exposes provider quotes separately from daily candles',async()=>{
   const app=await readFile(new URL('../artifacts/market-compass/src/App.tsx',import.meta.url),'utf8');
   const component=await readFile(new URL('../artifacts/market-compass/src/components/LiveCryptoQuotes.tsx',import.meta.url),'utf8');
-  assert.match(app,/<LiveCryptoQuotes currency=\{data.currency\}/);
+  assert.match(app,/<LiveCryptoQuotes dataSaver=\{dataSaver\} currency=\{data.currency\}/);
   assert.match(component,/Latest cryptocurrency prices/);
   assert.match(component,/not wallet holdings/i);
   assert.match(component,/24h volume/i);
