@@ -10,8 +10,9 @@ test('original Ionic assistant keeps a compact Compass header and maximizes conv
   const css=await readFile(cssUrl,'utf8');
   assert.match(src,/aria-label="Compass model connection"/);
   assert.match(src,/Compass connected/);
-  assert.match(src,/min-h-\[min\(55dvh,500px\)\]/);
-  assert.match(src,/max-h-\[min\(48dvh,540px\)\]/);
+  assert.match(src,/mc-chat-panel flex min-h-0 flex-1 flex-col/);
+  assert.match(src,/mc-chat-log min-h-0 flex-1/);
+  assert.match(src,/aria-label="Compass AI options"/);
   assert.doesNotMatch(src,/>Just ask\.</);
   assert.match(css,/\.mc-assistant-dock\{display:flex;flex-direction:column/);
   assert.match(css,/\.mc-assistant-dock-card\{box-sizing:border-box;width:100%/);

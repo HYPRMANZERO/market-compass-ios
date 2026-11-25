@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type {ReactNode} from 'react';
+import {createPortal} from 'react-dom';
 import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
@@ -79,6 +81,7 @@ type Props = {
   queuedReadOnlyQuestions: QueuedReadOnlyQuestion[];
   onQueueReadOnlyQuestion:(question:string)=>QueuedReadOnlyQuestion;
   onRemoveQueuedReadOnlyQuestion:(id:string)=>void;
+  auxiliaryPanel?:ReactNode;
 };
 const financeIdeas = [
   'What is my total debt?',
@@ -95,7 +98,7 @@ const explainError = (error: unknown) => error instanceof Error ? error.message 
 
 export default function VoiceAssistant({
   context,onNavigate,onImportDocuments,settings,onSettingsChange,
-  queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion
+  queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion,auxiliaryPanel
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', source: 'local',
@@ -872,42 +875,38 @@ export default function VoiceAssistant({
     if (!busy && query.trim()) submit(query);
   }
 
-  return <div className="mc-assistant min-w-0 max-w-full space-y-3" data-testid="voice-assistant">
-    <section className="flex min-h-[56px] items-center justify-between gap-2 rounded-[16px] bg-[hsl(165,24%,20%)] px-3 py-2 text-white" aria-label="Compass model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> {financeEdition?'Compass Advisor':'Compass AI'}</span>
-      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage || 'Compass private desktop connection status'}>
-        <span className={connected ? 'h-2 w-2 shrink-0 rounded-full bg-emerald-400' : connection === 'checking' ? 'h-2 w-2 shrink-0 rounded-full bg-amber-300' : 'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
-        {connected ? 'Compass connected' : personalTailnetStatus === 'checking' && preferredTailnet ? 'Connecting privately' : preferredTailnet || settings.enabled ? 'Private link unavailable' : 'Local commands'}
+  const [optionsOpen,setOptionsOpen]=useState(false);
+  const optionsTrigger=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
+    if(!optionsOpen)return;
+    const previousOverflow=document.body.style.overflow;
+    const onEscape=(event:KeyboardEvent)=>{if(event.key==='Escape')setOptionsOpen(false);};
+    document.body.style.overflow='hidden';
+    window.addEventListener('keydown',onEscape);
+    return ()=>{
+      document.body.style.overflow=previousOverflow;
+      window.removeEventListener('keydown',onEscape);
+      optionsTrigger.current?.focus();
+    };
+  },[optionsOpen]);
+
+  return <div className="mc-assistant flex h-[calc(100dvh-116px-env(safe-area-inset-top,0px))] min-h-0 min-w-0 max-w-full flex-col gap-2 lg:h-[calc(100dvh-156px)]" data-testid="voice-assistant">
+    <section className="flex min-h-12 items-center gap-2 rounded-[15px] bg-[hsl(165,24%,20%)] px-3 py-1.5 text-white" aria-label="Compass model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold"><BrainCircuit size={19} className="shrink-0 text-[hsl(43,65%,74%)]" aria-hidden="true"/>{financeEdition?'Compass Advisor':'Compass Personal'}</span>
+      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 text-[11px] font-semibold" title={connected?'Compass connected':connectionMessage||'Compass private AI connection status'}>
+        <span className={connected?'h-2 w-2 shrink-0 rounded-full bg-emerald-400':connection==='checking'?'h-2 w-2 shrink-0 rounded-full bg-amber-300':'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
+        <span className="max-w-[110px] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>
       </span>
-      <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
-        onClick={() => {
-          if (!speakingSupported) return;
-          if (settings.speakReplies) window.speechSynthesis.cancel();
-          onSettingsChange({ ...settings, speakReplies: !settings.speakReplies });
-        }} disabled={!speakingSupported}
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 disabled:opacity-40">
-        {settings.speakReplies ? <Speaker size={18}/> : <VolumeX size={18}/>}
-      </button>
+      <button ref={optionsTrigger} type="button" aria-label="Open Compass options" aria-haspopup="dialog" aria-expanded={optionsOpen} onClick={()=>setOptionsOpen(true)}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10"><LockKeyhole size={18}/></button>
     </section>
 
-    <section className="mc-chat-panel flex min-h-[min(55dvh,500px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm sm:min-h-[min(64dvh,650px)]" aria-label="AI chat interface">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-[13px] font-semibold">Conversation</h2>
-        <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
-          setMessages([]); setLastAgent(null); setStatus('Conversation cleared from page memory.');
-        }}><X size={14} className="mr-1 inline"/>Clear</button>
+    <section className="mc-chat-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
+      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 py-2">
+        <h2 className="text-[13px] font-bold">Conversation</h2>
+        <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck size={13} aria-hidden="true"/> Agent on · read only</span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <span className="flex min-h-8 items-center gap-2 text-[12px] font-semibold" aria-label="Read-only agent mode always active">
-          <ShieldCheck size={16} className="text-primary" aria-hidden="true"/>
-          Agent mode on <span className="font-normal text-muted-foreground">· always active · up to 3 read-only tools</span>
-        </span>
-        <details className="max-w-full text-[11px] text-muted-foreground">
-          <summary className="cursor-pointer">Safety and permissions</summary>
-          <p className="max-w-[340px] py-2 leading-5">Financial sources can be reviewed, not edited. Reminders and expense entries remain drafts; trading and payments are disabled. Your unlocked vault is not shared with HYPRBOX unless you separately enable sharing below.</p>
-        </details>
-      </div>
-      <div className="mc-chat-log min-h-[min(27dvh,250px)] max-h-[min(48dvh,540px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:min-h-[min(40dvh,340px)] sm:max-h-[min(62dvh,650px)] sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
@@ -922,6 +921,53 @@ export default function VoiceAssistant({
         {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for Compass…'}</div>}
         <div ref={bottom}/>
       </div>
+      <div className="border-t border-border p-3">
+        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_48px_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+          <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
+            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask Compass about finances…" : "Message Compass…"} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
+              aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[52px] w-full resize-none rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
+          </label>
+          <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'} style={{minWidth:48,minHeight:48}}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
+            {listening ? <MicOff size={22}/> : <Mic size={23}/>}
+          </button>
+          <button type="submit" disabled={!query.trim() || busy} aria-label="Send question" style={{minWidth:48,minHeight:48}}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
+        </form>
+        <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
+        {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use your device keyboard microphone to dictate.</p>}
+        {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
+      </div>
+    </section>
+
+
+
+    {optionsOpen&&createPortal(
+      <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" role="presentation" onClick={()=>setOptionsOpen(false)}>
+        <section role="dialog" aria-modal="true" aria-label="Compass AI options" className="flex max-h-[min(88dvh,820px)] w-full max-w-[680px] min-w-0 flex-col overflow-hidden rounded-t-[24px] bg-card text-foreground shadow-2xl sm:rounded-[24px]" onClick={event=>event.stopPropagation()}>
+          <header className="flex min-h-14 items-center justify-between gap-3 border-b border-border px-4 py-2">
+            <h2 className="text-[16px] font-bold">Compass options</h2>
+            <button type="button" autoFocus aria-label="Close Compass options" onClick={()=>setOptionsOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={20}/></button>
+          </header>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] pt-3">
+            <div className="rounded-xl bg-muted/40 p-3 text-[12px]">
+              <p className="flex items-center gap-2 font-semibold" aria-label="Read-only agent mode always active"><ShieldCheck size={16}/> Agent mode on · up to 3 read-only tools</p>
+              <details className="mt-2 text-[11px] text-muted-foreground"><summary className="min-h-8 cursor-pointer">Safety and permissions</summary>
+                <p className="mt-1 leading-5">The assistant reviews approved sources. No transfers, payments or trades are executed. Sharing financial records with your private model requires separate permission.</p>
+              </details>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" aria-label={settings.speakReplies?'Turn off spoken replies':'Turn on spoken replies'} aria-pressed={settings.speakReplies}
+                disabled={!speakingSupported} onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border px-2 text-[12px] font-semibold disabled:opacity-40">
+                {settings.speakReplies?<Speaker size={17}/>:<VolumeX size={17}/>} {settings.speakReplies?'Voice on':'Voice off'}
+              </button>
+              <button type="button" className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border px-2 text-[12px] font-semibold"
+                onClick={()=>{setMessages([]);setLastAgent(null);setStatus('Conversation cleared from page memory.');setOptionsOpen(false);}}>
+                <X size={16}/> Clear chat
+              </button>
+            </div>
+            {auxiliaryPanel&&<section aria-label="Additional Compass tools" className="space-y-3">{auxiliaryPanel}</section>}
       {reviewedQueue.length>0 && <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/40 p-3" aria-label="Encrypted offline agent questions">
         <h3 className="text-[12px] font-bold">Offline questions · {reviewedQueue.length} pending</h3>
         <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
@@ -976,26 +1022,6 @@ export default function VoiceAssistant({
           </p>
         </section>
       )}
-      <div className="border-t border-border p-3">
-        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_48px_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
-          <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
-            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask about debt or your budget…" : "Ask Compass about anything, including finances."} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
-              aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[64px] w-full resize-y rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
-          </label>
-          <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'} style={{minWidth:48,minHeight:48}}
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
-            {listening ? <MicOff size={22}/> : <Mic size={23}/>}
-          </button>
-          <button type="submit" disabled={!query.trim() || busy} aria-label="Send question" style={{minWidth:48,minHeight:48}}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
-        </form>
-        <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
-        {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use your device keyboard microphone to dictate.</p>}
-        {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
-      </div>
-    </section>
-
-
 
     <div className="mc-assistant-dock flex min-w-0 w-full flex-col items-stretch gap-3 pb-2" aria-label="AI tools and connections">
     <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary><div className="mt-2">
@@ -1255,5 +1281,8 @@ export default function VoiceAssistant({
       </p>
     </details>
     </div>
+          </div>
+        </section>
+      </div>,document.body)}
   </div>;
 }
