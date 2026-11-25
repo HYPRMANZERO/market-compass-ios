@@ -83,8 +83,8 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
     }catch(e){setNotice(e instanceof Error?e.message:'Unable to save the chosen category.');}
   };
   return <section className="mb-4 min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Review uncategorized saved payments">
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 sm:flex-1">
         <h2 className="flex items-center gap-2 text-[14px] font-bold">
           <Filter size={17} className="shrink-0 text-primary"/> Review uncategorized payments
         </h2>
@@ -93,8 +93,8 @@ export default function SavedCategoryReview({entries,currency,region,onApprove,o
           Payment rails are not categories. All updates require your approval.
         </p>
       </div>
-      <button type="button" onClick={startScan} className={button+' bg-primary text-primary-foreground'} aria-label="Scan saved payments for categories">
-        <RotateCcw size={16}/> Scan saved payments
+      <button type="button" onClick={startScan} className={button+' w-full bg-primary text-primary-foreground sm:w-auto'} aria-label={scan?'Rescan saved payments for categories':'Scan saved payments for categories'}>
+        <RotateCcw size={16}/> {scan?'Rescan saved payments':'Scan saved payments'}
       </button>
     </div>
     <p className="mt-2 text-[11px] text-muted-foreground">
