@@ -36,7 +36,13 @@ export default function BankCarousel({
   onAddAccount?: () => void;
   desktopAi?: DesktopAiSettings;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(()=>{
+    // The official bank redirect returns to /banks after consent or denial.
+    // Reopen Standard Bank's options, but never infer linkage from a URL flag.
+    if(typeof window==='undefined'||currentAssistantEdition()!=='finance')return null;
+    const status=new URLSearchParams(window.location.search).get('bank-consent');
+    return status==='connected'||status==='review'?'standard-bank':null;
+  });
   const chosen = banks.find(bank => bank.id === selected);
   return <section className="rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Choose a South African bank" data-testid="bank-carousel">
     <div className="mb-3 flex items-start justify-between gap-3">
