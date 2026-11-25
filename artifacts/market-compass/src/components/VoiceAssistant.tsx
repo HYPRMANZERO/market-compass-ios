@@ -878,7 +878,7 @@ export default function VoiceAssistant({
       <div className="border-t border-border p-3">
         <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_48px_48px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
-            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder="Ask about debt or your budget…" onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
+            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask about debt or your budget…" : "Ask Compass about anything, including finances."} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
               aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[64px] w-full resize-y rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
           <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'} style={{minWidth:48,minHeight:48}}
