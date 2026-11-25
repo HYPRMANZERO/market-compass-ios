@@ -249,6 +249,14 @@ try{
     if(!link)throw Error('Assistant route missing');link.click();
   });
   await expect('Conversation','mobile assistant screen');
+  // On slower CI runners, React content can appear before async CSS has settled.
+  // Keep the full-size invariant; wait for actual rendered dimensions instead of
+  // weakening the phone-height threshold or merely checking a class name.
+  await until(()=>js(function(){
+    const chat=document.querySelector('[aria-label="AI chat interface"]');
+    return !!chat&&getComputedStyle(chat).display==='flex'&&
+      chat.getBoundingClientRect().height>400;
+  }),'full-height AI chat layout',30000);
   // Chat occupies the available iPhone viewport. Auxiliary controls must be
   // accessible in the modal instead of shrinking the conversation.
   const compact=await js(function(){
