@@ -55,6 +55,7 @@ import { CURRENCIES, REGIONS, regionDefaultCurrency, selectedRegion } from '@/li
 import { approximateLocalValue, fetchFxReference, fxKey, type FxReference } from '@/lib/fxRates';
 import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
+import {loadMarketDataSaver,persistMarketDataSaver} from '@/lib/marketDataSaver';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
 import { localMarketResearch } from '@/lib/marketResearch';
@@ -656,13 +657,14 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   const [backtesting, setBacktesting] = useState(false);
   const requestSerial = useRef(0);
   const [fxError, setFxError] = useState('');
+  const [dataSaver,setDataSaver]=useState(loadMarketDataSaver);
   const activeSeries = series ?? (localCached ? data.marketCache : null);
   const fxPair = activeSeries && activeSeries.currency !== data.currency ? fxKey(activeSeries.currency, data.currency) : '';
   const fxQuote = fxPair ? data.fxRates?.[fxPair] ?? null : null;
   useEffect(() => {
     const base = activeSeries?.currency;
     const local = data.currency;
-    if (!base || base === local || !navigator.onLine) return;
+    if (!base || base === local || !navigator.onLine || dataSaver) return;
     if (fxQuote && Number.isFinite(Date.parse(fxQuote.fetchedAt)) &&
       Date.now() - Date.parse(fxQuote.fetchedAt) < 24 * 60 * 60 * 1000) return;
     const controller = new AbortController();
@@ -671,7 +673,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
       .then(rate => setData(old => ({...old,fxRates:{...(old.fxRates ?? {}),[fxKey(base,local)]:rate}})))
       .catch(error => { if (!controller.signal.aborted) setFxError(error instanceof Error ? error.message : 'Reference FX rate unavailable.'); });
     return () => controller.abort();
-  }, [activeSeries?.currency, data.currency, fxQuote?.fetchedAt, setData]);
+  }, [activeSeries?.currency, data.currency, fxQuote?.fetchedAt, setData, dataSaver]);
   const activeAnalysis = analysis ?? (localCached && data.analysisCache?.symbol === activeSeries?.symbol ? data.analysisCache : null);
   const lastSavedCandleDate = activeSeries?.candles?.at(-1)?.date ?? activeSeries?.asOf;
   const marketCacheDateMismatch = Boolean(activeSeries?.asOf && lastSavedCandleDate &&
@@ -696,17 +698,18 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
       }
     } finally { if (token === requestSerial.current) setFetching(false); }
   }
+  const updateDataSaver=(enabled:boolean)=>{setDataSaver(enabled);persistMarketDataSaver(enabled);};
   function requestMarket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void loadMarket(symbol.trim().toUpperCase(), range, venue);
   }
   function selectRange(next: CandleRange) {
     setRange(next);
-    if (symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), next, venue);
+    if (!dataSaver && symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), next, venue);
   }
   function selectVenue(next: PublicVenue) {
     setVenue(next);
-    if (symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), range, next);
+    if (!dataSaver && symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), range, next);
   }
   const price = activeAnalysis?.lastPrice ?? activeSeries?.candles.at(-1)?.close;
   const addDraft = () => {
@@ -760,7 +763,21 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   };
   return <>
     <PageIntro eyebrow="Observe before interpreting" title="Markets" description="View provider-sourced cryptocurrency quotes and analyse completed spot candles. JSE shares and other markets require authorized data feeds." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Read-only market research</div>} />
-    <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading Solana tracker?</p>}><SolanaTrackingBar cachedSeries={data.solanaSeries}
+    <section aria-label="Market Data Saver" className="mb-4 rounded-2xl border border-border bg-card px-4 py-3">
+      <label className="flex min-h-11 cursor-pointer items-start gap-3">
+        <input type="checkbox" aria-label="Data Saver for market refreshes"
+          checked={dataSaver} onChange={event=>updateDataSaver(event.target.checked)}
+          className="mt-1.5 h-5 w-5 shrink-0 accent-primary"/>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-bold">Data Saver {dataSaver?'on':'off'}</span>
+          <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
+            {dataSaver?'Automatic crypto, SOL and FX refreshes are paused. Cached historical candles keep their original dates. Use a refresh button or Request data when you want new prices.':'Opt in to pause automatic market checks and save mobile data. Manual requests always stay available.'}
+          </span>
+        </span>
+      </label>
+      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">This controls public market refreshes, not your private Compass connection. It does not make online AI, market prices or mobile connectivity carrier-data-free.</p>
+    </section>
+    <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading Solana tracker?</p>}><SolanaTrackingBar dataSaver={dataSaver} cachedSeries={data.solanaSeries}
       privateEnabled={data.desktopAi.enabled} privateUrl={data.desktopAi.url}
       privateToken={data.desktopAi.token} preferZar={data.currency!=='USD'}
       onCache={solanaSeries=>setData(old=>({...old,solanaSeries}))}
@@ -771,7 +788,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
         setData(old=>({...old,drafts:[draft,...old.drafts]}));
       }}
     /></Suspense>
-    <LiveCryptoQuotes currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
+    <LiveCryptoQuotes dataSaver={dataSaver} currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
         <label className="flex-1"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Crypto spot pair</span><input data-testid="input-market-symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTC, ETH, SOL or BTCUSD" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
@@ -779,7 +796,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
         <label className="sm:w-40"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Lookback</span><span className="relative block"><select data-testid="select-market-range" value={range} onChange={(e) => selectRange(e.target.value as CandleRange)} className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-8 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="1m">1 month</option><option value="3m">3 months</option><option value="6m">6 months</option><option value="1y">1 year</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-3.5 text-muted-foreground" /></span></label>
         <ActionButton type="submit" disabled={!symbol.trim() || fetching}>{fetching ? <LoaderCircle className="animate-spin" size={15} /> : <Search size={15} />}{fetching ? 'Loading data' : 'Request data'}</ActionButton>
       </form>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically · not live quotes</span></div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically unless Data Saver is on · not live quotes</span></div>
       <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Upload size={15} /></span>
         <p className="flex-1 text-[11px] leading-5 text-muted-foreground">For JSE shares, stocks, ETFs, licensed data feeds or offline use, import an authorized CSV with columns <span className="mono text-foreground">date,open,high,low,close[,volume]</span>. Check currency, units and licensing.</p>

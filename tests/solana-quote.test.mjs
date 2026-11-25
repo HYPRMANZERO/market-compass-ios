@@ -48,7 +48,7 @@ test('both views use one shared Solana bar, encrypted cached candles and local O
  assert.ok(app.includes("const SolanaTrackingBar=lazy(()=>import('@/components/SolanaTrackingBar'));"));
  assert.match(app,/solanaSeries: MarketSeries \| null/);
  assert.match(app,/solanaSeries: null/);
- assert.match(app,/<SolanaTrackingBar cachedSeries=/);
+ assert.match(app,/<SolanaTrackingBar dataSaver=\{dataSaver\} cachedSeries=/);
  assert.match(app,/setData\(old=>\(\{\.\.\.old,drafts:\[draft,\.\.\.old.drafts\]\}\)\)/);
  assert.match(bar,/NO LIVE ORDERS/);
  assert.match(bar,/Paper execution/);

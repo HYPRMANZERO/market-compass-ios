@@ -3,7 +3,7 @@ import {
   CRYPTO_REFRESH_MS,fetchLiveCryptoQuotes,type CryptoMarketSnapshot
 } from '@/lib/liveCryptoQuotes';
 
-type Props={currency:string;privateToken?:string;privateEnabled?:boolean};
+type Props={currency:string;privateToken?:string;privateEnabled?:boolean;dataSaver?:boolean};
 const amount=(n:number,currency:'ZAR'|'USD')=>{
   const digits=n<0.0001?10:n<0.01?8:n<1?6:2;
   return new Intl.NumberFormat('en-ZA',{style:'currency',currency,
@@ -18,7 +18,7 @@ const utc=(s:string)=>new Date(s).toLocaleString('en-ZA',{
 
 /** Public read-only market quotes are independent of debt figures and
  * never claim to be a live bank, wallet or trade execution quote. */
-export default function LiveCryptoQuotes({currency,privateToken='',privateEnabled=false}:Props){
+export default function LiveCryptoQuotes({currency,privateToken='',privateEnabled=false,dataSaver=false}:Props){
   const selected:'ZAR'|'USD'=currency==='USD'?'USD':'ZAR';
   const [snapshot,setSnapshot]=useState<CryptoMarketSnapshot|null>(null);
   const [busy,setBusy]=useState(false);
@@ -50,6 +50,7 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
     }
   },[selected,privateToken,privateEnabled]);
   useEffect(()=>{
+    if(dataSaver){pending.current?.abort();setBusy(false);return;}
     lastRequest.current=0;
     setSnapshot(null);
     void refresh();
@@ -63,7 +64,7 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
       window.removeEventListener('online',tick);
       pending.current?.abort();
     };
-  },[refresh]);
+  },[refresh,dataSaver]);
 
   const stale=snapshot && Date.now()-Date.parse(snapshot.providerAsOf)>15*60_000;
   return <section className="mb-5 overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
@@ -87,7 +88,7 @@ export default function LiveCryptoQuotes({currency,privateToken='',privateEnable
     {snapshot?<>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 text-[11px] sm:px-5">
         <div><strong>{snapshot.source}</strong> · Latest quote {utc(snapshot.providerAsOf)}</div>
-        <div className="font-semibold">{selected} · {stale?'Stale, refresh required':'Recent provider snapshot'}</div>
+        <div className="font-semibold">{selected} · {dataSaver?'Data Saver: previously retrieved, not refreshed':stale?'Stale, refresh required':'Recent provider snapshot'}</div>
       </div>
       <div className="divide-y divide-border">
         {snapshot.quotes.map(coin=><div key={coin.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-[12px] sm:grid-cols-[minmax(0,1.3fr)_minmax(100px,.7fr)_minmax(100px,.7fr)_minmax(100px,.7fr)] sm:px-5">
