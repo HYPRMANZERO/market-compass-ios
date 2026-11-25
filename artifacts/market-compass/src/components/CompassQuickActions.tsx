@@ -6,7 +6,7 @@ type Props={edition:AssistantEdition;onAction:(id:CompassActionId)=>void};
 export default function CompassQuickActions({edition,onAction}:Props){
   const actions=compassActionsForEdition(edition);
   const groups=edition==='personal'?(['finance','personal'] as const):(['finance'] as const);
-  return <section aria-label="Compass quick actions" className="rounded-[18px] border border-border bg-card p-3 shadow-sm">
+  return <section aria-label="Compass quick actions" className="mc-chat-quick-actions px-2 py-2">
     <h3 className="text-[14px] font-bold">Compass actions</h3>
     <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
       {edition==='personal'
@@ -21,7 +21,7 @@ export default function CompassQuickActions({edition,onAction}:Props){
         {actions.filter(action=>action.group===group).map(action=>
           <button type="button" key={action.id} onClick={()=>onAction(action.id)}
             aria-label={action.label}
-            className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-left text-[12px] font-semibold transition-colors hover:bg-muted active:bg-muted">
+            className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-border bg-background px-2.5 py-2 text-left text-[12px] font-semibold transition-colors hover:bg-muted active:bg-muted">
             <span className="min-w-0 break-words">{action.label}</span>
             <ArrowRight size={14} aria-hidden="true" className="shrink-0 text-muted-foreground"/>
           </button>)}

@@ -565,7 +565,7 @@ async function main(){
     await expectText(tab,'Conversation','assistant chat');
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
     await waitFor(()=>tab.invoke(function(){
-      return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+      return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
     }),'Finance quick actions sheet opens');
     const financeMenu=await tab.invoke(function(){
       return {
@@ -578,9 +578,9 @@ async function main(){
       'Source status','Debt planning','Spend review','Markets','Voice controls','AI permissions'],
       'Finance options must not include any Personal-only actions');
     assert.ok(financeMenu.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
-    await tab.invoke(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
+    await tab.invoke(function(){document.querySelector('button[aria-label="Close Compass actions"]').click();});
     await waitFor(()=>tab.invoke(function(){
-      return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+      return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
     }),'Finance quick actions sheet closes');
     console.log('PASS: Finance-only actions are visible with no Personal-only shortcuts');
     const beforeChat=await tab.invoke(function(){
@@ -646,15 +646,16 @@ async function main(){
     assert.equal(afterChat.input,'','clear sent question');
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
     await waitFor(()=>tab.invoke(function(){
-      return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+      return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
     }),'Options open for clearing chat');
+    await tab.invoke(function(){document.querySelector('details[aria-label="Additional Compass settings"]').open=true;});
     await tab.invoke(function(){
-      const btn=[...document.querySelectorAll('[role="dialog"][aria-label="Compass AI options"] button')]
+      const btn=[...document.querySelectorAll('[role="region"][aria-label="Compass actions drawer"] button')]
         .find(x=>x.textContent.trim()==='Clear chat');
       if(!btn)throw Error('Clear chat button missing from modal');btn.click();
     });
     await waitFor(()=>tab.invoke(function(){
-      return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]');
+      return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
     }),'Options close after clear');
     await expectText(tab,'Conversation cleared. Ask a new question below.','compact clear state');
     console.log('PASS: iPhone chat bubbles and compact composer; Enter, Shift+Enter, IME and Clear');
