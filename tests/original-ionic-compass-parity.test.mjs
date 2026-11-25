@@ -21,7 +21,9 @@ test('original Ionic assistant keeps a compact Compass header and maximizes conv
 test('original PWA preserves vault and voice safety instead of importing ngrok-only assistant',async()=>{
   const src=await readFile(uiUrl,'utf8');
   assert.match(src,/privateTailnetOrigin\(settings\.url\)/);
-  assert.match(src,/Enable read-only agent mode/);
+  assert.match(src,/const agentMode = true/);
+  assert.match(src,/Read-only agent mode always active/);
+  assert.doesNotMatch(src,/aria-label="Enable read-only agent mode"/);
   assert.match(src,/Agent mode/);
   assert.match(src,/Read-only agent mode|read-only/);
   assert.match(src,/Turn on spoken replies/);
