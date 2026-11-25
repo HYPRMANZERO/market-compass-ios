@@ -379,15 +379,14 @@ ion-app.mc-ionic-app {
 .mc-ionic-app .mc-quick-action.ion-activatable { position:relative; overflow:hidden; }
 .mc-ionic-app .mc-wallet-cta.ion-activatable { position:relative; overflow:hidden; }
 
-.mc-assistant-dock{display:flex;flex-direction:row;align-items:flex-start;min-width:0;width:100%;overflow-x:auto;overflow-y:visible;scroll-snap-type:x mandatory;}
+.mc-assistant-dock{display:flex;flex-direction:column;align-items:stretch;gap:12px;width:100%;min-width:0;max-width:100%;overflow-x:visible;overflow-y:visible;scroll-snap-type:none;}
 .mc-assistant-dock > *{box-sizing:border-box;min-width:0;}
+.mc-assistant-dock-card{box-sizing:border-box;width:100%;flex:0 0 auto;min-width:0;max-width:100%;overflow-wrap:anywhere;}
+.mc-assistant-dock-card[open]{width:100%;max-height:none;}
+.mc-assistant-dock-card:not([open]){min-height:76px;}
+.mc-assistant-dock-card > summary{min-height:40px;display:flex;align-items:center;gap:6px;line-height:1.25;white-space:normal;list-style:none;}
 .mc-assistant{min-width:0;max-width:100%;overflow-x:clip;}
-.mc-assistant-dock{width:100%;min-width:0;max-width:100%;scroll-padding-inline:4px;overscroll-behavior-x:contain;}
-.mc-assistant-dock-card{width:clamp(142px,43vw,188px);flex:0 0 clamp(142px,43vw,188px);max-width:calc(100vw - 32px);min-width:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;}
-.mc-assistant-dock-card[open]{width:min(86vw,342px);flex-basis:min(86vw,342px);max-height:min(62dvh,580px);}
-.mc-assistant-dock-card:not([open]){min-height:66px;max-height:66px;}
 
 html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-behavior:none !important;}
 .mc-quick-menu-layer{touch-action:pan-y;overscroll-behavior:contain;}
 .mc-quick-menu-panel{max-height:min(77dvh,calc(100dvh - env(safe-area-inset-top,0px) - 14px));overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
-.mc-assistant-dock-card > summary{min-height:40px;display:flex;align-items:center;gap:6px;line-height:1.25;white-space:normal;list-style:none;}

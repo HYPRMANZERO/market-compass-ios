@@ -13,8 +13,8 @@ test('original Ionic assistant keeps a compact Compass header and maximizes conv
   assert.match(src,/min-h-\[min\(55dvh,500px\)\]/);
   assert.match(src,/max-h-\[min\(48dvh,540px\)\]/);
   assert.doesNotMatch(src,/>Just ask\.</);
-  assert.match(css,/\.mc-assistant-dock\{display:flex;flex-direction:row/);
-  assert.match(css,/\.mc-assistant-dock-card\{width:clamp\(142px,43vw,188px\)/);
+  assert.match(css,/\.mc-assistant-dock\{display:flex;flex-direction:column/);
+  assert.match(css,/\.mc-assistant-dock-card\{box-sizing:border-box;width:100%/);
   assert.match(css,/\.mc-assistant-dock-card > summary\{min-height:40px/);
 });
 
