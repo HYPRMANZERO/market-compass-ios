@@ -33,6 +33,7 @@ jobs:
         env:
           PORT: '5173'
           BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: personal
           NODE_ENV: production
         run: pnpm --filter @workspace/market-compass run build
       - name: Validate offline shell without publishing
@@ -42,9 +43,38 @@ jobs:
           test -f artifacts/market-compass/dist/public/sw.js
           test -f artifacts/market-compass/dist/public/manifest.webmanifest
           grep -q 'mc-wallet-hero' artifacts/market-compass/dist/public/assets/*.css
+          grep -Fq '.flex{display:flex}' artifacts/market-compass/dist/public/assets/*.css
           grep -qi 'bootstrap' artifacts/market-compass/src/vendor/bootstrap/LICENSE
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('artifacts/market-compass/dist/public/manifest.webmanifest','utf8'));if(m.name!=='Compass Personal')process.exit(1)"
+      - name: Share exact public release bundle with Windows browser tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-public-pages-smoke
+          path: artifacts/market-compass/dist/public/
+          retention-days: 3
+      - name: Build Finance candidate from the same frontend sources
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: finance
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+          NODE_ENV: production
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          node scripts/prepare-offline-shell.mjs
+          test -f .release/finance/index.html
+          test -f .release/finance/sw.js
+          grep -Fq '.flex{display:flex}' .release/finance/assets/*.css
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('.release/finance/manifest.webmanifest','utf8'));if(m.name!=='Compass Financial Advisor')process.exit(1)"
+      - name: Share exact Finance release bundle with Windows browser tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-finance-smoke
+          path: .release/finance/
+          include-hidden-files: true
+          retention-days: 3
 
   public-edge-smoke:
+    needs: public-static-checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,17 +90,22 @@ jobs:
           Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
           pnpm install --frozen-lockfile --force
           if ($LASTEXITCODE -ne 0) { throw 'Dependency install failed' }
-      - name: Build public static PWA
+      # Do not regenerate Tailwind CSS on Windows. Exercise the exact static
+      # bundle built and checked on Linux for the public Pages release.
+      - uses: actions/download-artifact@v4
+        with:
+          name: compass-public-pages-smoke
+          path: artifacts/market-compass/dist/public/
+      - name: Verify downloaded release CSS and service worker
         shell: pwsh
-        env:
-          BASE_PATH: '/market-compass-ios/'
-          NODE_ENV: production
-          PORT: '5173'
         run: |
-          pnpm --filter @workspace/market-compass run build
-          if ($LASTEXITCODE -ne 0) { throw 'Windows build failed' }
-          node scripts/prepare-offline-shell.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Offline cache shell failed' }
+          $dir='artifacts/market-compass/dist/public'
+          foreach ($file in @('index.html','sw.js','manifest.webmanifest')) {
+            if (!(Test-Path (Join-Path $dir $file))) { throw "Missing public release file: $file" }
+          }
+          if (!(Select-String -Path (Join-Path $dir 'assets/*.css') -SimpleMatch -Pattern '.flex{display:flex}' -Quiet)) {
+            throw 'Public release CSS missing the flex layout utility'
+          }
       - name: Synthetic mobile Bootstrap and account smoke
         shell: pwsh
         env:
@@ -89,7 +124,11 @@ jobs:
         run: |
           node scripts/category-review-ui-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Personal Spend review browser check failed' }
-      - name: Build and smoke Finance review UI separately
+      - uses: actions/download-artifact@v4
+        with:
+          name: compass-finance-smoke
+          path: .release/finance/
+      - name: Smoke-test the protected Finance candidate without rebuilding it
         shell: pwsh
         env:
           BASE_PATH: '/market-compass-ios/'
@@ -97,9 +136,5 @@ jobs:
           MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
           NODE_ENV: production
         run: |
-          pnpm --filter @workspace/market-compass run build
-          if ($LASTEXITCODE -ne 0) { throw 'Finance static build failed' }
-          node scripts/prepare-offline-shell.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Finance offline shell failed' }
           node scripts/category-review-ui-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Finance Spend review browser check failed' }
