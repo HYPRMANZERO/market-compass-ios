@@ -317,21 +317,36 @@ try{
   await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
   await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Compass options close');
   console.log('PASS: full-height Personal chat and accessible full-width options sheet');
+  await js(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
+  await until(()=>js(function(){return !!document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Plus action menu opens');
+  const actionLabels=await js(function(){
+    return [...document.querySelectorAll('[aria-label="Compass quick actions"] button')].map(item=>item.getAttribute('aria-label'));
+  });
+  for(const label of ['Encrypted Vault','Add document','Scan saved payments','Source status',
+    'Debt planning','Spend review','Markets','Voice controls','AI permissions',
+    'Choose files to scan','Personal memory','Tasks / planning','Research tools',
+    'Device link / private network status']){
+    assert.ok(actionLabels.includes(label),'Personal must include action '+label);
+  }
+  await js(function(){document.querySelector('button[aria-label="Close Compass options"]').click();});
+  await until(()=>js(function(){return !document.querySelector('[role="dialog"][aria-label="Compass AI options"]')}),'Plus action menu closes');
+  console.log('PASS: Personal includes every Finance action plus Personal-only actions');
   const before=await js(function(){
     const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
     const log=document.querySelector('[role="log"][aria-label="AI conversation"]');
     const submit=document.querySelector('button[aria-label="Send question"]');
+    const plus=document.querySelector('button[aria-label="Open Compass actions"]');
     const mic=document.querySelector('button[aria-label="Speak a question"]');
     return {
-      present:!!input&&!!log&&!!submit&&!!mic,
+      present:!!input&&!!log&&!!plus&&!!mic&&!submit,
       width:input?.getBoundingClientRect().width||0,
       fontSize:input?getComputedStyle(input).fontSize:null,
-      actions:[submit?.getBoundingClientRect().width,mic?.getBoundingClientRect().width],
+      actions:[plus?.getBoundingClientRect().width,mic?.getBoundingClientRect().width],
       count:log?.querySelectorAll('.mc-chat-bubble').length??0,
       noOverflow:document.documentElement.scrollWidth<=innerWidth+1
     };
   });
-  assert.equal(before.present,true,'composer and accessible controls visible');
+  assert.equal(before.present,true,'empty composer offers actions and microphone without squeezing input');
   assert.ok(before.width>=155,'assistant text input must not be squeezed');
   assert.equal(before.fontSize,'16px','iPhone composer must not zoom on focus');
   assert.ok(before.actions.every(n=>n>=44),'voice/send tap targets at least 44px');
