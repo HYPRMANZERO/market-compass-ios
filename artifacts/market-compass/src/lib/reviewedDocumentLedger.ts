@@ -99,6 +99,14 @@ export function applyReviewedDocumentToLedger(
     if(blocked)throw Error(blocked);
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
       throw Error('A selected row has no usable nonzero amount.');
+    // A source-dated transaction is immutable during review. The reporting
+    // period cannot be substituted for a missing row date either.
+    if(line.date!==null&&choice.date!==line.date)
+      throw Error('The source transaction date must be preserved. Re-import corrected source evidence.');
+    const localToday=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),
+      String(now.getDate()).padStart(2,'0')].join('-');
+    if(typeof choice.date==='string'&&choice.date>localToday)
+      throw Error('Future-dated transactions cannot be approved as completed historical Spend.');
     if(!allowedKinds.has(choice.kind)||!categoryValues.has(choice.category) ||
        !validCategories[choice.kind].includes(choice.category))
       throw Error('Classify each row with an appropriate entry type and category.');

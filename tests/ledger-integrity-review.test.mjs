@@ -57,7 +57,9 @@ test('integrity hints stay visible but do not trigger automatic posting or delet
   const review=readFileSync(new URL('../artifacts/market-compass/src/components/ReviewedDocumentLedger.tsx',import.meta.url),'utf8');
   const panel=readFileSync(new URL('../artifacts/market-compass/src/components/LedgerIntegrityPanel.tsx',import.meta.url),'utf8');
   const app=readFileSync(new URL('../artifacts/market-compass/src/App.tsx',import.meta.url),'utf8');
-  assert.match(review,/matchingApprovedEntriesForDocumentLine/);
+  const checks=readFileSync(new URL('../artifacts/market-compass/src/lib/documentReconciliation.ts',import.meta.url),'utf8');
+  assert.match(checks,/matchingApprovedEntriesForDocumentLine/);
+  assert.match(review,/documentReconciliation/);
   assert.match(review,/possible duplicate/i);
   assert.match(panel,/Nothing is merged, hidden or removed automatically/);
   assert.match(app,/<LedgerIntegrityPanel entries={ledger}/);

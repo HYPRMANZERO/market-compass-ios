@@ -1,9 +1,8 @@
-import {useState} from 'react';
+import {useMemo,useState} from 'react';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
-import {conflictingApprovedCategory} from '@/lib/approvedPayeeCategory';
-import {matchingApprovedEntriesForDocumentLine} from '@/lib/ledgerIntegrity';
-import {isReviewableLine} from '@/lib/reviewInbox';
+import {documentReconciliation} from '@/lib/documentReconciliation';
+import {localDate} from '@/lib/dailyBackup';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {suggestRegionalDocumentClassification} from '@/lib/regionalDocumentReview';
@@ -36,6 +35,14 @@ export default function ReviewedDocumentLedger({
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
   const applied=documentAppliedIndices(document,entries);
+  const reconciliation=useMemo(()=>
+    documentReconciliation(document,entries,currency,region,localDate()),
+    [document,entries,currency,region]);
+  // A risk cannot be swept into a batch by either "Prepare" or "Select
+  // suggested". Rows remain visible for individual examination.
+  const risks=reconciliation.findings;
+  const categoryConflicts=new Map(risks.filter(r=>r.categoryConflict)
+    .map(r=>[r.index,r.categoryConflict!] as const));
   function initialRow(index:number):ReviewRow{
     const line=document.lines[index];
     const suggestion=suggestRegionalDocumentClassification(line,region);
@@ -44,19 +51,6 @@ export default function ReviewedDocumentLedger({
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
     !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0);
-  // A matching excerpt from another file or manual record is never silently
-  // merged. Exclude from bulk Prepare; owner may still inspect and select it.
-  const possibleDuplicateIndices=new Set(ready.filter(({line})=>
-    matchingApprovedEntriesForDocumentLine(line,entries,currency).length>0
-  ).map(({index})=>index));
-  const categoryConflicts=new Map<number,NonNullable<ReturnType<typeof conflictingApprovedCategory>>>();
-  document.lines.forEach((line,index)=>{
-    const proposed=preparedDocumentReview(document,index,region);
-    if(!proposed)return;
-    const history=conflictingApprovedCategory(
-      entries,line.label,proposed.kind,currency,proposed.category);
-    if(history)categoryConflicts.set(index,history);
-  });
   // Unreviewed movements are visible, but never included in approved Spend totals.
   const pendingCredits=ready.filter(({line})=>line.direction==='incoming')
     .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
@@ -69,17 +63,22 @@ export default function ReviewedDocumentLedger({
   }).length;
   const suggested=ready.filter(({index})=>{
     const row=draft[index]??initialRow(index);
-    return row.date&&row.kind&&row.category;
+    // Only fully prepared, unflagged, source-dated rows can be bulk-selected.
+    return risks[index]?.bulkSafe===true&&Boolean(row.date&&row.kind&&row.category);
   });
   const selected=document.lines.map((_,i)=>i).filter(i=>draft[i]?.checked&&!applied.has(i));
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
   const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i,region)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
-      item.proposal!==null&&!applied.has(item.index)&&!possibleDuplicateIndices.has(item.index)&&!categoryConflicts.has(item.index));
+      item.proposal!==null&&risks[item.index]?.bulkSafe===true);
+  const clearFlaggedSelections=(previous:Record<number,ReviewRow>)=>
+    Object.fromEntries(Object.entries(previous).map(([index,row])=>[
+      index,risks[Number(index)]?.bulkSafe?row:{...row,checked:false}
+    ])) as Record<number,ReviewRow>;
   const selectPrepared=()=>{
     if(!canApply)return;
     setDraft(old=>{
-      const next={...old};
+      const next=clearFlaggedSelections(old);
       for(const {index,proposal} of prepared){
         next[index]={checked:true,date:proposal.date,kind:proposal.kind,category:proposal.category};
       }
@@ -100,7 +99,8 @@ export default function ReviewedDocumentLedger({
       setError('Review the workspace currency first. This importer labels all extracted R amounts as ZAR and does not convert other currencies.');
       return;
     }
-    const similarCount=selected.filter(i=>possibleDuplicateIndices.has(i)).length;
+    const manualRisks=selected.map(i=>risks[i]).filter(r=>r&&(
+      r.matchesApproved||r.repeatedInFile||r.outsideReportingPeriod||r.categoryConflict));
     const decisions:ReviewedLedgerDecision[]=selected.map(i=>({
       lineIndex:i,date:draft[i].date,
       kind:draft[i].kind as ExpenseKind,
@@ -108,11 +108,16 @@ export default function ReviewedDocumentLedger({
     }));
     try{
       const revised=applyReviewedDocumentToLedger(document,entries,decisions,currency);
+      if(manualRisks.length>0&&!window.confirm(
+        'ADDITIONAL RECONCILIATION REVIEW: '+manualRisks.length+
+        ' selected line(s) may repeat another payment, disagree with the source reporting period, or conflict with past approved categories. '+
+        'Inspect the original file and linked transactions. Similar payments can be legitimate, but no entries are merged automatically. '+
+        'Continue with these specifically reviewed exceptions?'
+      ))return;
       if(!window.confirm(
-        'Add '+decisions.length+' reviewed line(s) to your encrypted Spend ledger? '+
-        (similarCount>0?similarCount+' selected row(s) look like existing approved transactions. '+'Confirm these are not repeat imports before continuing. ':'')+
-        'These are reviewed statement excerpts, not bank-reconciled transactions. '+
-        'This will change recorded cycle totals and local Assistant summaries; it will NOT change Debt Plan balances, send data to HYPRBOX, or execute payments.'
+        'Record '+decisions.length+' owner-approved transaction(s) in your encrypted Spend ledger? '+
+        'Source dates and amounts are preserved. These are not bank-reconciled entries. '+
+        'Recorded cycle totals and local Assistant summaries will change; Debt Plan balances, bank accounts and orders will not.'
       ))return;
       onApply(revised);
       setDraft({});
@@ -143,7 +148,7 @@ export default function ReviewedDocumentLedger({
       </div>)}
     </div>
     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-      These are historical, unapproved document movements. They are not bank-verified balances or Spend totals.
+      These are unapproved document excerpts, potentially including repeated or future-dated rows. They are not bank-verified balances or recorded Spend totals.
     </p>
     {currency!=='ZAR'||currencyReviewRequired?
       <p role="alert" className="mt-2 text-[11px] font-semibold text-destructive">
@@ -156,20 +161,33 @@ export default function ReviewedDocumentLedger({
       {sourceTimeContext(document)?.asOf&&<p className="mt-1 text-muted-foreground">Historical document as of {sourceTimeContext(document)?.asOf} · not a current balance</p>}
       <p className="mt-1 text-muted-foreground">Reporting periods do not date individual undated transactions. No unapproved amounts affect Spend.</p>
     </div>
-    {possibleDuplicateIndices.size>0&&<p role="status" className="mt-3 rounded-xl border border-border bg-muted/45 p-3 text-[11px] leading-5">
-      {possibleDuplicateIndices.size} possible duplicate source row(s) match existing approved entries by date, amount and description.
-      They are excluded from bulk Prepare. Compare the original documents before selecting them manually. Nothing has been deleted or approved.
-    </p>}
+    {(reconciliation.matchesApproved>0||reconciliation.repeatedInFile>0||
+      reconciliation.outsideReportingPeriod>0||reconciliation.futureDated>0||
+      reconciliation.categoryConflicts>0)&&
+      <div role="status" className="mt-3 rounded-xl border border-border bg-muted/45 p-3 text-[11px] leading-5">
+        <strong className="block font-semibold text-foreground">Reconciliation checks before recording</strong>
+        <p className="mt-1 text-muted-foreground">
+          {reconciliation.matchesApproved} match approved entries · {reconciliation.repeatedInFile} repeated inside this file ·
+          {' '}{reconciliation.outsideReportingPeriod} outside the stated period · {reconciliation.futureDated} future-dated ·
+          {' '}{reconciliation.categoryConflicts} category conflicts.
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          Flagged rows are excluded from both bulk-selection shortcuts. You can inspect and select them individually,
+          except future-dated transactions, which must not enter historical Spend.
+          Nothing is merged, deleted or posted automatically.
+        </p>
+      </div>}
     {prepared.length>0&&<button type="button" disabled={!canApply} onClick={selectPrepared}
       className="mt-3 min-h-11 w-full rounded-xl border border-primary/30 bg-primary/10 px-3 text-[12px] font-semibold disabled:opacity-40">
-      Prepare {prepared.length} dated, source-labelled transaction(s) for one approval
+      Prepare {prepared.length} unflagged dated transaction(s) for one approval
     </button>}
     {suggested.length>0&&<button type="button" disabled={!canApply}
       className="mt-2 min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
       onClick={()=>{
-        setDraft(old=>({...old,...Object.fromEntries(suggested.map(({index})=>[
-          index,{...(old[index]??initialRow(index)),checked:true}
-        ]))}));
+        setDraft(old=>({...clearFlaggedSelections(old),
+          ...Object.fromEntries(suggested.map(({index})=>[
+            index,{...(old[index]??initialRow(index)),checked:true}
+          ]))}));
         setError('');setFeedback('');
       }}>
       Select {suggested.length} suggested transactions
@@ -177,10 +195,10 @@ export default function ReviewedDocumentLedger({
     <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
-        const possibleRepeat=possibleDuplicateIndices.has(index);
+        const risk=risks[index];
         const categoryConflict=categoryConflicts.get(index);
         const blocked=documentRowBlockReason(document,line);
-        const unusable=line.amount===null||line.amount===0||Boolean(blocked);
+        const unusable=line.amount===null||line.amount===0||Boolean(blocked)||Boolean(risk?.futureDated);
         const row=draft[index]??initialRow(index);
         const proposal=preparedDocumentReview(document,index);
         const options=row.kind?allowedDocumentCategories(row.kind):[];
@@ -192,15 +210,24 @@ export default function ReviewedDocumentLedger({
             <span className="min-w-0 break-words">
               Line {index+1}: {maskDocumentPII(line.label)} · {showMoney(line.amount)}
               <span className="block text-[11px] font-normal text-muted-foreground">
-                {already?(blocked?'Previously posted · review in Spend':'Already added to Spend'):blocked??(unusable?'Amount unknown or zero':
+                {already?(blocked?'Previously posted · review in Spend':'Already added to Spend'):blocked??(risk?.futureDated?'Future-dated: cannot record':unusable?'Amount unknown or zero':
                   (line.direction==='incoming'?'Credit':line.direction==='outgoing'?'Debit':'Direction unclear')+
                   (row.kind&&row.category?' · '+EXPENSE_KINDS.find(k=>k.value===row.kind)?.label+
                     ' · '+EXPENSE_CATEGORIES.find(c=>c.value===row.category)?.label:''))}
               </span>
             </span>
           </label>
-          {possibleRepeat&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-            Possible duplicate of a saved transaction. Compare the source before approving this row.
+          {risk?.matchesApproved&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            Possible duplicate of an already approved transaction. Compare the source before manually selecting this row.
+          </p>}
+          {risk?.repeatedInFile&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            Repeated date, description, amount and direction elsewhere in this file. Check for a genuine second payment.
+          </p>}
+          {risk?.outsideReportingPeriod&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            This transaction date is outside the document's explicitly stated reporting period. Verify the source date before manual approval.
+          </p>}
+          {risk?.futureDated&&!already&&<p role="alert" className="mt-2 pl-6 text-[11px] font-semibold text-destructive">
+            Future-dated payment: cannot record as completed historical Spend. Confirm the source date and re-import a corrected document.
           </p>}
           {categoryConflict&&!already&&!unusable&&<p role="status"
             className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">

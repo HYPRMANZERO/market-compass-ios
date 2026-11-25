@@ -52,7 +52,7 @@ test('historical balance references are excluded from prepared review even if da
 });
 test('prepared review UX does not demand date input for source-dated rows',async()=>{
  const source=await readFile(new URL('../artifacts/market-compass/src/components/ReviewedDocumentLedger.tsx',import.meta.url),'utf8');
- assert.match(source,/Prepare \{prepared\.length\} dated, source-labelled transaction/);
+ assert.match(source,/Prepare \{prepared\.length\} unflagged dated transaction/);
  assert.match(source,/Transaction date extracted from file/);
  assert.match(source,/line\.date\?<div/);
  assert.match(source,/Missing transaction date/);

@@ -40,8 +40,10 @@ test('unclassified and other categories do not establish a history preference',(
 });
 test('view warns and blocks bulk Prepare instead of silently rewriting old transactions',()=>{
  const src=readFileSync(new URL('../artifacts/market-compass/src/components/ReviewedDocumentLedger.tsx',import.meta.url),'utf8');
- assert.match(src,/conflictingApprovedCategory/);
- assert.match(src,/!categoryConflicts\.has\(index\)|!categoryConflicts\.has\(item.index\)/);
+ const reconciliation=readFileSync(new URL('../artifacts/market-compass/src/lib/documentReconciliation.ts',import.meta.url),'utf8');
+ assert.match(reconciliation,/conflictingApprovedCategory/);
+ assert.match(src,/risks\[item\.index\]\?\.bulkSafe===true/);
+ assert.match(src,/risks\[index\]\?\.bulkSafe===true/);
  assert.match(src,/category:categoryConflicts\.has\(index\)\?'':/);
  assert.match(src,/Excluded from bulk Prepare; choose the category yourself before recording/);
  const helper=readFileSync(new URL('../artifacts/market-compass/src/lib/approvedPayeeCategory.ts',import.meta.url),'utf8');
