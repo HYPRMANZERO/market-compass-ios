@@ -724,12 +724,12 @@ export default function VoiceAssistant({
     if (!busy && query.trim()) submit(query);
   }
 
-  return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
-    <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass AI model connection">
+  return <div className="mc-assistant min-w-0 max-w-full space-y-3" data-testid="voice-assistant">
+    <section className="flex min-h-[56px] items-center justify-between gap-2 rounded-[16px] bg-[hsl(165,24%,20%)] px-3 py-2 text-white" aria-label="Compass AI model connection">
       <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private Compass model connection status"}>
         <span className={connected?"h-2 w-2 shrink-0 rounded-full bg-emerald-400":connection==="checking"?"h-2 w-2 shrink-0 rounded-full bg-amber-300":"h-2 w-2 shrink-0 rounded-full bg-white/50"} aria-hidden="true"/>
-        {connected?(activeModel==='qwen3.5:4b'?(ownerPreviewModel?'Compass preview':'Compass connected'):'Compass connected'):connection==="checking"?'Connecting Compass':settings.enabled?(ownerPreviewModel?'Compass preview offline':'Compass offline'):'Compass not connected'}
+        {connected?(activeModel==='qwen3.5:4b'?(ownerPreviewModel?'Compass preview':'Compass connected'):'Compass connected'):connection==="checking"?'Connecting Compass':publicPagesEdition && !personalConnected?'Owner link needed':settings.enabled?(ownerPreviewModel?'Compass preview offline':'Compass offline'):'Compass not connected'}
       </span>
       <button type="button" aria-label={settings.speakReplies?"Turn off spoken replies":"Turn on spoken replies"} aria-pressed={settings.speakReplies}
         onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
@@ -737,7 +737,7 @@ export default function VoiceAssistant({
         {settings.speakReplies?<Speaker size={18}/>:<VolumeX size={18}/>}</button>
     </section>
 
-    <section className="flex min-h-[min(64dvh,650px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
+    <section className="mc-chat-panel flex min-h-[min(55dvh,500px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm sm:min-h-[min(64dvh,650px)]" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
@@ -753,7 +753,7 @@ export default function VoiceAssistant({
           <p className="max-w-[330px] py-2 leading-5">Tools only review sources. No trading, banking or payment changes. Sharing iPhone vault entries requires separate permission in settings.</p>
         </details>
       </div>
-      <div className="mc-chat-log min-h-[min(40dvh,340px)] max-h-[min(62dvh,650px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-[min(27dvh,250px)] max-h-[min(48dvh,540px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:min-h-[min(40dvh,340px)] sm:max-h-[min(62dvh,650px)] sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
@@ -841,7 +841,7 @@ export default function VoiceAssistant({
       </div>
     </section>
 
-    <div className="mc-assistant-dock flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-4" aria-label="AI tools and connections">
+    <div className="mc-assistant-dock flex min-w-0 max-w-full snap-x snap-mandatory items-start gap-2.5 overflow-x-auto pb-2" aria-label="AI tools and connections">
 
 
     <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary>

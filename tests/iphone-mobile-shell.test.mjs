@@ -31,8 +31,8 @@ test('navigation and Safari route-change scroll placement remain deterministic',
 });
 
 test('header reports phone connectivity, not a potentially unverified desktop AI connection',()=>{
-  assert.match(app,/iPhone online/);
-  assert.match(app,/iPhone offline/);
+  assert.match(app,/Internet online/);
+  assert.match(app,/Internet offline/);
   assert.doesNotMatch(app,/\{online \? 'Connected' : 'Offline'\} · \{active\.label\}/);
 });
 

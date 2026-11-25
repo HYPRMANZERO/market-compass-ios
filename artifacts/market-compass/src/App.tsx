@@ -24,6 +24,7 @@ import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import BankCarousel from '@/components/BankCarousel';
+import {currentAssistantEdition} from '@/lib/assistantEdition';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
 import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
@@ -287,6 +288,7 @@ function useWorkspaceVault() {
 }
 
 function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
+  const editionName=currentAssistantEdition()==='finance'?'Compass Financial Advisor':'Compass Personal';
   const isStandalone=typeof window!=='undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & {standalone?:boolean}).standalone===true);
@@ -297,7 +299,7 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
     <div className="mx-auto w-full max-w-[390px]">
       <div className="mb-4 flex items-center gap-3 px-1">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={22}/></span>
-        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
+        <div><h1 className="serif text-[22px] leading-tight">{editionName}</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
       </div>
       <div className="rounded-[22px] bg-[hsl(44,33%,99%)] p-4 text-foreground shadow-[0_16px_44px_rgba(0,0,0,.12)] sm:p-6">
         <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
@@ -385,6 +387,7 @@ function InstallHelp() {
 function AppShell({ children, pending, currency, onImportDocuments, onAddAccount }: {
   children: ReactNode;pending:number;currency:string;onImportDocuments:()=>void;onAddAccount:()=>void;
 }) {
+  const editionName=currentAssistantEdition()==='finance'?'Compass Financial Advisor':'Compass Personal';
   const [menuOpen,setMenuOpen]=useState(false);
   const [path,navigate] = useLocation();
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -421,7 +424,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       <div className="flex h-full w-full flex-col border-r border-sidebar-border px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><Compass size={21} strokeWidth={1.8}/></span>
-          <span><span className="serif block text-[21px] leading-none">Market Compass</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">Personal workspace</span></span>
+          <span><span className="serif block text-[21px] leading-none">{editionName}</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">{currentAssistantEdition()==='finance'?'Finance workspace':'Personal workspace'}</span></span>
         </Link>
         <div className="mt-11 px-3 text-[10px] font-semibold uppercase tracking-[.22em] text-sidebar-foreground/40">Your workspace</div>
         <nav className="mt-3 space-y-1" aria-label="Desktop main navigation">
@@ -443,7 +446,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
           <div className="flex items-center gap-2 text-[11px] font-semibold"><ShieldCheck size={15} className="text-sidebar-primary"/> Deliberate by design</div>
           <p className="mt-2 text-[11px] leading-[1.65] text-sidebar-foreground/55">Your workspace stays on this device. Payments and trades always require separate approval.</p>
         </div>
-        <div className="mt-5 flex items-center justify-between px-1 text-[10px] text-sidebar-foreground/40"><span>MARKET COMPASS</span><span className="mono">LOCAL / 01</span></div>
+        <div className="mt-5 flex items-center justify-between px-1 text-[10px] text-sidebar-foreground/40"><span>{editionName.toUpperCase()}</span><span className="mono">LOCAL / 01</span></div>
       </div>
     </aside>
 
@@ -453,10 +456,10 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         <div className="flex min-h-[49px] items-center gap-3">
           <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-extrabold tracking-[-.02em] leading-5">Market Compass</div>
+            <div className="truncate text-[16px] font-extrabold tracking-[-.02em] leading-5">{editionName}</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
-              <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
+              <span>{online ? 'Internet online' : 'Internet offline'} · {active.label} · {currency}</span>
             </div>
           </div>
         </div>
@@ -478,7 +481,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
           <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
             <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
-            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">{editionName} menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
             <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
             <div className="grid grid-cols-2 gap-2">
               {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
