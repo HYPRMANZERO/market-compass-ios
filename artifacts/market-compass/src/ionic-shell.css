@@ -452,8 +452,11 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     box-sizing:border-box;
     width:100%;
     max-width:none;
-    height:calc(100dvh - 92px - env(safe-area-inset-bottom,0px));
-    padding:env(safe-area-inset-top,0px) 0 0 !important;
+    /* Tabbar = 58px button + 8px top + max(10px, iPhone home-indicator inset).
+       Match its actual top edge so there is no dead strip under the composer. */
+    height:calc(100dvh - 66px - max(10px,env(safe-area-inset-bottom,0px)));
+    /* Nudge the Compass identity below the status bar without shrinking the bottom edge. */
+    padding:calc(env(safe-area-inset-top,0px) + 10px) 0 0 !important;
     margin:0 !important;
     overflow:hidden;
   }

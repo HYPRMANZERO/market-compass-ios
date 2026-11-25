@@ -563,6 +563,29 @@ async function main(){
       if(!link)throw Error('Assistant tab missing');link.click();
     });
     await expectText(tab,'Conversation','assistant chat');
+
+    const seam=await tab.invoke(function(){
+    const page=document.querySelector('.mc-assistant-page');
+    const nav=document.querySelector('.mc-mobile-tabbar');
+    const title=document.querySelector('[aria-label="Compass model connection"]');
+    const p=page?.getBoundingClientRect();
+    const n=nav?.getBoundingClientRect();
+    const t=title?.getBoundingClientRect();
+    return {
+      gap:p&&n?n.top-p.bottom:null,
+      headerOffset:p&&t?t.top-p.top:null,
+      topPadding:page?parseFloat(getComputedStyle(page).paddingTop):null,
+      overflow:document.documentElement.scrollWidth>innerWidth+1
+    };
+    });
+    assert.ok(seam.gap!==null&&Math.abs(seam.gap)<=3,
+      'Finance chat-to-tabbar gap must be closed: '+JSON.stringify(seam));
+    assert.ok(seam.headerOffset!==null&&seam.headerOffset>=9,
+      'Finance title must sit below the status-bar inset');
+    assert.ok(seam.topPadding>=9,'top padding includes the extra 10px');
+    assert.equal(seam.overflow,false,'no sideways scroll from seam adjustment');
+    console.log('PASS: Finance full-height chat and status-bar spacing',JSON.stringify(seam));
+
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
     await waitFor(()=>tab.invoke(function(){
       return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
