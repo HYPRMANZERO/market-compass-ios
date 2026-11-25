@@ -960,9 +960,36 @@ async function main(){
     });
     await expectText(tab,'1 of 100 saved','restored count on independent origin');
     const restored=await storedRecord(tab);
-    assert.equal(restored.ciphertext,backup.ciphertext,
-      'restored ciphertext should match the exported backup');
-    console.log('PASS: rejected wrong backup password and restored encrypted vault to isolated second origin');
+    assert.equal(restored?.cipher,'AES-256-GCM','restored vault remains authenticated and encrypted');
+    assert.equal(restored?.version,2,'restored vault retains supported encrypted format');
+    // The normal encrypted auto-save may produce fresh salt and IV after a
+    // restore. Ciphertext equality is NOT a valid no-data-loss invariant.
+    // Decrypt both synthetic records and compare the actual full workspace.
+    const verified=await tab.invoke(async function(original,restored,pass){
+      async function decrypt(record,password){
+        const bytes=value=>Uint8Array.from(atob(value),ch=>ch.charCodeAt(0));
+        const secret=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),
+          'PBKDF2',false,['deriveKey']);
+        const key=await crypto.subtle.deriveKey({
+          name:'PBKDF2',salt:bytes(record.salt),iterations:record.iterations,hash:'SHA-256'
+        },secret,{name:'AES-GCM',length:256},false,['decrypt']);
+        const encrypted=bytes(record.ciphertext);
+        const packed=await crypto.subtle.decrypt({
+          name:'AES-GCM',iv:bytes(record.iv)
+        },key,encrypted);
+        const payload=record.compression==='gzip'?
+          await new Response(new Blob([packed]).stream().pipeThrough(
+            new DecompressionStream('gzip'))).arrayBuffer():packed;
+        return JSON.parse(new TextDecoder().decode(payload));
+      }
+      return {
+        before:await decrypt(original,pass),
+        after:await decrypt(restored,pass)
+      };
+    },backup,restored,pass);
+    assert.deepEqual(verified.after,verified.before,
+      'restoring on an independent origin must preserve the full decrypted workspace');
+    console.log('PASS: rejected wrong password and restored identical decrypted workspace on isolated origin');
     console.log('BROWSER RELEASE GATE PASS (synthetic data, Chromium; not iPhone Safari)');
   }finally{
     tab?.close();

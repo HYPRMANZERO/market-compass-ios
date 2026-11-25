@@ -22,6 +22,24 @@ test('refresh is user controlled, preserves vault, and can be deferred',()=>{
   assert.doesNotMatch(notice,/indexedDB\.|localStorage\.|sessionStorage\.|caches\.delete|\.clear\(/);
   assert.doesNotMatch(main,/window\.location\.reload\(\)/);
 });
+test('installed PWA checks for a newer shell on foreground resume without background polling',()=>{
+  assert.match(notice,/shouldCheckPwaOnResume/);
+  assert.match(notice,/getRegistration\(import\.meta\.env\.BASE_URL\)/);
+  assert.match(notice,/registration\?\.update\(\)/);
+  assert.match(notice,/addEventListener\('pageshow',checkOnResume\)/);
+  assert.match(notice,/addEventListener\('visibilitychange',checkOnResume\)/);
+  assert.match(notice,/addEventListener\('online',checkOnResume\)/);
+  assert.match(notice,/removeEventListener\('pageshow',checkOnResume\)/);
+  assert.match(notice,/removeEventListener\('visibilitychange',checkOnResume\)/);
+  assert.match(notice,/removeEventListener\('online',checkOnResume\)/);
+  assert.doesNotMatch(notice,/setInterval\(|setTimeout\(|fetch\(|caches\.delete|localStorage\.|indexedDB\./);
+});
+test('browser release gate verifies decrypted backup contents instead of comparing randomized ciphertext',()=>{
+  const gate=readFileSync(new URL('../scripts/browser-release-gate.mjs',import.meta.url),'utf8');
+  assert.match(gate,/await crypto\.subtle\.decrypt/);
+  assert.match(gate,/assert\.deepEqual\(verified\.after,verified\.before/);
+  assert.doesNotMatch(gate,/assert\.equal\(restored\.ciphertext,backup\.ciphertext/);
+});
 test('query placeholder respects Personal and Finance use cases',()=>{
   assert.match(assistant,/placeholder=\{financeEdition\s*\?/);
   assert.match(assistant,/Ask Compass about finances/);
