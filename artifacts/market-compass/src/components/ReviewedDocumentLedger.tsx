@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
+import {conflictingApprovedCategory} from '@/lib/approvedPayeeCategory';
 import {matchingApprovedEntriesForDocumentLine} from '@/lib/ledgerIntegrity';
 import {isReviewableLine} from '@/lib/reviewInbox';
 import {timeContextLabel,sourceTimeContext} from '@/lib/documentTimeContext';
@@ -38,7 +39,8 @@ export default function ReviewedDocumentLedger({
   function initialRow(index:number):ReviewRow{
     const line=document.lines[index];
     const suggestion=suggestRegionalDocumentClassification(line,region);
-    return {checked:false,date:line.date??'',kind:suggestion?.kind??'',category:suggestion?.category??''};
+    return {checked:false,date:line.date??'',kind:suggestion?.kind??'',
+      category:categoryConflicts.has(index)?'':suggestion?.category??''};
   }
   const ready=document.lines.map((line,index)=>({line,index})).filter(({line,index})=>
     !applied.has(index)&&!documentRowBlockReason(document,line)&&line.amount!==null&&line.amount!==0);
@@ -47,6 +49,14 @@ export default function ReviewedDocumentLedger({
   const possibleDuplicateIndices=new Set(ready.filter(({line})=>
     matchingApprovedEntriesForDocumentLine(line,entries,currency).length>0
   ).map(({index})=>index));
+  const categoryConflicts=new Map<number,NonNullable<ReturnType<typeof conflictingApprovedCategory>>>();
+  document.lines.forEach((line,index)=>{
+    const proposed=preparedDocumentReview(document,index,region);
+    if(!proposed)return;
+    const history=conflictingApprovedCategory(
+      entries,line.label,proposed.kind,currency,proposed.category);
+    if(history)categoryConflicts.set(index,history);
+  });
   // Unreviewed movements are visible, but never included in approved Spend totals.
   const pendingCredits=ready.filter(({line})=>line.direction==='incoming')
     .reduce((sum,{line})=>sum+Math.abs(line.amount??0),0);
@@ -65,7 +75,7 @@ export default function ReviewedDocumentLedger({
   const canApply=currency==='ZAR'&&!currencyReviewRequired;
   const prepared=document.lines.map((_,i)=>({index:i,proposal:preparedDocumentReview(document,i,region)}))
     .filter((item):item is {index:number;proposal:NonNullable<typeof item.proposal>}=>
-      item.proposal!==null&&!applied.has(item.index)&&!possibleDuplicateIndices.has(item.index));
+      item.proposal!==null&&!applied.has(item.index)&&!possibleDuplicateIndices.has(item.index)&&!categoryConflicts.has(item.index));
   const selectPrepared=()=>{
     if(!canApply)return;
     setDraft(old=>{
@@ -168,6 +178,7 @@ export default function ReviewedDocumentLedger({
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
         const possibleRepeat=possibleDuplicateIndices.has(index);
+        const categoryConflict=categoryConflicts.get(index);
         const blocked=documentRowBlockReason(document,line);
         const unusable=line.amount===null||line.amount===0||Boolean(blocked);
         const row=draft[index]??initialRow(index);
@@ -190,6 +201,12 @@ export default function ReviewedDocumentLedger({
           </label>
           {possibleRepeat&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
             Possible duplicate of a saved transaction. Compare the source before approving this row.
+          </p>}
+          {categoryConflict&&!already&&!unusable&&<p role="status"
+            className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            Category needs review: {categoryConflict.count} previously approved matching entries
+            used {categoryConflict.category}. The new import suggests a different category.
+            Excluded from bulk Prepare; choose the category yourself before recording.
           </p>}
           {line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">Transaction date extracted from file: <strong className="text-foreground">{line.date}</strong> · no date entry needed</p>}
           {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No transaction date extracted from this row. The document period is not a substitute.</p>}
