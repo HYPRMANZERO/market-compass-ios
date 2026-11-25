@@ -332,6 +332,77 @@ async function main(){
     await tab.invoke(function(){document.querySelector('[data-testid="bank-option-standard-bank"]')?.click();});
     assert.equal(await tab.invoke(function(){return !!document.querySelector('[data-testid="selected-bank-options"]')?.textContent?.includes('Import');}),true,'selected bank must expose a local statement-import option');
     console.log('PASS: unlocked Ionic Home scrolls and bank carousel shows real selection options');
+    // Market Data Saver is opt-in and never changes encrypted finance records.
+    await tab.invoke(function(){
+      const markets=[...document.querySelectorAll('[aria-label="Mobile app tabs"] a')]
+        .find(a=>a.textContent?.includes('Markets'));
+      if(!markets)throw Error('Markets tab missing');markets.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('input[aria-label="Data Saver for market refreshes"]');
+    }),'Markets Data Saver checkbox');
+    const saverDefault=await tab.invoke(function(){
+      const box=document.querySelector('input[aria-label="Data Saver for market refreshes"]');
+      return {checked:box?.checked,stored:localStorage.getItem('compass-market-data-saver-v1')};
+    });
+    assert.equal(saverDefault.checked,false,'Data Saver must be off by default');
+    assert.equal(saverDefault.stored,null,'Data Saver requires explicit consent');
+    await tab.invoke(function(){
+      document.querySelector('input[aria-label="Data Saver for market refreshes"]').click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return document.querySelector('input[aria-label="Data Saver for market refreshes"]')?.checked &&
+        localStorage.getItem('compass-market-data-saver-v1')==='on';
+    }),'Data Saver saved on');
+    const audit=await tab.invoke(async function(){
+      const original=window.fetch;
+      const attempted=[];
+      window.fetch=function(resource,init){
+        const url=typeof resource==='string'?resource:(resource?.url||'');
+        if((url.startsWith('http://')||url.startsWith('https://'))&&!url.includes('127.0.0.1'))attempted.push(url);
+        return original.call(this,resource,init);
+      };
+      try{
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('online'));
+        const range=document.querySelector('select[data-testid="select-market-range"]');
+        if(!range)throw Error('Market lookback selector missing');
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')
+          .set.call(range,'1m');
+        range.dispatchEvent(new Event('change',{bubbles:true}));
+        await new Promise(resolve=>setTimeout(resolve,450));
+        return {
+          calls:attempted.length,
+          text:document.body.innerText.includes('Automatic crypto, SOL and FX refreshes are paused'),
+          manual:!!document.querySelector('button[aria-label="Refresh live cryptocurrency quotes"]')
+        };
+      }finally{window.fetch=original;}
+    });
+    assert.equal(audit.calls,0,'Data Saver must not automatically fetch markets after visibility/online/range change');
+    assert.equal(audit.text,true,'Data Saver must explain that quotes are paused');
+    assert.equal(audit.manual,true,'Manual crypto refresh must remain available');
+    await tab.invoke(function(){
+      document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){return !!document.querySelector('.mc-bs-quick-actions');}),'Home after Data Saver');
+    await tab.invoke(function(){
+      const markets=[...document.querySelectorAll('[aria-label="Mobile app tabs"] a')]
+        .find(a=>a.textContent?.includes('Markets'));
+      markets?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('input[aria-label="Data Saver for market refreshes"]');
+    }),'Markets reloaded with Data Saver');
+    assert.equal(await tab.invoke(function(){
+      return document.querySelector('input[aria-label="Data Saver for market refreshes"]')?.checked;
+    }),true,'Data Saver persists across navigation in this browser');
+    await tab.invoke(function(){
+      document.querySelector('input[aria-label="Data Saver for market refreshes"]').click();
+      document.querySelector('[aria-label="Mobile app tabs"] a[aria-label="Overview"]')?.click();
+    });
+    await waitFor(()=>tab.invoke(function(){return !!document.querySelector('.mc-bs-quick-actions');}),'Home after saver reset');
+    console.log('PASS: explicit Market Data Saver pauses background fetches, persists, preserves manual buttons');
+
     await tab.invoke(function(){document.querySelector('button[aria-label="Open Market Compass menu"]')?.click();});
     const menu=await waitFor(async()=>{
       const state=await tab.invoke(function(){
@@ -563,27 +634,137 @@ async function main(){
       if(!link)throw Error('Assistant tab missing');link.click();
     });
     await expectText(tab,'Conversation','assistant chat');
+
+    const seam=await tab.invoke(function(){
+    const page=document.querySelector('.mc-assistant-page');
+    const nav=document.querySelector('.mc-mobile-tabbar');
+    const title=document.querySelector('[aria-label="Compass model connection"]');
+    const p=page?.getBoundingClientRect();
+    const n=nav?.getBoundingClientRect();
+    const t=title?.getBoundingClientRect();
+    return {
+      gap:p&&n?n.top-p.bottom:null,
+      headerOffset:p&&t?t.top-p.top:null,
+      topPadding:page?parseFloat(getComputedStyle(page).paddingTop):null,
+      overflow:document.documentElement.scrollWidth>innerWidth+1
+    };
+    });
+    assert.ok(seam.gap!==null&&Math.abs(seam.gap)<=3,
+      'Finance chat-to-tabbar gap must be closed: '+JSON.stringify(seam));
+    assert.ok(seam.headerOffset!==null&&seam.headerOffset>=9,
+      'Finance title must sit below the status-bar inset');
+    assert.ok(seam.topPadding>=9,'top padding includes the extra 10px');
+    assert.equal(seam.overflow,false,'no sideways scroll from seam adjustment');
+    console.log('PASS: Finance full-height chat and status-bar spacing',JSON.stringify(seam));
+
+    await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
+    }),'Finance quick actions sheet opens');
+    const financeMenu=await tab.invoke(function(){
+      return {
+        actions:[...document.querySelectorAll('[aria-label="Compass quick actions"] button')]
+          .map(x=>x.getAttribute('aria-label')),
+        bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent
+      };
+    });
+    assert.deepEqual(financeMenu.actions,['Encrypted Vault','Add document','Scan saved payments',
+      'Source status','Debt planning','Spend review','Markets','Voice controls','AI permissions'],
+      'Finance options must not include any Personal-only actions');
+    assert.ok(financeMenu.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Close Compass actions"]').click();});
+    await waitFor(()=>tab.invoke(function(){
+      return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
+    }),'Finance quick actions sheet closes');
+    console.log('PASS: Finance-only actions are visible with no Personal-only shortcuts');
     const beforeChat=await tab.invoke(function(){
       const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       const send=document.querySelector('button[aria-label="Send question"]');
+      const plus=document.querySelector('button[aria-label="Open Compass actions"]');
       const mic=document.querySelector('button[aria-label="Speak a question"]');
       return {
-        present:!!input&&!!send&&!!mic,
+        present:!!input&&!!plus&&!!mic&&!send,
         width:input?.getBoundingClientRect().width??0,
         font:input?getComputedStyle(input).fontSize:null,
         micWidth:mic?.getBoundingClientRect().width??0,
-        sendWidth:send?.getBoundingClientRect().width??0,
+        plusWidth:plus?.getBoundingClientRect().width??0,
         bubbles:document.querySelectorAll('.mc-chat-bubble').length,
-        bankStatus:document.querySelector('details[aria-label="Bank connectivity and consent status"]')?.textContent,
         overflow:document.documentElement.scrollWidth>innerWidth+1
       };
     });
     assert.equal(beforeChat.present,true,'chat input and buttons present');
     assert.ok(beforeChat.width>=155,'iPhone text input cannot be crowded out');
     assert.equal(beforeChat.font,'16px','no Safari keyboard focus zoom');
-    assert.ok(beforeChat.micWidth>=44&&beforeChat.sendWidth>=44,'accessible send/voice buttons');
+    assert.ok(beforeChat.micWidth>=44&&beforeChat.plusWidth>=44,'accessible microphone and plus buttons');
     assert.equal(beforeChat.overflow,false,'AI tab must not horizontally overflow');
-    assert.ok(beforeChat.bankStatus?.includes('Not connected'),'bank consent is not fabricated');
+    // Synthetic approximation of iPhone keyboard visualViewport contraction.
+    // A real Safari keyboard still needs physical-device confirmation.
+    await tab.invoke(function(){
+      const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      if(!input)throw Error('Composer missing');input.focus();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return document.documentElement.classList.contains('mc-chat-input-focused');
+    }),'chat composer gets keyboard-aware focus');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:520,deviceScaleFactor:3,mobile:true
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return document.documentElement.classList.contains('mc-chat-keyboard-open');
+    }),'visual viewport keyboard contraction applied');
+    const keyboard=await tab.invoke(function(){
+      const page=document.querySelector('.mc-assistant-page');
+      const composer=document.querySelector('.mc-chat-composer-wrap');
+      const nav=document.querySelector('.mc-mobile-tabbar');
+      const visual=window.visualViewport;
+      const top=visual?.offsetTop??0, height=visual?.height??innerHeight;
+      const pageRect=page?.getBoundingClientRect();
+      const composerRect=composer?.getBoundingClientRect();
+      return {
+        navHidden:!!nav&&getComputedStyle(nav).display==='none',
+        pageMode:page?getComputedStyle(page).position:null,
+        visibleBottom:top+height,
+        pageBottom:pageRect?.bottom??null,
+        composerBottom:composerRect?.bottom??null,
+        composerWidth:composerRect?.width??0,
+        overflow:document.documentElement.scrollWidth>innerWidth+1
+      };
+    });
+    assert.equal(keyboard.navHidden,true,'bottom tabbar must hide while keyboard is active');
+    assert.equal(keyboard.pageMode,'fixed','assistant attaches to visual viewport when typing');
+    assert.ok(keyboard.pageBottom!==null &&
+      Math.abs(keyboard.visibleBottom-keyboard.pageBottom)<=4,
+      'assistant must meet keyboard top: '+JSON.stringify(keyboard));
+    assert.ok(keyboard.composerBottom!==null &&
+      keyboard.composerBottom<=keyboard.visibleBottom+3 &&
+      keyboard.composerBottom>=keyboard.visibleBottom-160,
+      'composer must remain visible immediately above keyboard');
+    assert.ok(keyboard.composerWidth>320,'composer retains width on keyboard resize');
+    assert.equal(keyboard.overflow,false,'keyboard cannot introduce horizontal scroll');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:844,deviceScaleFactor:3,mobile:true
+    });
+    await tab.invoke(function(){
+      document.querySelector('textarea[aria-describedby="mc-composer-hint"]')?.blur();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      const root=document.documentElement;
+      const nav=document.querySelector('.mc-mobile-tabbar');
+      return !root.classList.contains('mc-chat-input-focused') &&
+        !root.classList.contains('mc-chat-keyboard-open') &&
+        nav&&getComputedStyle(nav).display!=='none';
+    }),'bottom nav restored after keyboard dismissal');
+    const keyboardRestored=await tab.invoke(function(){
+      const page=document.querySelector('.mc-assistant-page')?.getBoundingClientRect();
+      const nav=document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect();
+      return {gap:page&&nav?nav.top-page.bottom:null,
+        overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.ok(keyboardRestored.gap!==null&&Math.abs(keyboardRestored.gap)<=5,
+      'no blank band when the keyboard closes: '+JSON.stringify(keyboardRestored));
+    assert.equal(keyboardRestored.overflow,false,'keyboard dismissal must preserve viewport width');
+    console.log('PASS: synthetic keyboard open/close keeps composer visible and nav seamless');
+
     if(process.env.MC_TEST_ASSISTANT_SCREENSHOT){
       const shot=await tab.command('Page.captureScreenshot',{
         format:'png',captureBeyondViewport:false,fromSurface:true
@@ -625,15 +806,24 @@ async function main(){
     });
     assert.equal(afterChat.bubbles,beforeChat.bubbles+2,'send exactly once');
     assert.equal(afterChat.input,'','clear sent question');
+    await tab.invoke(function(){document.querySelector('button[aria-label="Open Compass actions"]').click();});
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
+    }),'Options open for clearing chat');
+    await tab.invoke(function(){document.querySelector('details[aria-label="Additional Compass settings"]').open=true;});
     await tab.invoke(function(){
-      const btn=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Clear');
-      if(!btn)throw Error('Clear button missing');btn.click();
+      const btn=[...document.querySelectorAll('[role="region"][aria-label="Compass actions drawer"] button')]
+        .find(x=>x.textContent.trim()==='Clear chat');
+      if(!btn)throw Error('Clear chat button missing from modal');btn.click();
     });
+    await waitFor(()=>tab.invoke(function(){
+      return !document.querySelector('[role="region"][aria-label="Compass actions drawer"]');
+    }),'Options close after clear');
     await expectText(tab,'Conversation cleared. Ask a new question below.','compact clear state');
     console.log('PASS: iPhone chat bubbles and compact composer; Enter, Shift+Enter, IME and Clear');
 
-    // Jarvis source audit: only offer a click-through HTTPS link for explicit
-    // website commands; no browser navigation or Windows program is launched.
+    // Finance-only policy: legacy website shortcuts must not bypass edition
+    // restrictions through a local deterministic assistant handler.
     await tab.invoke(function(){
       const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')
@@ -641,23 +831,22 @@ async function main(){
       field.dispatchEvent(new Event('input',{bubbles:true}));
     });
     await waitFor(()=>tab.invoke(function(){
-      return !document.querySelector('button[aria-label="Send question"]').disabled;
-    }),'Jarvis-derived command ready');
+      const send=document.querySelector('button[aria-label="Send question"]');
+      return !!send&&!send.disabled;
+    }),'finance-only personal command entered');
     await tab.invoke(function(){
       const field=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
     });
-    const jarvisLink=await waitFor(()=>tab.invoke(function(){
-      const anchor=document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
-      if(!anchor)return null;
-      return {href:anchor.getAttribute('href'),target:anchor.getAttribute('target'),
-        rel:anchor.getAttribute('rel'),text:anchor.closest('.mc-chat-bubble')?.innerText};
-    }),'safe Jarvis browser shortcut');
-    assert.equal(jarvisLink.href,'https://www.youtube.com/');
-    assert.equal(jarvisLink.target,'_blank');
-    assert.ok(jarvisLink.rel.includes('noopener')&&jarvisLink.rel.includes('noreferrer'));
-    assert.ok(jarvisLink.text.includes('not opened a website automatically'));
-    console.log('PASS: Jarvis-style Compass command offers an explicit safe HTTPS link, no auto-launch');
+    const policy=await waitFor(()=>tab.invoke(function(){
+      const latest=[...document.querySelectorAll('.mc-chat-bubble')].map(el=>el.textContent||'');
+      return latest.find(text=>text.includes('Compass Financial Advisor handles finance only'))||null;
+    }),'finance-only Personal shortcut refusal');
+    assert.ok(policy.includes('Compass Personal'));
+    assert.equal(await tab.invoke(function(){
+      return !!document.querySelector('.mc-chat-bubble a[aria-label="Open YouTube"]');
+    }),false,'Finance must not produce a Personal-only website link');
+    console.log('PASS: Finance rejects Personal-only browser shortcuts while preserving secure chat');
 
     await tab.invoke(function(){
       const link=[...document.querySelectorAll('a')].find(x=>x.getAttribute('href')?.endsWith('/expenses'));

@@ -11,6 +11,9 @@ import {preparedDocumentReview} from '@/lib/reviewSuggestions';
 import {listConsentedFinanceFiles,type ReadableFolder,type DiscoveredFinanceFile} from '@/lib/consentedFolderScan';
 import {extractLocalPdfText,MAX_LOCAL_PDF_BYTES} from '@/lib/localPdfText';
 import {
+  classifyImportFailure,importRecoveryAdvice,type ImportRecoveryCode
+} from '@/lib/documentImportRecovery';
+import {
   addLocalFinanceDocument,extractLocalFinanceDocument,validateLocalFinanceDocument,
   MAX_FINANCE_FILE_BYTES,MAX_FINANCE_FILES,type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
@@ -76,6 +79,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
   const [preview,setPreview]=useState<LocalFinanceDocument|null>(null);
   const [feedback,setFeedback]=useState('');
   const [error,setError]=useState('');
+  // Never keep file contents, passwords, error traces or private paths in state.
+  const [importRecoveryCode,setImportRecoveryCode]=useState<ImportRecoveryCode|null>(null);
   const safe=documents.map(validateLocalFinanceDocument)
     .filter((x):x is LocalFinanceDocument=>x!==null);
   // One explicit document approval can also post only source-dated, unambiguous
@@ -219,7 +224,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
     setFeedback('Selected documents discarded without saving any unapproved excerpts.');
   }
   async function selected(file:File|undefined,oneTimePassword:string){
-    setPreview(null);setFeedback('');setError('');
+    setPreview(null);setFeedback('');setError('');setImportRecoveryCode(null);
     if(!file||readController.current)return;
     const pdf=/\.pdf$/i.test(file.name);
     const limit=pdf?MAX_LOCAL_PDF_BYTES:MAX_FINANCE_FILE_BYTES;
@@ -256,6 +261,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
         'Local review ready. Only the extracted excerpts below will be saved if you approve. The original document and its password were not uploaded or saved.');
     }catch(e){
       const message=e instanceof Error?e.message:'Could not read this financial file privately.';
+      const recovery=classifyImportFailure(e);
+      setImportRecoveryCode(recovery);
       if(pdf&&/requires a password|temporary password was incorrect/i.test(message)){
         lockedFile.current=file;
         setNeedsPassword(true);
@@ -263,7 +270,8 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
       }else{
         lockedFile.current=null;
         setNeedsPassword(false);
-        setError(message);
+        // Parser stack traces and sensitive paths must not reach the UI.
+        setError(importRecoveryAdvice(recovery).label+'. No file was saved.');
       }
     }finally{
       temporaryPassword='';
@@ -580,6 +588,10 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,onUpdate,
       </button>
     </section>}
     {error&&<p role="alert" className="mt-2 text-[12px] text-destructive">{error}</p>}
+    {error&&importRecoveryCode&&!needsPassword&&
+      <p role="status" className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] leading-5">
+        <strong>How to recover this import:</strong> {importRecoveryAdvice(importRecoveryCode).nextStep}
+      </p>}
     {feedback&&<p role="status" className="mt-2 text-[12px] text-muted-foreground">{feedback}</p>}
     {safe.length>0&&<div className="mt-4"><DocumentHistorySummary documents={safe} currency={currency}/></div>}
     {safe.length>0&&<section className="mt-5 space-y-3 border-t border-border pt-5">

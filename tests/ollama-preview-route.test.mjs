@@ -12,7 +12,7 @@ test('stronger-model canary requires an explicitly requested protected owner ori
 });
 test('canary session and read-only agent use dedicated routes; normal mode keeps original',()=>{
   assert.match(source,/ownerPreviewModel \? '\/api\/session\/preview' : '\/api\/session'/);
-  assert.match(source,/ownerPreviewModel \? '\/api\/agent\/preview' : '\/api\/agent\/run'/);
+  assert.match(source,/ownerPreviewModel\s*\?\s*'\/api\/agent\/preview'\s*:\s*'\/api\/agent\/run'/);
   assert.match(source,/const agentMode = true/);
   assert.match(source,/payload\.answerSource !== 'private-desktop-model'/);
 });

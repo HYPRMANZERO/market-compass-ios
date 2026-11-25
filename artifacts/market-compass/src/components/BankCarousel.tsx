@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { FileUp, Landmark, ShieldCheck, WalletCards } from 'lucide-react';
+import StandardBankLinkPanel from '@/components/StandardBankLinkPanel';
+import type {DesktopAiSettings} from '@/lib/desktopAiSettings';
+import {currentAssistantEdition} from '@/lib/assistantEdition';
 
 type Bank = { id: string; name: string; monogram: string; color: string; description?: string };
 const banks: Bank[] = [
@@ -26,13 +29,20 @@ function BankMark({bank}:{bank:Bank}){
 }
 
 export default function BankCarousel({
-  compact = false, onImportDocuments, onAddAccount,
+  compact = false, onImportDocuments, onAddAccount, desktopAi,
 }: {
   compact?: boolean;
   onImportDocuments?: () => void;
   onAddAccount?: () => void;
+  desktopAi?: DesktopAiSettings;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(()=>{
+    // The official bank redirect returns to /banks after consent or denial.
+    // Reopen Standard Bank's options, but never infer linkage from a URL flag.
+    if(typeof window==='undefined'||currentAssistantEdition()!=='finance')return null;
+    const status=new URLSearchParams(window.location.search).get('bank-consent');
+    return status==='connected'||status==='review'?'standard-bank':null;
+  });
   const chosen = banks.find(bank => bank.id === selected);
   return <section className="rounded-2xl border border-border bg-card p-4 shadow-sm" aria-label="Choose a South African bank" data-testid="bank-carousel">
     <div className="mb-3 flex items-start justify-between gap-3">
@@ -54,11 +64,21 @@ export default function BankCarousel({
     {chosen ? <div className="mt-2 rounded-xl border border-border bg-background p-3" role="region" aria-label={`${chosen.name} account options`} data-testid="selected-bank-options">
       <p className="flex items-center gap-2 text-[13px] font-bold"><WalletCards size={16} className="text-primary"/>{chosen.name}</p>
       {chosen.description && <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{chosen.description}</p>}
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Secure live account linking is not enabled for this provider. You can import a statement for local review; importing does not establish a bank connection or update a balance automatically.</p>
+      {chosen.id==='standard-bank' && currentAssistantEdition()==='finance'
+        ? <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+            The Finance edition can check whether an approved, read-only Standard Bank connection is available.
+            Import statements until partner access is verified.
+          </p>
+        : <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+            Secure live account linking is not enabled for this provider. You can import a statement for local review;
+            importing does not establish a bank connection or update a balance automatically.
+          </p>}
       <div className="mt-3 flex flex-wrap gap-2">
         {onImportDocuments && <button type="button" onClick={onImportDocuments} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground"><FileUp size={16}/> Import statement</button>}
         {onAddAccount && <button type="button" onClick={onAddAccount} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-[12px] font-semibold"><WalletCards size={16}/> Add debt record manually</button>}
       </div>
+      {chosen.id==='standard-bank' && desktopAi && currentAssistantEdition()==='finance' &&
+        <StandardBankLinkPanel settings={desktopAi}/>}
     </div> : <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Tap a bank card to see supported options. No banking password is requested.</p>}
     {!compact && <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-primary"/>Bank and fintech brands are shown for identification only, not as connected partners or live integrations.</p>}
   </section>;

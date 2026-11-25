@@ -6,9 +6,9 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import VoiceAssistant from '@/components/VoiceAssistant';
+// Load the private AI conversation only when the AI route mounts.
 import OwnerBudgetDraftEditor from '@/components/OwnerBudgetDraftEditor';
-import LocalFinanceFiles from '@/components/LocalFinanceFiles';
+
 import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
 import {
@@ -24,18 +24,27 @@ import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
 import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import BankCarousel from '@/components/BankCarousel';
+import {currentAssistantEdition} from '@/lib/assistantEdition';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import SavedCategoryReview from '@/components/SavedCategoryReview';
-import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
+import {applySavedCategoryChanges,allowedSavedCategory} from '@/lib/savedCategoryReview';
+import {expenseCategoryNeedsSorting} from '@/lib/monthlyExpenses';
 import FinancialPulse from '@/components/FinancialPulse';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
+import LedgerIntegrityPanel from '@/components/LedgerIntegrityPanel';
+import FinancialSourceStatusPanel from '@/components/FinancialSourceStatusPanel';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
-import MonthlyExpenses from '@/components/MonthlyExpenses';
-import SpendingPortfolio from '@/components/SpendingPortfolio';
+// MonthlyExpenses loads only on its route.
+// SpendingPortfolio loads only on its route.
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
+const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
+const LocalFinanceFiles=lazy(()=>import('@/components/LocalFinanceFiles'));
+
+const SpendingPortfolio=lazy(()=>import('@/components/SpendingPortfolio'));
+const MonthlyExpenses=lazy(()=>import('@/components/MonthlyExpenses'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -43,6 +52,8 @@ import { CURRENCIES, REGIONS, regionDefaultCurrency, selectedRegion } from '@/li
 import { approximateLocalValue, fetchFxReference, fxKey, type FxReference } from '@/lib/fxRates';
 import { calculateLocalDebtPlan } from '@/lib/localDebtPlan';
 import { fetchPublicCandles, type CandleRange, type PublicVenue } from '@/lib/publicMarkets';
+import {loadMarketDataSaver,persistMarketDataSaver} from '@/lib/marketDataSaver';
+import {installAssistantKeyboardViewport} from '@/lib/assistantKeyboardViewport';
 import HistoricalCandleChart, { utcCandleDate } from '@/components/HistoricalCandleChart';
 import { localTechnicalReading, localSmaBacktest } from '@/lib/localIndicators';
 import { localMarketResearch } from '@/lib/marketResearch';
@@ -287,6 +298,7 @@ function useWorkspaceVault() {
 }
 
 function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
+  const editionName=currentAssistantEdition()==='finance'?'Compass Financial Advisor':'Compass Personal';
   const isStandalone=typeof window!=='undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & {standalone?:boolean}).standalone===true);
@@ -297,7 +309,7 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
     <div className="mx-auto w-full max-w-[390px]">
       <div className="mb-4 flex items-center gap-3 px-1">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={22}/></span>
-        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
+        <div><h1 className="serif text-[22px] leading-tight">{editionName}</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
       </div>
       <div className="rounded-[22px] bg-[hsl(44,33%,99%)] p-4 text-foreground shadow-[0_16px_44px_rgba(0,0,0,.12)] sm:p-6">
         <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
@@ -385,6 +397,7 @@ function InstallHelp() {
 function AppShell({ children, pending, currency, onImportDocuments, onAddAccount }: {
   children: ReactNode;pending:number;currency:string;onImportDocuments:()=>void;onAddAccount:()=>void;
 }) {
+  const editionName=currentAssistantEdition()==='finance'?'Compass Financial Advisor':'Compass Personal';
   const [menuOpen,setMenuOpen]=useState(false);
   const [path,navigate] = useLocation();
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -395,6 +408,12 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
+  // Keep the AI composer in the iPhone's *visible* viewport while the
+  // on-screen keyboard is active. Other routes retain normal document scroll.
+  useEffect(()=>{
+    if(path!=='/assistant')return;
+    return installAssistantKeyboardViewport();
+  },[path]);
   // iOS standalone PWAs can restore the previous tab's scroll offset after
   // React has already switched routes. Reset once now and once after paint.
   // This prevents the first hero/card from opening beneath the sticky header.
@@ -421,7 +440,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       <div className="flex h-full w-full flex-col border-r border-sidebar-border px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><Compass size={21} strokeWidth={1.8}/></span>
-          <span><span className="serif block text-[21px] leading-none">Market Compass</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">Personal workspace</span></span>
+          <span><span className="serif block text-[21px] leading-none">{editionName}</span><span className="mt-1 block text-[10px] uppercase tracking-[.19em] text-sidebar-foreground/55">{currentAssistantEdition()==='finance'?'Finance workspace':'Personal workspace'}</span></span>
         </Link>
         <div className="mt-11 px-3 text-[10px] font-semibold uppercase tracking-[.22em] text-sidebar-foreground/40">Your workspace</div>
         <nav className="mt-3 space-y-1" aria-label="Desktop main navigation">
@@ -443,25 +462,28 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
           <div className="flex items-center gap-2 text-[11px] font-semibold"><ShieldCheck size={15} className="text-sidebar-primary"/> Deliberate by design</div>
           <p className="mt-2 text-[11px] leading-[1.65] text-sidebar-foreground/55">Your workspace stays on this device. Payments and trades always require separate approval.</p>
         </div>
-        <div className="mt-5 flex items-center justify-between px-1 text-[10px] text-sidebar-foreground/40"><span>MARKET COMPASS</span><span className="mono">LOCAL / 01</span></div>
+        <div className="mt-5 flex items-center justify-between px-1 text-[10px] text-sidebar-foreground/40"><span>{editionName.toUpperCase()}</span><span className="mono">LOCAL / 01</span></div>
       </div>
     </aside>
 
     <main className="min-w-0">
+      {path!=='/assistant'&&(
       <IonHeader className="mc-mobile-header sticky top-0 z-30 lg:hidden" role="banner">
         <IonToolbar className="mc-ionic-toolbar">
         <div className="flex min-h-[49px] items-center gap-3">
           <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-extrabold tracking-[-.02em] leading-5">Market Compass</div>
+            <div className="truncate text-[16px] font-extrabold tracking-[-.02em] leading-5">{editionName}</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
-              <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
+              <span>{online ? 'Internet online' : 'Internet offline'} · {active.label} · {currency}</span>
             </div>
           </div>
         </div>
         </IonToolbar>
       </IonHeader>
+      )}
+      {path==='/assistant'&&<div aria-hidden="true" className="fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top,0px)] bg-[hsl(165,24%,20%)] lg:hidden"/>}
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
         <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
         <div className="flex items-center gap-4">
@@ -478,7 +500,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
         <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
           <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
             <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
-            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">{editionName} menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
             <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
             <div className="grid grid-cols-2 gap-2">
               {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
@@ -488,7 +510,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             </div>
           </section>
         </div>,document.body)}
-      <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
+      <div className={'mc-mobile-content min-w-0 '+(path==='/assistant'?'mc-assistant-page w-full px-0 pt-0 lg:mx-auto lg:max-w-[1440px] lg:px-11 lg:pt-4':'mx-auto max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9')}>{children}</div>
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
@@ -563,6 +585,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
   onImportDocuments:()=>void; onRecoverVault:()=>void; onAddAccount:()=>void;
 }) {
   const [,navigate] = useLocation();
+  const [homeImporterOpen,setHomeImporterOpen]=useState(false);
   const openDrafts = data.drafts.filter((draft) => draft.status === 'pending').length;
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
@@ -583,7 +606,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
       <FinancialSpaceHero currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
         onViewAccounts={()=>navigate('/debt')}/>
     </div>
-    <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
+    <details id="mc-home-upload" onToggle={event=>setHomeImporterOpen(event.currentTarget.open)} className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Upload size={20}/></span>
         <span className="min-w-0 flex-1">
@@ -600,7 +623,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
           One approval saves reviewed document evidence and eligible source-dated transactions.
           Check for overlapping statements before recording amounts in Spend.
         </p>
-        <LocalFinanceFiles
+        {homeImporterOpen && <Suspense fallback={<p role="status" className="rounded-xl bg-card px-4 py-3 text-[12px] text-muted-foreground">Opening the local document importer...</p>}><LocalFinanceFiles
           documents={docs}
           onAdd={(document,approvals)=>setData(old=>({
             ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
@@ -614,11 +637,12 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
-        />
+        /></Suspense>}
       </div>
     </details>
     <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
       currency={data.currency} settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}/></div>
+    <FinancialSourceStatusPanel entries={entries} documents={docs}/>
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
@@ -688,13 +712,14 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   const [backtesting, setBacktesting] = useState(false);
   const requestSerial = useRef(0);
   const [fxError, setFxError] = useState('');
+  const [dataSaver,setDataSaver]=useState(loadMarketDataSaver);
   const activeSeries = series ?? (localCached ? data.marketCache : null);
   const fxPair = activeSeries && activeSeries.currency !== data.currency ? fxKey(activeSeries.currency, data.currency) : '';
   const fxQuote = fxPair ? data.fxRates?.[fxPair] ?? null : null;
   useEffect(() => {
     const base = activeSeries?.currency;
     const local = data.currency;
-    if (!base || base === local || !navigator.onLine) return;
+    if (!base || base === local || !navigator.onLine || dataSaver) return;
     if (fxQuote && Number.isFinite(Date.parse(fxQuote.fetchedAt)) &&
       Date.now() - Date.parse(fxQuote.fetchedAt) < 24 * 60 * 60 * 1000) return;
     const controller = new AbortController();
@@ -703,7 +728,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
       .then(rate => setData(old => ({...old,fxRates:{...(old.fxRates ?? {}),[fxKey(base,local)]:rate}})))
       .catch(error => { if (!controller.signal.aborted) setFxError(error instanceof Error ? error.message : 'Reference FX rate unavailable.'); });
     return () => controller.abort();
-  }, [activeSeries?.currency, data.currency, fxQuote?.fetchedAt, setData]);
+  }, [activeSeries?.currency, data.currency, fxQuote?.fetchedAt, setData, dataSaver]);
   const activeAnalysis = analysis ?? (localCached && data.analysisCache?.symbol === activeSeries?.symbol ? data.analysisCache : null);
   const lastSavedCandleDate = activeSeries?.candles?.at(-1)?.date ?? activeSeries?.asOf;
   const marketCacheDateMismatch = Boolean(activeSeries?.asOf && lastSavedCandleDate &&
@@ -728,17 +753,18 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
       }
     } finally { if (token === requestSerial.current) setFetching(false); }
   }
+  const updateDataSaver=(enabled:boolean)=>{setDataSaver(enabled);persistMarketDataSaver(enabled);};
   function requestMarket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void loadMarket(symbol.trim().toUpperCase(), range, venue);
   }
   function selectRange(next: CandleRange) {
     setRange(next);
-    if (symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), next, venue);
+    if (!dataSaver && symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), next, venue);
   }
   function selectVenue(next: PublicVenue) {
     setVenue(next);
-    if (symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), range, next);
+    if (!dataSaver && symbol.trim() && (series || fetching || activeSeries)) void loadMarket(symbol.trim().toUpperCase(), range, next);
   }
   const price = activeAnalysis?.lastPrice ?? activeSeries?.candles.at(-1)?.close;
   const addDraft = () => {
@@ -792,7 +818,21 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   };
   return <>
     <PageIntro eyebrow="Observe before interpreting" title="Markets" description="View provider-sourced cryptocurrency quotes and analyse completed spot candles. JSE shares and other markets require authorized data feeds." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Read-only market research</div>} />
-    <LiveCryptoQuotes currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
+    <section aria-label="Market Data Saver" className="mb-4 rounded-2xl border border-border bg-card px-4 py-3">
+      <label className="flex min-h-11 cursor-pointer items-start gap-3">
+        <input type="checkbox" aria-label="Data Saver for market refreshes"
+          checked={dataSaver} onChange={event=>updateDataSaver(event.target.checked)}
+          className="mt-1.5 h-5 w-5 shrink-0 accent-primary"/>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-bold">Data Saver {dataSaver?'on':'off'}</span>
+          <span className="mt-1 block text-[11px] leading-5 text-muted-foreground">
+            {dataSaver?'Automatic crypto, SOL and FX refreshes are paused. Cached historical candles keep their original dates. Use a refresh button or Request data when you want new prices.':'Opt in to pause automatic market checks and save mobile data. Manual requests always stay available.'}
+          </span>
+        </span>
+      </label>
+      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">This controls public market refreshes, not your private Compass connection. It does not make online AI, market prices or mobile connectivity carrier-data-free.</p>
+    </section>
+    <LiveCryptoQuotes dataSaver={dataSaver} currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
         <label className="flex-1"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Crypto spot pair</span><input data-testid="input-market-symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTC, ETH, SOL or BTCUSD" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-ring/30" /></label>
@@ -800,7 +840,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
         <label className="sm:w-40"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Lookback</span><span className="relative block"><select data-testid="select-market-range" value={range} onChange={(e) => selectRange(e.target.value as CandleRange)} className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-8 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="1m">1 month</option><option value="3m">3 months</option><option value="6m">6 months</option><option value="1y">1 year</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-3.5 text-muted-foreground" /></span></label>
         <ActionButton type="submit" disabled={!symbol.trim() || fetching}>{fetching ? <LoaderCircle className="animate-spin" size={15} /> : <Search size={15} />}{fetching ? 'Loading data' : 'Request data'}</ActionButton>
       </form>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically · not live quotes</span></div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically unless Data Saver is on · not live quotes</span></div>
       <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Upload size={15} /></span>
         <p className="flex-1 text-[11px] leading-5 text-muted-foreground">For JSE shares, stocks, ETFs, licensed data feeds or offline use, import an authorized CSV with columns <span className="mono text-foreground">date,open,high,low,close[,volume]</span>. Check currency, units and licensing.</p>
@@ -1182,7 +1222,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
             Approving a document also records safely classified, source-dated transactions in Spend. Older saved statements can be approved below without re-uploading or entering dates.
           </p>
         </div>
-        <LocalFinanceFiles
+        <Suspense fallback={<p role="status" className="rounded-xl bg-card px-4 py-3 text-[12px] text-muted-foreground">Opening the local document importer...</p>}><LocalFinanceFiles
           documents={docs}
           onAdd={(document,approvals)=>setData(old=>({
             ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
@@ -1196,7 +1236,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
           onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
-        />
+        /></Suspense>
         <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
           currency={data.currency}
           onCreate={account=>setData(old=>({...old,accounts:[
@@ -1208,9 +1248,18 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
-        <SavedCategoryReview entries={ledger} currency={data.currency}
-          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
-        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
+        <FinancialSourceStatusPanel entries={ledger} documents={docs}/>
+        <LedgerIntegrityPanel entries={ledger} currency={data.currency}/>
+        <SavedCategoryReview entries={ledger} currency={data.currency} region={selectedRegion(data.region)}
+          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(
+            old.expenseEntries??[],approved,selectedRegion(old.region))}))}
+          onManualCategorize={(entryId,category)=>setData(old=>{
+            const original=(old.expenseEntries??[]).find(item=>item.id===entryId);
+            if(!original||!expenseCategoryNeedsSorting(original.category)||
+               !allowedSavedCategory(original.kind,category))return old;
+            return {...old,expenseEntries:old.expenseEntries.map(item=>item.id===entryId?{...item,category}:item)};
+          })}/>
+        <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending categories...</p>}><SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/></Suspense>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
@@ -1223,7 +1272,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
             ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
           }:old)}/>
-        <MonthlyExpenses
+        <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending history...</p>}><MonthlyExpenses
           entries={ledger}
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
           desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
@@ -1240,7 +1289,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           }))}
           onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
           onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
-        />
+        /></Suspense>
       </>}
       {section==='plan'&&<>
         <HistoricalRecurringInsights documents={docs} entries={ledger} currency={data.currency}/>
@@ -1286,7 +1335,7 @@ function Assistant({ data, setData, onImportDocuments }: {
     })(),
   };
   return <>
-    <VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
+    <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Preparing Compass AI?</p>}><VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
       onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))}
       queuedReadOnlyQuestions={Array.isArray(data.offlineAgentQuestions)?data.offlineAgentQuestions:[]}
       onQueueReadOnlyQuestion={question=>{
@@ -1301,7 +1350,7 @@ function Assistant({ data, setData, onImportDocuments }: {
       }}
       onRemoveQueuedReadOnlyQuestion={id=>setData(old=>({
         ...old,offlineAgentQuestions:removeOfflineQuestion(old.offlineAgentQuestions??[],id)
-      }))} />
+      }))} auxiliaryPanel={<div className="space-y-3">
     {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
       <summary className="cursor-pointer text-[12px] font-semibold">Earlier saved instructions · {data.queue.length}</summary>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">These records came from the original command interpreter and remain encrypted in your vault. They are not active instructions, payments or trades.</p>
@@ -1312,6 +1361,7 @@ function Assistant({ data, setData, onImportDocuments }: {
           className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground"><Trash2 size={16}/></button>
       </div>)}</div>
     </details>}
+    </div>} /></Suspense>
   </>;
 }
 
@@ -1433,7 +1483,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
     <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
-    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Select a bank or provider to organize your account documents. Live bank connections are not enabled."/><BankCarousel onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
+    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Select a bank or provider to organize your account documents. Live bank connections are not enabled."/><BankCarousel desktopAi={data.desktopAi} onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
     <Route component={NotFound} />
   </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
     {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 px-3 py-[max(20px,env(safe-area-inset-top))]" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
@@ -1443,7 +1493,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
           <button type="button" aria-label="Close document importer" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border"><X size={19}/></button>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
-          <LocalFinanceFiles
+          <Suspense fallback={<p role="status" className="rounded-xl bg-card px-4 py-3 text-[12px] text-muted-foreground">Opening the local document importer...</p>}><LocalFinanceFiles
             documents={data.localFinanceDocuments??[]}
             onAdd={(document,approvals)=>setData(old=>({...old,
               localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
@@ -1454,7 +1504,7 @@ function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
             currency={data.currency}
             currencyReviewRequired={data.currencyReviewRequired}
             onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
-          />
+          /></Suspense>
         </div>
       </section>
     </div>}
