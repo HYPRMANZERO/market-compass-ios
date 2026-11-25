@@ -10,7 +10,7 @@ type Props={
   cachedSeries:MarketSeries|null;
   onCache:(series:MarketSeries)=>void;
   onSaveDraft:(info:{limitPrice:number;quantity:number;rationale:string})=>void;
-  privateEnabled?:boolean;privateUrl?:string;privateToken?:string;preferZar?:boolean;
+  privateEnabled?:boolean;privateUrl?:string;privateToken?:string;preferZar?:boolean;dataSaver?:boolean;
 };
 const usd=(amount:number)=>new Intl.NumberFormat('en-ZA',{
   style:'currency',currency:'USD',maximumFractionDigits:2
@@ -18,7 +18,7 @@ const usd=(amount:number)=>new Intl.NumberFormat('en-ZA',{
 const stamp=(date:string)=>new Date(date).toLocaleString('en-ZA',{
   day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'
 })+' UTC';
-export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,privateEnabled,privateUrl,privateToken,preferZar}:Props){
+export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,privateEnabled,privateUrl,privateToken,preferZar,dataSaver=false}:Props){
  const [series,setSeries]=useState<MarketSeries|null>(
    cachedSeries?.symbol==='SOLUSD'?cachedSeries:null);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -31,6 +31,7 @@ export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,priv
  const lastRefresh=useRef(0),request=useRef(0);
  const active=series??(cachedSeries?.symbol==='SOLUSD'?cachedSeries:null);
  useEffect(()=>{
+  if(dataSaver)return;
   let alive=true;
   let controller:AbortController|null=null;
   const check=()=>{
@@ -46,7 +47,7 @@ export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,priv
   window.addEventListener('online',check);document.addEventListener('visibilitychange',check);
   return ()=>{alive=false;controller?.abort();window.clearInterval(timer);
     window.removeEventListener('online',check);document.removeEventListener('visibilitychange',check);};
- },[privateEnabled,privateUrl,privateToken,preferZar]);
+ },[privateEnabled,privateUrl,privateToken,preferZar,dataSaver]);
  const analysis=useMemo(()=>{
    if(!active||active.symbol!=='SOLUSD'||active.candles.length<31)return null;
    try{return analyzeSolana(active.candles);}catch{return null;}
@@ -61,6 +62,7 @@ export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,priv
  },[analysis,capital]);
  const refresh=useCallback(async(force=false)=>{
    if(!navigator.onLine){setError('Offline: showing only saved, dated SOL candles from this encrypted workspace.');return;}
+   if(dataSaver&&!force)return;
    if(!force && Date.now()-lastRefresh.current<15*60_000)return;
    const token=++request.current;
    lastRefresh.current=Date.now();
@@ -74,15 +76,16 @@ export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,priv
      if(token!==request.current)return;
      setError(e instanceof Error?e.message:'Unable to update SOL candles.');
    }finally{if(token===request.current)setBusy(false);}
- },[]);
+ },[dataSaver]);
  useEffect(()=>{
+   if(dataSaver)return;
    let running=true;
    const start=()=>{if(running&&document.visibilityState==='visible'&&navigator.onLine)void refresh();};
    start();const interval=window.setInterval(start,15*60_000);
    document.addEventListener('visibilitychange',start);window.addEventListener('online',start);
    return ()=>{running=false;++request.current;window.clearInterval(interval);
      document.removeEventListener('visibilitychange',start);window.removeEventListener('online',start);};
- },[refresh]);
+ },[refresh,dataSaver]);
  const refreshQuote=useCallback(async()=>{
    if(!navigator.onLine)return;
    if(Date.now()-lastQuote.current<90_000)return;
@@ -93,12 +96,13 @@ export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,priv
    }catch(e){setQuoteError(e instanceof Error?e.message:'SOL spot quote unavailable.');}
  },[privateEnabled,privateUrl,privateToken,preferZar]);
  useEffect(()=>{
+   if(dataSaver)return;
    void refreshQuote();
    const check=()=>{if(document.visibilityState==='visible'&&navigator.onLine)void refreshQuote();};
    const ticker=window.setInterval(check,90_000);
    document.addEventListener('visibilitychange',check);
    return ()=>{window.clearInterval(ticker);document.removeEventListener('visibilitychange',check);};
- },[refreshQuote]);
+ },[refreshQuote,dataSaver]);
  const save=()=>{
    if(!analysis||!sizing||sizing.quantity<=0||analysis.status!=='paper-entry-candidate')return;
    onSaveDraft({
@@ -141,7 +145,7 @@ export default function SolanaTrackingBar({cachedSeries,onCache,onSaveDraft,priv
        <span className="font-bold tabular-nums">{new Intl.NumberFormat('en-ZA',{style:'currency',currency:spotQuote.currency}).format(spotQuote.last)}</span>
        <span className="ml-2 text-muted-foreground">Bid {spotQuote.bid.toFixed(2)} · Ask {spotQuote.ask.toFixed(2)}</span></div>
      <div className="text-[10px] text-muted-foreground">{spotQuote.source} · fetched {stamp(spotQuote.retrievedAt)}
-       {Date.now()-Date.parse(spotQuote.retrievedAt)>180000?' · STALE':''} · not executable</div>
+       {(dataSaver||Date.now()-Date.parse(spotQuote.retrievedAt)>180000)?' · STALE':''} · not executable</div>
    </div>}
    {quoteError&&<p role="status" className="mx-4 mt-2 text-[10px] text-muted-foreground sm:mx-5">{quoteError}</p>}
    <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 text-[11px] sm:px-5">
