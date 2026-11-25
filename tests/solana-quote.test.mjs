@@ -45,7 +45,7 @@ test('public Kraken fallback never receives saved private Ollama token',async()=
 test('both views use one shared Solana bar, encrypted cached candles and local Orders drafts',async()=>{
  const app=await readFile(new URL('../artifacts/market-compass/src/App.tsx',import.meta.url),'utf8');
  const bar=await readFile(new URL('../artifacts/market-compass/src/components/SolanaTrackingBar.tsx',import.meta.url),'utf8');
- assert.match(app,/import SolanaTrackingBar/);
+ assert.ok(app.includes("const SolanaTrackingBar=lazy(()=>import('@/components/SolanaTrackingBar'));"));
  assert.match(app,/solanaSeries: MarketSeries \| null/);
  assert.match(app,/solanaSeries: null/);
  assert.match(app,/<SolanaTrackingBar cachedSeries=/);

@@ -21,7 +21,7 @@ import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import FinancialReadinessChecklist from '@/components/FinancialReadinessChecklist';
 import LiveCryptoQuotes from '@/components/LiveCryptoQuotes';
-import SolanaTrackingBar from '@/components/SolanaTrackingBar';
+// SolanaTrackingBar loads only on its route.
 import {
   addLocalFinanceDocument,removeLocalFinanceDocument,
   type LocalFinanceDocument
@@ -37,10 +37,14 @@ import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import IncomeAllocation from '@/components/IncomeAllocation';
-import MonthlyExpenses from '@/components/MonthlyExpenses';
-import SpendingPortfolio from '@/components/SpendingPortfolio';
+// MonthlyExpenses loads only on its route.
+// SpendingPortfolio loads only on its route.
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
+const SolanaTrackingBar=lazy(()=>import('@/components/SolanaTrackingBar'));
+
+const SpendingPortfolio=lazy(()=>import('@/components/SpendingPortfolio'));
+const MonthlyExpenses=lazy(()=>import('@/components/MonthlyExpenses'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -748,7 +752,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
   };
   return <>
     <PageIntro eyebrow="Observe before interpreting" title="Markets" description="View provider-sourced cryptocurrency quotes and analyse completed spot candles. JSE shares and other markets require authorized data feeds." trailing={<div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Database size={14} /> Read-only market research</div>} />
-    <SolanaTrackingBar cachedSeries={data.solanaSeries}
+    <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading Solana tracker?</p>}><SolanaTrackingBar cachedSeries={data.solanaSeries}
       privateEnabled={data.desktopAi.enabled} privateUrl={data.desktopAi.url}
       privateToken={data.desktopAi.token} preferZar={data.currency!=='USD'}
       onCache={solanaSeries=>setData(old=>({...old,solanaSeries}))}
@@ -758,7 +762,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
           status:'pending',createdAt:new Date().toISOString()};
         setData(old=>({...old,drafts:[draft,...old.drafts]}));
       }}
-    />
+    /></Suspense>
     <LiveCryptoQuotes currency={data.currency} privateToken={data.desktopAi.token} privateEnabled={data.desktopAi.enabled} />
     <Panel className="mb-5">
       <form data-market-form onSubmit={requestMarket} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:p-5">
@@ -1182,7 +1186,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
                !allowedSavedCategory(original.kind,category))return old;
             return {...old,expenseEntries:old.expenseEntries.map(item=>item.id===entryId?{...item,category}:item)};
           })}/>
-        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
+        <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending categories?</p>}><SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/></Suspense>
         <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
@@ -1195,7 +1199,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
             ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
           }:old)}/>
-        <MonthlyExpenses
+        <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending history?</p>}><MonthlyExpenses
           entries={ledger}
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
           desktopAi={data.desktopAi??DEFAULT_DESKTOP_AI}
@@ -1213,7 +1217,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           }))}
           onDelete={id=>setData(old=>({...old,expenseEntries:(old.expenseEntries??[]).filter(e=>e.id!==id)}))}
           onSettingsChange={next=>setData(old=>({...old,expenseSettings:next}))}
-        />
+        /></Suspense>
       </>}
       {section==='plan'&&<>
         <FinancialReadinessChecklist data={data} />
