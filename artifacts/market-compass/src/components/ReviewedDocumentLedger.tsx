@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {isFinanceReferenceLabel} from '@/lib/vehicleFinance';
 import {maskDocumentPII} from '@/lib/documentIntelligence';
 import {preparedDocumentReview} from '@/lib/reviewSuggestions';
+import {matchingApprovedEntriesForDocumentLine} from '@/lib/ledgerIntegrity';
 import {isReviewableLine} from '@/lib/reviewInbox';
 import {timeContextLabel} from '@/lib/documentTimeContext';
 import {type LocalFinanceDocument} from '@/lib/localFinanceDocs';
@@ -81,10 +82,14 @@ export default function ReviewedDocumentLedger({
         kind:draft[i].kind as ExpenseKind,
         category:draft[i].category as ExpenseCategory
       }));
+    const matchingManualRows=decisions.filter(decision=>
+      matchingApprovedEntriesForDocumentLine(document.lines[decision.lineIndex],entries,currency).length>0
+    ).length;
     try{
       const revised=applyReviewedDocumentToLedger(document,entries,decisions,currency);
       if(!window.confirm(
         'Add '+decisions.length+' individually reviewed line(s) to your encrypted Spend ledger? '+
+        (matchingManualRows>0?matchingManualRows+' selected row(s) resemble previously approved entries. '+'Compare the original statements before recording any repeats. ':'')+
         'These are owner-classified partial excerpts, not bank-reconciled transactions. '+
         'This will change recorded cycle totals and local Assistant summaries; it will NOT change Debt Plan balances, send data to HYPRBOX, or execute payments.'
       ))return;
@@ -143,6 +148,7 @@ export default function ReviewedDocumentLedger({
     <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto rounded-xl border border-border bg-background/40 p-2 sm:max-h-[640px] sm:p-3">
       {document.lines.map((line,index)=>{
         const already=applied.has(index);
+        const possibleRepeat=matchingApprovedEntriesForDocumentLine(line,entries,currency).length>0;
         const referenceOnly=line.semanticRole==='contract-term'||line.semanticRole==='balance-reference'||
           line.semanticRole==='rate-reference'||isFinanceReferenceLabel(line.label)||
           (document.documentKind&&document.documentKind!=='unclassified'&&line.semanticRole!=='transaction');
@@ -168,6 +174,9 @@ export default function ReviewedDocumentLedger({
               </span>
             </span>
           </label>
+          {possibleRepeat&&!already&&<p className="mt-2 pl-6 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            Possible duplicate of a saved transaction. Compare the source before approving this row.
+          </p>}
           {line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">Transaction date extracted from file: <strong className="text-foreground">{line.date}</strong> · no date entry needed</p>}
           {!line.date&&<p className="mt-1 pl-6 text-[11px] text-muted-foreground">No individual transaction date extracted. Kept as document-period evidence; no date entry required or allowed for posting.</p>}
           {proposal&&!already&&!unusable&&<p className="mt-1 pl-6 text-[10px] text-muted-foreground">Prepared classification: {proposal.kind} · {proposal.category}. {proposal.explanation}. Confirm before recording.</p>}
