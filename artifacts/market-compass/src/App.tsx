@@ -6,7 +6,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import VoiceAssistant from '@/components/VoiceAssistant';
+// Load the private AI conversation only when the AI route mounts.
 import PersonalTaskBoard from '@/components/PersonalTaskBoard';
 import { normalizePersonalTasks, type PersonalTask } from '@/lib/personalTasks';
 import { currentAssistantEdition } from '@/lib/assistantEdition';
@@ -40,6 +40,7 @@ import IncomeAllocation from '@/components/IncomeAllocation';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
 import SpendingPortfolio from '@/components/SpendingPortfolio';
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
+const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle, cycleCashflowCutIdeas } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -1261,7 +1262,7 @@ function Assistant({ data, setData, onImportDocuments }: {
     })(),
   };
   return <>
-    <VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
+    <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Preparing Compass AI?</p>}><VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
       onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))}
       queuedReadOnlyQuestions={Array.isArray(data.offlineAgentQuestions)?data.offlineAgentQuestions:[]}
       onQueueReadOnlyQuestion={question=>{
@@ -1276,7 +1277,7 @@ function Assistant({ data, setData, onImportDocuments }: {
       }}
       onRemoveQueuedReadOnlyQuestion={id=>setData(old=>({
         ...old,offlineAgentQuestions:removeOfflineQuestion(old.offlineAgentQuestions??[],id)
-      }))} />
+      }))} /></Suspense>
     {currentAssistantEdition()==='personal' && <PersonalTaskBoard tasks={Array.isArray(data.personalTasks)?data.personalTasks:[]}
       onChange={tasks=>setData(old=>({...old,personalTasks:tasks}))}/>}
     {data.queue.length > 0 && <details className="mt-4 rounded-2xl border border-border bg-card p-4">
