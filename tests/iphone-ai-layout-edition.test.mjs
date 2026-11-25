@@ -27,10 +27,12 @@ test('Agent stays read-only, always on, with no misleading checkbox toggle',()=>
   assert.doesNotMatch(ai,/checked=\{agentMode\}/);
   assert.match(ai,/payload\.answerSource\s*!==\s*'private-desktop-model'/);
 });
-test('Mobile AI panel fills the screen and keeps tools in a scrollable modal',()=>{
+test('Mobile AI panel fills the screen with a short inline tools drawer, not a modal',()=>{
   assert.match(ai,/mc-chat-panel flex min-h-0 flex-1 flex-col/);
-  assert.match(ai,/aria-label="Compass AI options"/);
-  assert.match(ai,/optionsOpen&&createPortal/);
+  assert.match(ai,/aria-label="Compass actions drawer"/);
+  assert.match(ai,/optionsOpen&&\(/);
+  assert.doesNotMatch(ai,/createPortal\(/);
+  assert.match(css,/max-height:min\(45dvh,380px\)/);
   assert.match(ai,/mc-chat-log min-h-0 flex-1/);
   assert.match(ai,/mc-assistant-dock flex min-w-0 w-full flex-col items-stretch/);
   assert.match(css,/width:100%;flex:0 0 auto/);
