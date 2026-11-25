@@ -697,6 +697,74 @@ async function main(){
     assert.equal(beforeChat.font,'16px','no Safari keyboard focus zoom');
     assert.ok(beforeChat.micWidth>=44&&beforeChat.plusWidth>=44,'accessible microphone and plus buttons');
     assert.equal(beforeChat.overflow,false,'AI tab must not horizontally overflow');
+    // Synthetic approximation of iPhone keyboard visualViewport contraction.
+    // A real Safari keyboard still needs physical-device confirmation.
+    await tab.invoke(function(){
+      const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      if(!input)throw Error('Composer missing');input.focus();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return document.documentElement.classList.contains('mc-chat-input-focused');
+    }),'chat composer gets keyboard-aware focus');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:520,deviceScaleFactor:3,mobile:true
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return document.documentElement.classList.contains('mc-chat-keyboard-open');
+    }),'visual viewport keyboard contraction applied');
+    const keyboard=await tab.invoke(function(){
+      const page=document.querySelector('.mc-assistant-page');
+      const composer=document.querySelector('.mc-chat-composer-wrap');
+      const nav=document.querySelector('.mc-mobile-tabbar');
+      const visual=window.visualViewport;
+      const top=visual?.offsetTop??0, height=visual?.height??innerHeight;
+      const pageRect=page?.getBoundingClientRect();
+      const composerRect=composer?.getBoundingClientRect();
+      return {
+        navHidden:!!nav&&getComputedStyle(nav).display==='none',
+        pageMode:page?getComputedStyle(page).position:null,
+        visibleBottom:top+height,
+        pageBottom:pageRect?.bottom??null,
+        composerBottom:composerRect?.bottom??null,
+        composerWidth:composerRect?.width??0,
+        overflow:document.documentElement.scrollWidth>innerWidth+1
+      };
+    });
+    assert.equal(keyboard.navHidden,true,'bottom tabbar must hide while keyboard is active');
+    assert.equal(keyboard.pageMode,'fixed','assistant attaches to visual viewport when typing');
+    assert.ok(keyboard.pageBottom!==null &&
+      Math.abs(keyboard.visibleBottom-keyboard.pageBottom)<=4,
+      'assistant must meet keyboard top: '+JSON.stringify(keyboard));
+    assert.ok(keyboard.composerBottom!==null &&
+      keyboard.composerBottom<=keyboard.visibleBottom+3 &&
+      keyboard.composerBottom>=keyboard.visibleBottom-160,
+      'composer must remain visible immediately above keyboard');
+    assert.ok(keyboard.composerWidth>320,'composer retains width on keyboard resize');
+    assert.equal(keyboard.overflow,false,'keyboard cannot introduce horizontal scroll');
+    await tab.command('Emulation.setDeviceMetricsOverride',{
+      width:390,height:844,deviceScaleFactor:3,mobile:true
+    });
+    await tab.invoke(function(){
+      document.querySelector('textarea[aria-describedby="mc-composer-hint"]')?.blur();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      const root=document.documentElement;
+      const nav=document.querySelector('.mc-mobile-tabbar');
+      return !root.classList.contains('mc-chat-input-focused') &&
+        !root.classList.contains('mc-chat-keyboard-open') &&
+        nav&&getComputedStyle(nav).display!=='none';
+    }),'bottom nav restored after keyboard dismissal');
+    const keyboardRestored=await tab.invoke(function(){
+      const page=document.querySelector('.mc-assistant-page')?.getBoundingClientRect();
+      const nav=document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect();
+      return {gap:page&&nav?nav.top-page.bottom:null,
+        overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.ok(keyboardRestored.gap!==null&&Math.abs(keyboardRestored.gap)<=5,
+      'no blank band when the keyboard closes: '+JSON.stringify(keyboardRestored));
+    assert.equal(keyboardRestored.overflow,false,'keyboard dismissal must preserve viewport width');
+    console.log('PASS: synthetic keyboard open/close keeps composer visible and nav seamless');
+
     if(process.env.MC_TEST_ASSISTANT_SCREENSHOT){
       const shot=await tab.command('Page.captureScreenshot',{
         format:'png',captureBeyondViewport:false,fromSurface:true
