@@ -286,6 +286,29 @@ try{
   assert.ok(compact.logHeight>130,'chat messages need usable scroll area');
   assert.equal(compact.hasOptions,true,'options opener must remain available');
   assert.equal(compact.horizontalOverflow,false,'AI screen must not overflow on iPhone');
+
+  const seam=await js(function(){
+    const page=document.querySelector('.mc-assistant-page');
+    const nav=document.querySelector('.mc-mobile-tabbar');
+    const title=document.querySelector('[aria-label="Compass model connection"]');
+    const p=page?.getBoundingClientRect();
+    const n=nav?.getBoundingClientRect();
+    const t=title?.getBoundingClientRect();
+    return {
+      gap:p&&n?n.top-p.bottom:null,
+      headerOffset:p&&t?t.top-p.top:null,
+      topPadding:page?parseFloat(getComputedStyle(page).paddingTop):null,
+      overflow:document.documentElement.scrollWidth>innerWidth+1
+    };
+  });
+  assert.ok(seam.gap!==null&&Math.abs(seam.gap)<=3,
+    'chat must meet bottom nav with no dead strip: '+JSON.stringify(seam));
+  assert.ok(seam.headerOffset!==null&&seam.headerOffset>=9,
+    'Compass identity needs breathing room below status bar');
+  assert.ok(seam.topPadding>=9,'safe-area top padding includes 10px identity spacing');
+  assert.equal(seam.overflow,false,'seam fix must not introduce horizontal overflow');
+  console.log('PASS: Personal chat-to-tabbar seam and lowered top identity',JSON.stringify(seam));
+
   await js(function(){document.querySelector('button[aria-label="Toggle Compass tools"]').click();});
   await until(()=>js(function(){return !!document.querySelector('[role="region"][aria-label="Compass actions drawer"]')}),'Compass options open');
   await js(function(){document.querySelector('details[aria-label="Additional Compass settings"]').open=true;});
