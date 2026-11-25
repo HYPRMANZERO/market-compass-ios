@@ -771,12 +771,12 @@ export default function VoiceAssistant({
     if (!busy && query.trim()) submit(query);
   }
 
-  return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
-    <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> {financeEdition?'Compass Financial Advisor':'Compass Personal'}</span>
+  return <div className="mc-assistant min-w-0 max-w-full space-y-3" data-testid="voice-assistant">
+    <section className="flex min-h-[56px] items-center justify-between gap-2 rounded-[16px] bg-[hsl(165,24%,20%)] px-3 py-2 text-white" aria-label="Compass model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> {financeEdition?'Compass Advisor':'Compass AI'}</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage || 'Compass private desktop connection status'}>
         <span className={connected ? 'h-2 w-2 shrink-0 rounded-full bg-emerald-400' : connection === 'checking' ? 'h-2 w-2 shrink-0 rounded-full bg-amber-300' : 'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
-        {connected ? 'Compass connected' : personalTailnetStatus === 'checking' && preferredTailnet ? 'Connecting privately' : preferredTailnet || settings.enabled ? 'Offline · auto reconnect' : 'Local commands'}
+        {connected ? 'Compass connected' : personalTailnetStatus === 'checking' && preferredTailnet ? 'Connecting privately' : preferredTailnet || settings.enabled ? 'Private link unavailable' : 'Local commands'}
       </span>
       <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
         onClick={() => {
@@ -789,7 +789,7 @@ export default function VoiceAssistant({
       </button>
     </section>
 
-    <section className="flex min-h-[min(64dvh,650px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
+    <section className="mc-chat-panel flex min-h-[min(55dvh,500px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm sm:min-h-[min(64dvh,650px)]" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
@@ -806,7 +806,7 @@ export default function VoiceAssistant({
           <p className="max-w-[340px] py-2 leading-5">Financial sources can be reviewed, not edited. Reminders and expense entries remain drafts; trading and payments are disabled. Your unlocked vault is not shared with HYPRBOX unless you separately enable sharing below.</p>
         </details>
       </div>
-      <div className="mc-chat-log min-h-[min(40dvh,340px)] max-h-[min(62dvh,650px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-[min(27dvh,250px)] max-h-[min(48dvh,540px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:min-h-[min(40dvh,340px)] sm:max-h-[min(62dvh,650px)] sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
@@ -896,8 +896,8 @@ export default function VoiceAssistant({
 
 
 
-    <div className="mc-assistant-dock flex flex-col items-stretch gap-3 pb-3" aria-label="AI tools and connections">
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[12px] font-bold">Private memory</summary><div className="mt-2">
+    <div className="mc-assistant-dock flex min-w-0 w-full flex-col items-stretch gap-3 pb-2" aria-label="AI tools and connections">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary><div className="mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
         <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
@@ -939,7 +939,7 @@ export default function VoiceAssistant({
       </p>
     </div></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[12px] font-bold">Financial sources</summary><div className="mt-2">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[13px] font-bold">Financial sources</summary><div className="mt-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
         <button type="button" onClick={() => setSourceRefresh(n => n + 1)} disabled={!connected || sourceLoading}
@@ -1035,7 +1035,7 @@ export default function VoiceAssistant({
 
     {financeEdition ? <FinanceFocusDeck onAsk={submit} onImportDocuments={onImportDocuments}/> :
       <PersonalToolDeck onAsk={submit} onImportDocuments={onImportDocuments}/>}
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[12px] font-bold">Suggested questions</summary><div className="mt-2">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary><div className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         {(financeEdition?financeIdeas:personalIdeas).map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
@@ -1046,7 +1046,7 @@ export default function VoiceAssistant({
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
     </div></details>
 
-    <details className="mc-assistant-dock-card snap-start rounded-[18px] border border-border bg-card p-3 shadow-sm">
+    <details className="mc-assistant-dock-card rounded-[20px] border border-border bg-card p-3 shadow-sm">
       <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
@@ -1054,7 +1054,7 @@ export default function VoiceAssistant({
         Compass Personal connects automatically through the pinned Tailscale Serve address when HYPRBOX is online and this device is joined to the tailnet. Agent mode is always active. Legacy manual connections are retained for migration.
       </p>
       {!financeEdition && publicPagesEdition && <p role="status" className="mt-2 text-[12px] leading-5 text-muted-foreground">
-        {tailnetConnected?'Private Personal agent connected through Tailscale.':preferredTailnet?'Tailscale Personal connection will retry automatically when the private network is available.':'Tailscale host provisioning pending. The original PWA remains usable offline.'}
+        {tailnetConnected?'Private Personal agent connected through Tailscale.':preferredTailnet?'Private model needs an owner-authorized Tailscale connection on this iPhone. Internet access alone is not enough. Reconnection retries when the private network becomes reachable.':'Tailscale host provisioning pending. The original PWA remains usable offline.'}
       </p>}
       <div role="status" className="mt-3 rounded-xl bg-muted/70 p-3 text-[12px] leading-5">
         <div className="flex items-center gap-2 font-semibold"><span className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : connection === 'checking' ? 'bg-amber-500' : 'bg-muted-foreground'}`}/>
