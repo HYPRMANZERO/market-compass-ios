@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import {shouldCheckPwaOnResume} from '@/lib/pwaResumeUpdate';
 
 /**
  * Announce a new offline PWA shell only after an already-controlled page
@@ -17,7 +18,33 @@ export default function PwaUpdateNotice() {
       hadController = true;
     };
     navigator.serviceWorker.addEventListener('controllerchange',controllerChanged);
-    return () => navigator.serviceWorker.removeEventListener('controllerchange',controllerChanged);
+
+    // Installed iOS PWAs can remain suspended for hours without a page load.
+    // A foreground event checks one tiny service worker script, never bank
+    // data, market quotes or the encrypted vault. No background timer/polling.
+    let lastUpdateCheck = 0;
+    const checkOnResume = () => {
+      const now = Date.now();
+      if (!shouldCheckPwaOnResume(lastUpdateCheck,now,
+        document.visibilityState === 'visible',navigator.onLine)) return;
+      lastUpdateCheck = now;
+      navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL)
+        .then(registration => registration?.update())
+        .catch(() => {
+          // Offline, captive portal or transient Pages failure: keep the
+          // existing cached shell and retry on the next foreground session.
+          lastUpdateCheck = 0;
+        });
+    };
+    window.addEventListener('pageshow',checkOnResume);
+    document.addEventListener('visibilitychange',checkOnResume);
+    window.addEventListener('online',checkOnResume);
+    return () => {
+      navigator.serviceWorker.removeEventListener('controllerchange',controllerChanged);
+      window.removeEventListener('pageshow',checkOnResume);
+      document.removeEventListener('visibilitychange',checkOnResume);
+      window.removeEventListener('online',checkOnResume);
+    };
   },[]);
 
   if (!updateAvailable) return null;
