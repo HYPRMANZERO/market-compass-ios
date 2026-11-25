@@ -32,6 +32,7 @@ import FinancialPulse from '@/components/FinancialPulse';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
+import LedgerIntegrityPanel from '@/components/LedgerIntegrityPanel';
 import IncomeAllocation from '@/components/IncomeAllocation';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 // MonthlyExpenses loads only on its route.
@@ -1215,6 +1216,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
             onOpenDocuments={()=>setSection('documents')}/>
         </Suspense>
+        <LedgerIntegrityPanel entries={ledger} currency={data.currency}/>
         <SavedCategoryReview entries={ledger} currency={data.currency}
           onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
         <Suspense fallback={<p role="status" className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading spending categories...</p>}><SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/></Suspense>
