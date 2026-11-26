@@ -95,7 +95,7 @@ export default function EvidenceReviewInbox({documents,entries,currency,currency
                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar"
                  aria-label={'Approved excerpts for '+maskDocumentPII(doc.label)}
                  aria-valuemin={0} aria-valuemax={doc.reviewable||1} aria-valuenow={doc.approved}>
-                 <div className="h-full rounded-full bg-[hsl(165,34%,37%)]"
+                 <div className="h-full rounded-full bg-[hsl(165,79%,32%)]"
                    style={{width:(doc.reviewable?doc.approved/doc.reviewable*100:0)+'%'}}/>
                </div>
              </span>
