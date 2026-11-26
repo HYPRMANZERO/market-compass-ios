@@ -111,3 +111,13 @@ test('the browser will not silently replay a failed remote agent POST to another
   const client=readFileSync(new URL('../artifacts/market-compass/src/lib/personalTailnetFailover.ts',import.meta.url),'utf8');
   assert.doesNotMatch(client,/\/api\/personal\/agent\/run/);
 });
+
+test('selected tailnet health cannot be masked by legacy readiness and POST is not replayed',()=>{
+ const src=readFileSync(new URL('../artifacts/market-compass/src/components/VoiceAssistant.tsx',import.meta.url),'utf8');
+ assert.ok(src.includes('const connected=useConfiguredTailnet?tailnetConnected'));
+ assert.ok(src.includes('const replyVerified=connected&&!agentRequestFailed'));
+ assert.ok(src.includes('setAgentRequestFailed(true);setVerifiedReplyOrigin(null)'));
+ const send=src.slice(src.indexOf('async function askDesktop'),src.indexOf('function submit('));
+ assert.ok(send.indexOf('await acquireAvailablePersonalNode')<send.indexOf('await fetch(url +'));
+ assert.equal(send.split('await fetch(url +').length-1,1);
+});

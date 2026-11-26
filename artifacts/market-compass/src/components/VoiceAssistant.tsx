@@ -196,7 +196,14 @@ export default function VoiceAssistant({
   const messageSerial = useRef(0);
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
-  const connected = tailnetConnected || (deviceChoice==='auto' && settings.enabled && connection === 'connected');
+  // Never use legacy session health to mask a failed configured Personal tailnet.
+  const useConfiguredTailnet=tailnetConnectHosts.length>0;
+  const connected=useConfiguredTailnet?tailnetConnected:(deviceChoice==='auto' && settings.enabled && connection==='connected');
+  const [verifiedReplyOrigin,setVerifiedReplyOrigin]=useState<string|null>(null);
+  const [agentRequestFailed,setAgentRequestFailed]=useState(false);
+  const activeOrigin=useConfiguredTailnet?personalTailnetSession?.origin:privateTailnetOrigin(settings.url);
+  const replyVerified=connected&&!agentRequestFailed&&!!activeOrigin&&verifiedReplyOrigin===activeOrigin;
+  const connectionLabel=busy?'Compass working…':replyVerified?'Connected':connected?(agentRequestFailed?'Ready · retry message':'Ready · awaiting reply'):((useConfiguredTailnet?personalTailnetStatus:connection)==='checking'?'Connecting':'Private link unavailable');
   const add = (source: Message['source'], text: string, link?:Message['link']) => setMessages(old => [...old, {
     id: crypto.randomUUID(), source, text, ...(link?{link}:{}),
   }].slice(-35));
@@ -666,13 +673,21 @@ export default function VoiceAssistant({
   }
 
   async function askDesktop(prompt: string, id: number, queuedId?:string) {
-    const useTailnet=tailnetConnected && personalTailnetSession!==null;
-    const url = useTailnet ? personalTailnetSession.origin : privateTailnetOrigin(settings.url);
-    const bearer = useTailnet ? personalTailnetSession.token : settings.token;
-    if (!url || !bearer || !connected) return;
+    const useTailnet=useConfiguredTailnet;
+    let url=useTailnet?null:privateTailnetOrigin(settings.url);
+    let bearer=useTailnet?'':settings.token;
+    if(!useTailnet&&(!url||!bearer||!connected)){setBusy(false);return;}
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 130000); // Local Qwen 4B CPU inference may need up to ~2 minutes.
     try {
+      // Safe GET failover before sending exactly one agent POST; never replay POST.
+      if(useTailnet){
+        const session=await acquireAvailablePersonalNode(tailnetConnectHosts);
+        if(messageSerial.current!==id)return;
+        url=session.origin;bearer=session.token;
+        setPersonalTailnetSession(session);setPersonalTailnetStatus('connected');
+      }
+      if(!url||!bearer)throw Error('No authorized private AI route.');
       const validAccount = (a: CompassCommandContext['accounts'][number]) =>
         a.name.trim().length > 0 && [a.balance, a.apr, a.minimumPayment].every(v =>
           typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0);
@@ -702,7 +717,7 @@ export default function VoiceAssistant({
       } : undefined;
       const useAgent = agentMode; // The local model always handles online queries via read-only agent.
       const response = await fetch(url + (useTailnet ? '/api/personal/agent/run' : '/api/agent/run'), {
-        method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+        method: 'POST', mode: 'cors', credentials: !useTailnet && privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', redirect:'error',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
@@ -726,6 +741,7 @@ export default function VoiceAssistant({
         }
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
+        setVerifiedReplyOrigin(url);setAgentRequestFailed(false);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
         setStatus(`Read-only agent · ${agentResult.steps} source${agentResult.steps===1?'':'s'} checked (maximum ${agentResult.maxSteps}). No records changed.`);
       } else {
@@ -749,6 +765,7 @@ export default function VoiceAssistant({
       if (queuedId) onRemoveQueuedReadOnlyQuestion(queuedId);
     } catch (error) {
       if (messageSerial.current !== id) return;
+      setAgentRequestFailed(true);setVerifiedReplyOrigin(null);
       if (controller.signal.aborted) {
         // An unusually slow local model is not proof that the private
         // network/session is disconnected. Preserve encrypted credentials and
@@ -757,9 +774,10 @@ export default function VoiceAssistant({
         add('local', 'Compass took too long to answer on the private desktop. No action was executed. Please retry when the model is ready.');
         return;
       }
-      if(useTailnet){setPersonalTailnetSession(null);setTailnetRetryNonce(n=>n+1);}
+      if(useTailnet){setPersonalTailnetSession(null);setPersonalTailnetStatus('checking');setTailnetRetryNonce(n=>n+1);}
       else{setConnection('offline');setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);}
-      add('local', 'The desktop AI is temporarily unavailable. Offline questions about your saved debt plan and markets still work.');
+      setStatus('Private AI request failed. '+explainError(error)+' No message was automatically resent.');
+      add('local', 'Compass could not complete this request. '+explainError(error)+' Reconnecting; retry the message manually.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
 
@@ -972,9 +990,9 @@ export default function VoiceAssistant({
       <span className="fin-brandmark grid h-10 w-10 shrink-0 place-items-center" aria-hidden="true"><BrainCircuit size={19}/></span>
       <span className="min-w-0 flex-1">
         <span className="fin-hdr-title block truncate">{financeEdition?'Compass Advisor':'Compass Personal'}</span>
-        <span role="status" aria-live="polite" className="fin-hdr-meta" title={connected?'Compass connected':connectionMessage||'Compass private AI connection status'}>
-          <span className={connected?'fin-hdr-dot is-online':'fin-hdr-dot is-offline'} aria-hidden="true"/>
-          <span className="min-w-0 max-w-[52vw] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>
+        <span role="status" aria-live="polite" className="fin-hdr-meta" title={connectionLabel}>
+          <span className={replyVerified?'fin-hdr-dot is-online':'fin-hdr-dot is-offline'} aria-hidden="true"/>
+          <span className="min-w-0 max-w-[52vw] truncate sm:max-w-none">{connectionLabel}</span>
         </span>
       </span>
       <button ref={optionsTrigger} type="button" aria-label="Toggle Compass tools" aria-controls="mc-chat-tools-drawer" aria-expanded={optionsOpen} onClick={()=>setOptionsOpen(open=>!open)}
