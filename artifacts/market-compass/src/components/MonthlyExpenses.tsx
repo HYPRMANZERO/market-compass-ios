@@ -462,7 +462,17 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
         </select>
       </label>
       <p className="mt-2 text-[11px] text-muted-foreground">Showing {shownEntries.length} of {analysis.count} reviewed entries. Filters never remove or modify saved money movements.</p>
-      {selectedEntries.length===0?<p className="mt-3 text-[12px] text-muted-foreground">No entries recorded for this salary cycle. Start with your next payment or salary deposit.</p>:
+      {selectedEntries.length===0?<div className="fin-empty">
+        <span className="fin-empty-icon"><Plus size={20} aria-hidden="true"/></span>
+        <h3>No entries in this cycle yet</h3>
+        <p>Cycles run from the 26th to the 25th. Record a payment or a salary below and it appears here immediately. Nothing is fetched from a bank.</p>
+        <div className="fin-empty-actions">
+          <button type="button" onClick={()=>{const form=document.getElementById('mc-expense-form');form?.scrollIntoView({behavior:'smooth',block:'start'});form?.querySelector<HTMLInputElement>('input')?.focus();}}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[12.5px] font-semibold text-primary-foreground">
+            <Plus size={15} aria-hidden="true"/> Record a payment
+          </button>
+        </div>
+      </div>:
         <div className="mt-3 space-y-2">{shownEntries.map(e=><div key={e.id} className="rounded-xl border border-border p-3">
           <div className="flex items-start justify-between gap-3"><div className="min-w-0">
             <div className="text-[12px] font-bold">{e.description}</div>
