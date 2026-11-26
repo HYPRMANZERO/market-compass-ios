@@ -667,7 +667,7 @@ export default function VoiceAssistant({
           typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0);
       // Sharing financial context is opt-in AND relevant-topic-only. A greeting or
       // unrelated question must not transmit salary, account or spending figures.
-      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|cashflow|costs?|cut(?:ting|s)?|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
+      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|cashflow|costs?|cut(?:ting|s)?|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation|financial\s*pulse|after[ -]?bills|money\s*left|safe\s*to\s*spend|available\s*cash|cash\s*position)\b/i.test(prompt);
       const wantsDocuments=/\b(?:documents?|statements?|payslips?|invoices?|instalments?|quotations?)\b/i.test(prompt);
       const includeFacts=settings.shareFinancialContext&&shareDocumentFacts&&wantsDocuments;
       const documentFacts=includeFacts?(context.localFinanceDocuments??[]).slice().sort((a,b)=>b.importedAt.localeCompare(a.importedAt))
@@ -686,6 +686,7 @@ export default function VoiceAssistant({
         liquidFunds: context.privateBudget?.liquidFunds ?? '',
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
+        financialPulse:context.financialPulse,
         documentFacts,
       } : undefined;
       const useAgent = agentMode; // The local model always handles online queries via read-only agent.
