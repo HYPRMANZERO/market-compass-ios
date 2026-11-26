@@ -648,6 +648,28 @@ async function main(){
     assert.equal(chatOnly.bodyOverflow,'hidden','assistant has no second scroll layer');
     assert.equal(chatOnly.chatOverflow,'auto','only AI messages scroll by default');
     assert.ok(Math.abs(chatOnly.before-chatOnly.after)<=1,'AI document cannot pan while keyboard is closed: '+JSON.stringify(chatOnly));
+
+    const restingBounds=await tab.invoke(async function(){
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const nav=document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect();
+      const page=document.querySelector('.mc-assistant-page')?.getBoundingClientRect();
+      const visual=window.visualViewport;
+      const visibleBottom=(visual?.offsetTop??0)+(visual?.height??window.innerHeight);
+      const root=document.documentElement.style;
+      return {navBottom:nav?.bottom,pageBottom:page?.bottom,navTop:nav?.top,
+        visibleBottom,cssBottom:root.getPropertyValue('--mc-chat-resting-visible-bottom'),
+        cssInset:root.getPropertyValue('--mc-chat-resting-bottom-inset'),
+        cssNav:root.getPropertyValue('--mc-chat-tabbar-height')};
+    });
+    assert.ok(restingBounds.navBottom!==undefined&&restingBounds.pageBottom!==undefined,
+      'assistant resting footer and page must exist');
+    assert.ok(Math.abs(restingBounds.navBottom-restingBounds.visibleBottom)<=5,
+      'AI nav must end at the real visual viewport bottom: '+JSON.stringify(restingBounds));
+    assert.ok(Math.abs(restingBounds.navTop-restingBounds.pageBottom)<=5,
+      'composer cannot leave a dead strip above navigation: '+JSON.stringify(restingBounds));
+    assert.ok(restingBounds.cssBottom.endsWith('px')&&restingBounds.cssInset.endsWith('px')&&
+      restingBounds.cssNav.endsWith('px'),'dynamic visible viewport geometry must be attached');
+
     // Synthetic approximation of iPhone keyboard visualViewport contraction.
     // A real Safari keyboard still needs physical-device confirmation.
     await tab.invoke(function(){
