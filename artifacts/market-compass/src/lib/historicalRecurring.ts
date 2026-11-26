@@ -22,6 +22,15 @@ const validDate=(s:unknown):s is string=>{
   const stamp=new Date(s+'T00:00:00Z');
   return !Number.isNaN(stamp.valueOf())&&stamp.toISOString().slice(0,10)===s;
 };
+/** Display-only cleanup; original ledger evidence and grouping are untouched. */
+export function recurringDisplayLabel(value:string):string {
+  const label=value.trim().replace(/\s+/g,' ');
+  const words=label.split(' ');
+  for(let n=Math.floor(words.length/2);n>=2;n--){
+    if(words.length===n*2 && words.slice(0,n).join(' ').toLowerCase()===words.slice(n).join(' ').toLowerCase())return words.slice(0,n).join(' ');
+  }
+  return label;
+}
 const descriptionKey=(s:string)=>s.toLowerCase().replace(/\b\d{4,}\b/g,' ')
   .replace(/\b(?:ref|reference|txn|transaction|payment no|receipt)\b/g,' ')
   .replace(/[^a-z]+/g,' ').replace(/\s+/g,' ').trim().slice(0,65);
