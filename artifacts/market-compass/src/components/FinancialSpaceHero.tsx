@@ -16,18 +16,26 @@ export default function FinancialSpaceHero({currency,totalDebt,accountsCount,onV
         <span className="mc-wallet-eyebrow">YOUR FINANCIAL SPACE</span>
         <span className="mc-wallet-lock"><LockKeyhole size={12} aria-hidden="true"/> Private workspace</span>
       </div>
-      <p className="mt-7 text-[12px] font-medium text-white/75">
-        {accountsCount ? 'Total entered debt balances' : 'Your financial overview'}
-      </p>
+      {accountsCount
+        ? <p className="mt-6 text-[11.5px] font-semibold uppercase tracking-[.13em] text-white/55">Total entered debt balances</p>
+        : <p className="mt-2.5 text-[11.5px] leading-5 text-white/65">Add an account or import a statement to begin building your private picture.</p>}
       <h1 className="mc-wallet-number" data-testid="financial-space-debt-total">
         {accountsCount ? formatDebt(totalDebt,currency) : 'Start with clarity'}
       </h1>
-      <p className="mt-3 max-w-[440px] text-[12px] leading-5 text-white/75">
-        {accountsCount
-          ? 'Based on amounts you entered. Not a live or bank-verified balance.'
-          : 'Add an account or import a statement to begin building your private picture.'}
-      </p>
-      <div className="mt-6 flex items-center justify-between gap-3">
+      {accountsCount > 0 && <p className="mt-2.5 max-w-[440px] text-[11.5px] leading-5 text-white/65">
+        Based on amounts you entered. Not a live or bank-verified balance.
+      </p>}
+      <div className="fin-hero-stats">
+        <div className="fin-hero-stat">
+          <span>Accounts</span>
+          <strong>{accountsCount ? `${accountsCount} tracked` : 'None yet'}</strong>
+        </div>
+        <div className="fin-hero-stat">
+          <span>Currency</span>
+          <strong>{currency}</strong>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
         <span className="mc-wallet-footnote"><ShieldCheck size={14} aria-hidden="true"/> Encrypted on your device</span>
         <button type="button" onClick={onViewAccounts} aria-label={accountsCount?'View saved accounts':'Add an account'} className="mc-wallet-cta ion-activatable">
           <IonRippleEffect/>{accountsCount ? 'View accounts' : 'Add account'} <ArrowUpRight size={15} aria-hidden="true"/>
