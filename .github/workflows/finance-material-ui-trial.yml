@@ -40,7 +40,42 @@ jobs:
           pnpm --filter @workspace/market-compass run build
           node scripts/prepare-offline-shell.mjs
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('.release/finance-mui/manifest.webmanifest','utf8'));if(m.name!=='Compass Financial Advisor')process.exit(1)"
-      - name: Three isolated mobile browser checks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: finance-mui-unverified-build
+          path: .release/finance-mui
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mui-resolved-lock
+          path: pnpm-lock.yaml
+          retention-days: 7
+  mobile-browser:
+    needs: trial
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - uses: actions/download-artifact@v4
+        with:
+          name: mui-resolved-lock
+          path: .
+      - name: Install exact resolved dependency lock
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile --force
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency install failed' }
+      - uses: actions/download-artifact@v4
+        with:
+          name: finance-mui-unverified-build
+          path: .release/finance-mui
+      - name: Three isolated mobile browser checks using Edge
+        shell: pwsh
         env:
           BASE_PATH: /market-compass-ios/
           VITE_MC_EDITION: finance
@@ -48,16 +83,13 @@ jobs:
           MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance-mui
           MC_TEST_MUI_ONLY: 'true'
         run: |
-          for round in 1 2 3; do
-            node scripts/browser-release-gate.mjs || exit 1
-          done
+          for ($round=1; $round -le 3; $round++) {
+            node scripts/browser-release-gate.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Mobile browser round $round failed" }
+            Write-Host "PASS: mobile browser round $round of 3"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: finance-mui-candidate
           path: .release/finance-mui
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mui-resolved-lock
-          path: pnpm-lock.yaml
           retention-days: 7
