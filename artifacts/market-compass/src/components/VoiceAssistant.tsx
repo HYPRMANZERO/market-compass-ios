@@ -953,8 +953,8 @@ export default function VoiceAssistant({
 
 
   return <div className="mc-assistant flex min-h-0 min-w-0 max-w-full flex-col gap-0 lg:gap-2" data-testid="voice-assistant">
-    <section className="flex min-h-12 items-center gap-2 rounded-none bg-[hsl(165,24%,20%)] px-3 py-1.5 text-white lg:rounded-[15px]" aria-label="Compass model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold"><BrainCircuit size={19} className="shrink-0 text-[hsl(43,65%,74%)]" aria-hidden="true"/>{financeEdition?'Compass Advisor':'Compass Personal'}</span>
+    <section className="flex min-h-12 items-center gap-2 rounded-none bg-[#0b1620] px-3 py-1.5 text-white lg:rounded-[15px]" aria-label="Compass model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold"><BrainCircuit size={19} className="shrink-0 text-[#7fe3b0]" aria-hidden="true"/>{financeEdition?'Compass Advisor':'Compass Personal'}</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 text-[11px] font-semibold" title={connected?'Compass connected':connectionMessage||'Compass private AI connection status'}>
         <span className={connected?'h-2 w-2 shrink-0 rounded-full bg-emerald-400':connection==='checking'?'h-2 w-2 shrink-0 rounded-full bg-amber-300':'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
         <span className="max-w-[110px] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>

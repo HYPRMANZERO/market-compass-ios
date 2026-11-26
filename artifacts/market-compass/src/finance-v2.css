@@ -209,7 +209,8 @@ ion-card .tabular-nums {
   border-top: 1px solid var(--fin-line) !important;
   border-radius: 24px 24px 0 0 !important;
   background: #ffffff !important;
-  box-shadow: var(--fin-shadow-float) !important;
+  /* A bar pinned to the bottom must cast its shadow upward. */
+  box-shadow: 0 -16px 34px -24px rgba(12, 22, 38, 0.55) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
@@ -367,6 +368,78 @@ section[aria-label='Install Market Compass'] .text-\[12px\] {
 section[aria-label='Install Market Compass'] button {
   min-height: 30px !important;
   font-size: 11.5px !important;
+}
+
+/* ------------------------------------------------------ disclosure rows -- */
+/* <details> rows were showing the raw native triangle ("\u25b6") inside rounded
+   cards. Hide it everywhere and give plain-text rows a proper chevron; rows
+   that already carry their own arrow icon are left alone. */
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::marker {
+  content: '';
+}
+details > summary:not(:has(svg)) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+details > summary:not(:has(svg))::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  margin-top: -3px;
+  opacity: 0.42;
+  transition: transform 0.18s ease-out;
+}
+details[open] > summary:not(:has(svg))::after {
+  transform: rotate(-135deg);
+  margin-top: 3px;
+}
+
+/* ------------------------------------------------------ disabled buttons -- */
+/* A disabled primary was brand emerald at 40% opacity: pale mint with white
+   text, which reads as a broken button. Use a neutral, legible state instead. */
+button[class~='bg-primary']:disabled,
+button[class~='bg-[hsl(43,65%,73%)]']:disabled {
+  background: var(--fin-line-soft) !important;
+  color: var(--fin-ink-faint) !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------- chat surface --- */
+/* The chat route is the one screen that is pure white edge to edge, so the
+   white dock had nothing to separate from. Tint the conversation surface and
+   give the bubbles a card treatment: header white, log tinted, composer white. */
+.mc-chat-bubble {
+  background: var(--fin-card) !important;
+  border: 1px solid var(--fin-line);
+  box-shadow: 0 1px 2px rgba(12, 22, 38, 0.04);
+}
+.mc-chat-bubble[class~='bg-primary'] {
+  background: hsl(var(--primary)) !important;
+  border-color: transparent;
+  box-shadow: none;
+  color: hsl(var(--primary-foreground));
+}
+@media (max-width: 1023px) {
+  .mc-chat-panel {
+    background: var(--fin-card);
+  }
+  /* Desktop keeps its own rounded card shell; only the phone is full-bleed. */
+  .mc-chat-log {
+    background: var(--fin-canvas);
+  }
 }
 
 /* ------------------------------------------------------ button geometry --- */

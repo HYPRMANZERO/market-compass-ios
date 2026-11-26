@@ -46,7 +46,11 @@ test('composer, settings and finance rights survive the layout change',()=>{
 
 test('the status-bar seam and action controls remain flush',()=>{
  assert.match(css,/background:linear-gradient\(to bottom,/);
- assert.match(css,/hsl\(165,24%,20%\) calc\(env\(safe-area-inset-top,0px\) \+ 11px\)/);
+ // Finance v2 paints the strip above the assistant bar in the new ink and stops
+ // it at the bar's exact top edge (safe area + 10px), so no light hairline shows.
+ assert.match(css,/#0b1620 0,/);
+ assert.match(css,/calc\(env\(safe-area-inset-top,0px\) \+ 10px\)/);
+ assert.doesNotMatch(css,/hsl\(165,24%,20%\)/);
  assert.match(css,/grid-template-columns:52px minmax\(0,1fr\) 52px/);
  assert.match(css,/width:52px/);
  assert.match(css,/height:52px/);

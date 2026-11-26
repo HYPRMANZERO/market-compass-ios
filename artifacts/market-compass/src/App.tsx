@@ -333,7 +333,7 @@ function InstallHelp() {
     return () => window.removeEventListener('beforeinstallprompt', onInstall);
   }, []);
   if (!visible || (!ios && !installPrompt)) return null;
-  return <section className="mx-4 mt-3 rounded-2xl border border-[hsl(39,30%,80%)] bg-[hsl(43,48%,92%)] p-3 sm:mx-6 lg:mx-10 lg:max-w-lg" aria-label="Install Market Compass">
+  return <section className="mx-4 mt-3 rounded-2xl border border-[hsl(154,40%,84%)] bg-[hsl(154,44%,96%)] p-3 sm:mx-6 lg:mx-10 lg:max-w-lg" aria-label="Install Market Compass">
     <div className="flex items-start gap-3">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Compass size={19}/></span>
       <div className="min-w-0 flex-1">
@@ -522,7 +522,7 @@ function ActionButton({ children, onClick, type = 'button', variant = 'primary',
 }
 
 function StatusTag({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'good' | 'warn' | 'bad' }) {
-  const tones = { neutral: 'bg-muted text-muted-foreground', good: 'bg-[hsl(155,30%,90%)] text-[hsl(158,36%,29%)]', warn: 'bg-[hsl(42,56%,89%)] text-[hsl(34,52%,34%)]', bad: 'bg-[hsl(5,48%,92%)] text-[hsl(4,52%,41%)]' };
+  const tones = { neutral: 'bg-muted text-muted-foreground', good: 'bg-[hsl(154,40%,92%)] text-[hsl(165,79%,24%)]', warn: 'bg-[hsl(41,86%,93%)] text-[hsl(32,90%,30%)]', bad: 'bg-[hsl(6,71%,95%)] text-[hsl(2,72%,38%)]' };
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${tones[tone]}`}><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />{children}</span>;
 }
 
@@ -823,11 +823,11 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
     {candlesError && !activeSeries && <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5 p-5"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 text-destructive" size={18} /><div className="flex-1"><div className="text-[13px] font-semibold">Market data could not be retrieved</div><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Check the ticker and connection, then try again. No figures are shown unless returned by the provider.</p></div><button className="text-[11px] font-semibold text-primary" onClick={(e) => { e.preventDefault(); const form = document.querySelector<HTMLFormElement>('[data-market-form]'); form?.requestSubmit(); }}>Retry</button></div></div>}
     {!activeSeries && !fetching && !candlesError && <Panel><EmptyState icon={TrendingUp} title="Start with an actual data request" description="Enter a ticker to retrieve candle data. Market Compass does not use sample prices or simulated balances." /></Panel>}
     {activeSeries && !fetching && <>
-      <div className={`mb-4 flex flex-col justify-between gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center ${localCached ? 'border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)]' : 'border-border bg-card'}`}>
+      <div className={`mb-4 flex flex-col justify-between gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center ${localCached ? 'border-[hsl(38,60%,80%)] bg-[hsl(41,86%,95%)]' : 'border-border bg-card'}`}>
         <div className="flex items-center gap-3"><span className={`grid h-8 w-8 place-items-center rounded-full ${localCached ? 'bg-[hsl(38,45%,80%)]' : 'bg-muted'}`}>{localCached ? <Clock3 size={15} /> : <Database size={15} />}</span><div><div className="text-[11px] font-semibold">{localCached ? 'Showing saved copy · may be out of date' : 'Completed historical daily candles · not a live quote'}</div><div className="mt-1 text-[10px] text-muted-foreground">Source: {activeSeries.source} · Latest saved candle: {utcCandleDate(lastSavedCandleDate)} (UTC){localCached ? ' · saved in this browser' : ''}</div></div></div>
         <div className="text-[10px] text-muted-foreground sm:text-right"><div>{loadedRange ? ({ '1m': '1 month', '3m': '3 months', '6m': '6 months', '1y': '1 year' } as const)[loadedRange] : 'Imported / saved window'} · {activeSeries.candles.length} candles · {activeSeries.currency}</div><div className="mt-1">Actual dates: {utcCandleDate(activeSeries.candles[0]?.date)} – {utcCandleDate(activeSeries.candles.at(-1)?.date)} (UTC)</div></div>
       </div>
-      {marketCacheDateMismatch && <div className="mb-4 rounded-xl border border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)] px-4 py-3 text-[12px] leading-5">
+      {marketCacheDateMismatch && <div className="mb-4 rounded-xl border border-[hsl(38,60%,80%)] bg-[hsl(41,86%,95%)] px-4 py-3 text-[12px] leading-5">
         The saved feed contains inconsistent timestamps: its earlier source label does not match the last stored candle. The chart shows the dates on its candles. Request fresh provider data to reconcile the feed before relying on analysis.
       </div>}
       {activeSeries.notice && !marketCacheDateMismatch && <div className="mb-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-[11px] leading-5 text-muted-foreground">{activeSeries.notice}</div>}
@@ -1048,7 +1048,7 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
           </div>
         </Panel>
         <p className="rounded-lg border border-border bg-muted/45 px-4 py-3 text-[11px] leading-5 text-muted-foreground">Currency is selected using the region but can be changed independently. No automatic FX conversion is performed. Every account in a payoff comparison must be expressed in the same planning currency ({data.currency}).</p>
-        {data.currencyReviewRequired && <div role="alert" className="rounded-lg border border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)] px-4 py-3 text-[11px] leading-5">
+        {data.currencyReviewRequired && <div role="alert" className="rounded-lg border border-[hsl(38,60%,80%)] bg-[hsl(41,86%,95%)] px-4 py-3 text-[11px] leading-5">
           <p className="font-semibold">Existing amounts have not been converted.</p>
           <p>Check every debt balance, minimum payment, extra amount and reserve, then manually correct any figure that was in another currency.</p>
           <button type="button" className="mt-2 rounded-md border border-border bg-background px-3 py-2 font-semibold" onClick={() => setData(old => ({ ...old, currencyReviewRequired: false }))}>I have reviewed all amounts in {data.currency}</button>
@@ -1064,7 +1064,7 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
             {plan.notes.map((note, i) => <p key={`${i}-${note}`} className="mt-3 text-[10px] leading-5 text-muted-foreground">{note}</p>)}
           </div> : <EmptyState icon={ArrowLeftRight} title="Two paths, one informed choice" description="Enter at least one account and calculate to see the avalanche and snowball scenarios. No outcome is estimated here in advance." />}
         </Panel>
-        <div className="rounded-xl border border-border bg-[hsl(42,44%,92%)] p-5"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 shrink-0 text-[hsl(34,52%,42%)]" size={17} /><div><div className="text-[11px] font-semibold">A calculation is not a promise</div><p className="mt-1.5 text-[10px] leading-5 text-muted-foreground">Actual payoff timing depends on your lender’s terms, payment timing, fees, and future rates. Keep an emergency reserve that fits your situation.</p></div></div></div>
+        <div className="rounded-xl border border-border bg-[hsl(41,80%,96%)] p-5"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 shrink-0 text-[hsl(32,90%,32%)]" size={17} /><div><div className="text-[11px] font-semibold">A calculation is not a promise</div><p className="mt-1.5 text-[10px] leading-5 text-muted-foreground">Actual payoff timing depends on your lender’s terms, payment timing, fees, and future rates. Keep an emergency reserve that fits your situation.</p></div></div></div>
       </div>
     </form>
     <div className="mt-6">
@@ -1118,7 +1118,7 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
   return <>
     <PageIntro eyebrow="Nothing leaves this workspace" title="Order drafts" description="These are personal notes for review only. Approving a draft changes its local status and never sends an order." trailing={<StatusTag>{data.drafts.filter((d) => d.status === 'pending').length} pending</StatusTag>} />
     {notice && <div role="status" className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/60 px-4 py-3 text-[11px]"><span>{notice}</span><button aria-label="Dismiss notice" onClick={() => setNotice('')}><X size={14} /></button></div>}
-    <div className="mb-5 flex items-start gap-3 rounded-xl border border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)] p-4"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-[hsl(34,52%,39%)]" /><p className="text-[11px] leading-5 text-[hsl(166,19%,25%)]"><strong>Local review only.</strong> “Approve” records your review in this browser. There is no brokerage connection, order submission, or automatic trading.</p></div>
+    <div className="mb-5 flex items-start gap-3 rounded-xl border border-[hsl(38,60%,80%)] bg-[hsl(41,86%,95%)] p-4"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-[hsl(32,90%,30%)]" /><p className="text-[11px] leading-5 text-foreground"><strong>Local review only.</strong> “Approve” records your review in this browser. There is no brokerage connection, order submission, or automatic trading.</p></div>
     <section aria-label="Order review progress" className="mb-5 rounded-[22px] border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[14px] font-bold">Order review readiness</h2><button type="button" onClick={()=>setLastReviewAt(new Date().toISOString())} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Check progress now</button></div>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">This is an instant, local readiness check. It does not ask an AI to recommend a trade, obtain an executable broker quote, or submit an order.</p>
@@ -1380,7 +1380,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
   };
   return <details id="mc-backup-controls" className="group mb-4 rounded-2xl border border-border bg-card shadow-sm lg:mb-7" aria-label="Encrypted vault and backup settings">
     <summary className="flex min-h-[55px] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(165,19%,91%)] text-primary"><ShieldCheck size={18}/></span>
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(154,40%,92%)] text-primary"><ShieldCheck size={18}/></span>
       <span className="min-w-0 flex-1">
         <span className="block text-[12px] font-bold">Encrypted vault &amp; settings</span>
         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.saving ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>

@@ -498,10 +498,14 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
    the page canvas. Keep the inline + tools drawer unchanged. */
 @media (max-width:1023px) {
   .mc-mobile-content.mc-assistant-page {
+    /* The safe-area strip continues the dark app bar down to the exact top edge
+       of the assistant header (safe area + 10px, matching the padding above).
+       It used to be the old forest green and stopped 1px early, which left a
+       light hairline between the status bar and the bar. */
     background:linear-gradient(to bottom,
-      hsl(165,24%,20%) 0,
-      hsl(165,24%,20%) calc(env(safe-area-inset-top,0px) + 11px),
-      #ffffff calc(env(safe-area-inset-top,0px) + 11px));
+      #0b1620 0,
+      #10302a calc(env(safe-area-inset-top,0px) + 10px),
+      transparent calc(env(safe-area-inset-top,0px) + 10px));
   }
   .mc-assistant-page .mc-assistant-composer {
     grid-template-columns:52px minmax(0,1fr) 52px;
