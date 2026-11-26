@@ -866,6 +866,8 @@ ion-card.mc-wallet-hero::after {
   color: var(--fin-ink-soft);
 }
 .mc-account-empty-action {
+  width: 40px;
+  height: 40px;
   background: var(--fin-line-soft);
   color: var(--fin-brand);
 }
