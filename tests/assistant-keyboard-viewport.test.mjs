@@ -89,3 +89,21 @@ test('new assistant replies scroll only chat log, never the document',()=>{
   assert.match(voice,/log\.scrollTo\(\{top:log\.scrollHeight,behavior:'smooth'\}\)/);
   assert.doesNotMatch(voice,/bottom\.current\?\.scrollIntoView/);
 });
+
+test('iPhone footer caps an inflated safe-area bottom and shares its height with the AI surface',()=>{
+  assert.match(css,/--mc-mobile-footer-safe:\s*clamp\(10px,\s*env\(safe-area-inset-bottom,\s*0px\),\s*34px\)/);
+  const nav=css.match(/\.mc-mobile-tabbar\s*\{([^}]+)\}/)?.[1]??'';
+  assert.match(nav,/height:\s*calc\(66px\s*\+\s*var\(--mc-mobile-footer-safe\)\)/);
+  assert.match(nav,/padding:\s*8px 8px var\(--mc-mobile-footer-safe\)/);
+  const assistant=css.match(/\.mc-mobile-content\.mc-assistant-page\s*\{([^}]+)\}/)?.[1]??'';
+  assert.match(assistant,/height:\s*calc\(var\(--mc-chat-resting-height,\s*100dvh\)\s*-\s*66px\s*-\s*var\(--mc-mobile-footer-safe\)\)/);
+  assert.doesNotMatch(nav,/max\(10px,\s*env\(safe-area-inset-bottom/);
+});
+test('assistant viewport measurement survives navigation and clears private layout styles',()=>{
+  const code=read('../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts');
+  assert.match(code,/setProperty\('--mc-chat-resting-height'/);
+  assert.match(code,/!keyboardOpen&&\(height>=baseline-110/);
+  assert.match(code,/removeProperty\('--mc-chat-resting-height'\)/);
+  assert.match(css,/html\.mc-assistant-route body\s*\{[^}]*height:var\(--mc-chat-resting-height,100dvh\)\s*!important/s);
+  assert.match(code,/root\.classList\.remove\('mc-chat-input-focused','mc-chat-keyboard-open','mc-assistant-route'\)/);
+});
