@@ -450,6 +450,93 @@ button[class~='bg-[hsl(43,65%,73%)]']:disabled {
   }
 }
 
+/* ================================================== iOS device hardening ==
+   Everything here exists because iOS behaves differently from a desktop browser.
+   Kept in one place so the Android pass can mirror it knowingly rather than
+   rediscovering it. */
+
+/* 1. Landscape. The notch / Dynamic Island eats the left and right edges and no
+      rule accounted for it: in landscape the app bar, dock, content and vault
+      card all sat under the cutout. Longhand overrides beat the shorthand
+      paddings set elsewhere. */
+@media (max-width: 1023px) {
+  .mc-mobile-tabbar {
+    padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
+  }
+  .mc-mobile-content {
+    padding-left: max(16px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(16px, env(safe-area-inset-right, 0px)) !important;
+  }
+  .mc-mobile-header .mc-ionic-toolbar {
+    --padding-start: max(16px, env(safe-area-inset-left, 0px));
+    --padding-end: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .mc-vault-entry {
+    padding-left: calc(16px + env(safe-area-inset-left, 0px)) !important;
+    padding-right: calc(16px + env(safe-area-inset-right, 0px)) !important;
+  }
+  /* The chat route is deliberately full-bleed. */
+  .mc-mobile-content.mc-assistant-page {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+/* 2. Fixed bars on iOS repaint during scroll and pick up a visible shimmer.
+      Promoting them to their own layer keeps the dock and app bar steady. */
+.mc-mobile-tabbar,
+.mc-mobile-header {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* 3. A long press on shell chrome popped the iOS callout menu (Copy / Look Up)
+      over the dock. Native apps never do that. */
+@media (max-width: 1023px) {
+  .mc-mobile-tabbar a,
+  .mc-mobile-tabbar button,
+  .mc-mobile-header a,
+  .mc-mobile-header button,
+  .fin-sheet-row,
+  .fin-sheet-close {
+    -webkit-touch-callout: none;
+  }
+}
+
+/* 4. Rails that scroll must not rubber-band the page behind them. */
+.mc-quick-menu-panel,
+.mc-chat-actions-drawer,
+.mc-chat-log {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 5. Short viewports (iPhone in landscape, and Safari with the toolbars shown).
+      The dock is the single biggest consumer of vertical space there, and the
+      assistant page height follows it automatically because it derives from the
+      measured --mc-dock-height. */
+@media (max-width: 1023px) and (max-height: 540px) {
+  .mc-mobile-tabbar {
+    min-height: calc(52px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
+    padding-top: 4px !important;
+  }
+  .mc-mobile-tabbar .fin-tab {
+    min-height: 46px;
+    gap: 1px;
+  }
+  .mc-mobile-tabbar .fin-tab-icon {
+    height: 21px;
+  }
+  .mc-mobile-tabbar .fin-tab-label {
+    font-size: 9.5px;
+  }
+  .mc-install,
+  .fin-install {
+    display: none;
+  }
+}
+
 /* ------------------------------------------------------- dock geometry --- */
 /* The dock's height is not a constant: it depends on the home-indicator inset
    and on the browser's own zoom. AppShell measures it and publishes
