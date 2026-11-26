@@ -54,6 +54,7 @@ jobs:
           BASE_PATH: '/market-compass-ios/'
           VITE_MC_EDITION: personal
           NODE_ENV: production
+          MC_ASSISTANT_LAYOUT_ONLY: '1'
         run: |
           for($i=1;$i -le 3;$i++){
             Write-Host "Personal fixed-footer browser gate $i/3"
@@ -79,6 +80,7 @@ jobs:
           VITE_MC_EDITION: finance
           NODE_ENV: production
           MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+          MC_ASSISTANT_LAYOUT_ONLY: '1'
         run: |
           for($i=1;$i -le 3;$i++){
             Write-Host "Finance fixed-footer browser gate $i/3"
