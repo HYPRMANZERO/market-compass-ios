@@ -1,3 +1,4 @@
+import {useMemo} from 'react';
 import {Link} from 'wouter';
 import {Activity,ArrowRight,ShieldCheck} from 'lucide-react';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
@@ -15,10 +16,15 @@ export default function FinancialPulseMini({entries,currency}:{entries:readonly 
     <h2 className="text-[14px] font-extrabold">Financial Pulse</h2>
     <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ZAR evidence only for now. No automatic currency conversion or bank balance is assumed.</p>
   </section>;
-  const pulse=calculateFinancialPulse({asOf:today,approvedEntries:entries});
-  const out=pulse.recorded.expenses+pulse.recorded.debtPayments;
-  const patterns=recurringSpendCandidates(entries,today,'ZAR');
-  const nextReview=nextFinancialPulseReview(pulse,patterns.length);
+  // Documents and expense arrays can be large. Recalculate only when the
+  // approved ledger or salary-cycle day changes, not on unrelated UI renders.
+  const {pulse,out,patterns,nextReview}=useMemo(()=>{
+    const pulse=calculateFinancialPulse({asOf:today,approvedEntries:entries});
+    const out=pulse.recorded.expenses+pulse.recorded.debtPayments;
+    const patterns=recurringSpendCandidates(entries,today,'ZAR');
+    const nextReview=nextFinancialPulseReview(pulse,patterns.length);
+    return {pulse,out,patterns,nextReview};
+  },[entries,today]);
   const lastEntryDate=entries.filter(e=>e&&e.currency==='ZAR'&&e.date<=today&&/^\d{4}-\d{2}-\d{2}$/.test(e.date))
     .map(e=>e.date).sort().at(-1)??null;
   return <section className="mb-4 rounded-[18px] border border-border bg-card p-4 lg:hidden" aria-label="Financial Pulse" data-testid="financial-pulse-mobile">
