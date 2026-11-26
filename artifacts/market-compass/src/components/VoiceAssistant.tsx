@@ -957,7 +957,7 @@ export default function VoiceAssistant({
       <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold"><BrainCircuit size={19} className="shrink-0 text-[#7fe3b0]" aria-hidden="true"/>{financeEdition?'Compass Advisor':'Compass Personal'}</span>
       <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 text-[11px] font-semibold" title={connected?'Compass connected':connectionMessage||'Compass private AI connection status'}>
         <span className={connected?'h-2 w-2 shrink-0 rounded-full bg-emerald-400':connection==='checking'?'h-2 w-2 shrink-0 rounded-full bg-amber-300':'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
-        <span className="max-w-[110px] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>
+        <span className="min-w-0 max-w-[52vw] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>
       </span>
       <button ref={optionsTrigger} type="button" aria-label="Toggle Compass tools" aria-controls="mc-chat-tools-drawer" aria-expanded={optionsOpen} onClick={()=>setOptionsOpen(open=>!open)}
         className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10"><LockKeyhole size={18}/></button>
