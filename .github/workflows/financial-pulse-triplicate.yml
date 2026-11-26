@@ -11,6 +11,8 @@ on:
       - 'tests/financial-pulse-readonly.test.mjs'
       - 'artifacts/market-compass/src/lib/recurringSpendInsights.ts'
       - 'tests/recurring-spend-insights.test.mjs'
+      - 'artifacts/market-compass/src/lib/financialPulseGuidance.ts'
+      - 'tests/financial-pulse-guidance.test.mjs'
       - '.github/workflows/financial-pulse-triplicate.yml'
   workflow_dispatch:
 
@@ -32,5 +34,5 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Financial Pulse deterministic regression attempt ${attempt}/3"
-            node --experimental-strip-types --test tests/financial-pulse-readonly.test.mjs tests/recurring-spend-insights.test.mjs
+            node --experimental-strip-types --test tests/financial-pulse-readonly.test.mjs tests/recurring-spend-insights.test.mjs tests/financial-pulse-guidance.test.mjs
           done
