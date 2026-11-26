@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {isChatKeyboardVisible,shouldBlockChatTouchScroll} from '../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts';
+import {isChatKeyboardVisible,shouldBlockChatTouchScroll,assistantRestingViewportGeometry} from '../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts';
 const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 const app=read('../artifacts/market-compass/src/App.tsx');
 const css=read('../artifacts/market-compass/src/ionic-shell.css');
@@ -88,4 +88,37 @@ test('new assistant replies scroll only chat log, never the document',()=>{
   assert.match(voice,/ref=\{chatLog\} className="mc-chat-log/);
   assert.match(voice,/log\.scrollTo\(\{top:log\.scrollHeight,behavior:'smooth'\}\)/);
   assert.doesNotMatch(voice,/bottom\.current\?\.scrollIntoView/);
+});
+
+test('resting iPhone visual viewport anchors tabs above hidden layout bottom',()=>{
+  const ordinary=assistantRestingViewportGeometry(844,844,0,101);
+  assert.deepEqual(ordinary,{visibleBottom:844,bottomInset:0,tabbarHeight:101});
+  assert.equal(ordinary.visibleBottom-ordinary.tabbarHeight,743);
+  // Real-device screenshot regression: restored PWA exposes roughly 148px
+  // of the layout viewport below the visual bottom after opening the AI route.
+  const restored=assistantRestingViewportGeometry(896,748,0,101);
+  assert.deepEqual(restored,{visibleBottom:748,bottomInset:148,tabbarHeight:101});
+  assert.equal(restored.visibleBottom-restored.tabbarHeight,647);
+  const topShift=assistantRestingViewportGeometry(896,730,18,101);
+  assert.equal(topShift.visibleBottom,748);
+  assert.equal(topShift.bottomInset,148);
+  const tooLarge=assistantRestingViewportGeometry(896,400,0,101);
+  assert.equal(tooLarge.bottomInset,200,'unexpected viewport mismatch is capped');
+  const recovery=assistantRestingViewportGeometry(896,896,0,101);
+  assert.equal(recovery.bottomInset,0,'navigation returns after dismissing keyboard');
+  assert.equal(assistantRestingViewportGeometry(896,896,0,NaN).tabbarHeight,100);
+});
+test('both editions bind non-keyboard AI page and nav to visual viewport, then clean up',()=>{
+  const module=read('../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts');
+  assert.match(module,/if\(!keyboardOpen\)\{/);
+  assert.match(module,/assistantRestingViewportGeometry\(/);
+  for(const variable of ['--mc-chat-resting-visible-bottom','--mc-chat-resting-bottom-inset','--mc-chat-tabbar-height']){
+    assert.ok(module.includes("root.style.setProperty('"+variable+"'"));
+    assert.ok(module.includes("root.style.removeProperty('"+variable+"'"));
+  }
+  assert.match(css,/html\.mc-assistant-route:not\(\.mc-chat-keyboard-open\) \.mc-mobile-tabbar/);
+  assert.match(css,/bottom:var\(--mc-chat-resting-bottom-inset,0px\) !important/);
+  assert.match(css,/height:calc\(var\(--mc-chat-resting-visible-bottom,100dvh\) - var\(--mc-chat-tabbar-height,100px\)\) !important/);
+  assert.match(css,/padding-bottom:clamp\(10px,env\(safe-area-inset-bottom,0px\),34px\) !important/);
+  assert.match(css,/html\.mc-chat-keyboard-open \.mc-mobile-content\.mc-assistant-page/);
 });
