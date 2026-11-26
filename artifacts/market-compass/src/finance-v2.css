@@ -1,0 +1,975 @@
+/* ============================================================================
+   Market Compass — finance app skin, v2
+   ----------------------------------------------------------------------------
+   A visual layer only. Loaded after index.css and ionic-shell.css so it wins on
+   cascade order. No component removes a control, a route or a data contract:
+   this file changes colour, shape, rhythm and typography, and adds the small
+   set of `.fin-*` primitives the redesigned shell and Home screen compose from.
+   ========================================================================== */
+
+:root {
+  --fin-canvas: #f2f5fa;
+  --fin-canvas-2: #eaeef7;
+  --fin-card: #ffffff;
+  --fin-ink: #0c1626;
+  --fin-ink-soft: #5a6b85;
+  --fin-ink-faint: #8695ab;
+  --fin-line: #e6eaf2;
+  --fin-line-soft: #eff2f8;
+  --fin-brand: #0e7a5f;
+  --fin-brand-deep: #0b6a52;
+  --fin-brand-tint: #e3f3ec;
+  --fin-mint: #7fe3b0;
+  --fin-gold: #f4c86a;
+  --fin-rose: #e0453f;
+  --fin-blue: #2f6fed;
+  --fin-blue-tint: #e8effc;
+  --fin-gold-tint: #fbf1dc;
+  --fin-rose-tint: #fbe9e7;
+  --fin-ink-card: #0b1620;
+  --fin-ink-card-2: #12302a;
+  --fin-r-card: 22px;
+  --fin-r-lg: 26px;
+  --fin-r-pill: 999px;
+  --fin-shadow-card: 0 1px 2px rgba(12, 22, 38, 0.04), 0 12px 28px -22px rgba(12, 22, 38, 0.42);
+  --fin-shadow-float: 0 18px 44px -26px rgba(12, 22, 38, 0.45);
+  --fin-shadow-ink: 0 16px 36px -22px rgba(6, 18, 26, 0.72);
+  --fin-tabbar-h: 68px;
+}
+
+.dark {
+  --fin-canvas: #0a0f14;
+  --fin-canvas-2: #0d131a;
+  --fin-card: #111820;
+  --fin-ink: #e8eef5;
+  --fin-ink-soft: #8fa0b3;
+  --fin-ink-faint: #6d7d91;
+  --fin-line: #1e2933;
+  --fin-line-soft: #18212b;
+  --fin-brand: #31d9a0;
+  --fin-brand-deep: #24b686;
+  --fin-brand-tint: #12302a;
+  --fin-blue-tint: #16233c;
+  --fin-gold-tint: #2b2417;
+  --fin-rose-tint: #2c1a1a;
+  --fin-ink-card: #0d1a20;
+  --fin-ink-card-2: #10302a;
+  --fin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 30px -24px rgba(0, 0, 0, 0.9);
+  --fin-shadow-float: 0 18px 44px -26px rgba(0, 0, 0, 0.9);
+}
+
+/* ---------------------------------------------------------------- canvas --- */
+.mc-ionic-app {
+  background:
+    radial-gradient(120% 46% at 50% -12%, #dde5f2 0%, rgba(221, 229, 242, 0) 62%),
+    var(--fin-canvas) !important;
+}
+.dark .mc-ionic-app {
+  background:
+    radial-gradient(120% 46% at 50% -12%, #12202c 0%, rgba(18, 32, 44, 0) 60%),
+    var(--fin-canvas) !important;
+}
+body {
+  background: var(--fin-canvas);
+}
+::selection {
+  background: rgba(126, 227, 176, 0.4);
+}
+
+/* Shared numerals: money should line up in every card and list. */
+.fin-num,
+.mc-wallet-number,
+.mc-stat-number,
+.mc-account-right strong,
+.mc-market-value strong,
+ion-card .tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'cv01' 1;
+}
+.fin-num {
+  font-family: var(--app-font-sans);
+  letter-spacing: -0.03em;
+}
+.fin-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--fin-r-pill);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.fin-delta[data-tone='up'] {
+  color: #0a6b4b;
+  background: var(--fin-brand-tint);
+}
+.fin-delta[data-tone='down'] {
+  color: #a82c26;
+  background: var(--fin-rose-tint);
+}
+.fin-delta[data-tone='flat'] {
+  color: var(--fin-ink-soft);
+  background: var(--fin-line-soft);
+}
+.dark .fin-delta[data-tone='up'] {
+  color: #7fe3b0;
+}
+.dark .fin-delta[data-tone='down'] {
+  color: #ffa39c;
+}
+.fin-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fin-ink-faint);
+}
+
+/* ------------------------------------------------------- mobile top bar --- */
+@media (max-width: 1023px) {
+  .mc-mobile-header {
+    background: var(--fin-ink-card) !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .mc-mobile-header .mc-ionic-toolbar {
+    --background: var(--fin-ink-card);
+    --min-height: 58px;
+    background: var(--fin-ink-card) !important;
+  }
+  .mc-ionic-toolbar > div {
+    min-height: 58px !important;
+    padding-block: 6px;
+    position: relative;
+  }
+}
+
+/* Brand mark, header type and the currency chip. */
+.fin-brandmark {
+  position: relative;
+  border-radius: 13px;
+  color: #06231b;
+  background: linear-gradient(150deg, #9df0c6 0%, #7fe3b0 46%, #4ecfa0 100%);
+  box-shadow: 0 6px 16px -10px rgba(126, 227, 176, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.fin-brandmark:active {
+  transform: scale(0.96);
+}
+.fin-hdr-title {
+  font-size: 16.5px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+  color: #ffffff;
+}
+.fin-hdr-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.55);
+  min-width: 0;
+}
+.fin-hdr-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+}
+.fin-hdr-dot.is-online {
+  background: #7fe3b0;
+  box-shadow: 0 0 0 3px rgba(127, 227, 176, 0.18);
+}
+.fin-hdr-dot.is-offline {
+  background: #f4c86a;
+  box-shadow: 0 0 0 3px rgba(244, 200, 106, 0.16);
+}
+.fin-chip {
+  display: inline-flex;
+  min-height: 28px;
+  flex: none;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* ------------------------------------------------------------ tab bar ---- */
+.mc-mobile-tabbar {
+  min-height: calc(var(--fin-tabbar-h) + max(10px, env(safe-area-inset-bottom, 0px))) !important;
+  padding-top: 8px !important;
+  border-top: 1px solid var(--fin-line) !important;
+  border-radius: 24px 24px 0 0 !important;
+  background: #ffffff !important;
+  box-shadow: var(--fin-shadow-float) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.dark .mc-mobile-tabbar {
+  background: #111820 !important;
+  border-top-color: var(--fin-line) !important;
+}
+.mc-mobile-tabbar .mc-tab-link {
+  min-height: 54px !important;
+  border-radius: 16px !important;
+  color: var(--fin-ink-soft) !important;
+  gap: 4px;
+}
+.mc-mobile-tabbar .mc-tab-link span {
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+.mc-mobile-tabbar .mc-tab-link[aria-current='page'] {
+  background: var(--fin-brand-tint) !important;
+  color: var(--fin-brand-deep) !important;
+}
+.dark .mc-mobile-tabbar .mc-tab-link[aria-current='page'] {
+  color: var(--fin-brand) !important;
+}
+/* One clean pill indicator instead of an underline plus a floating bar. */
+.mc-mobile-tabbar .mc-tab-link[aria-current='page']::after {
+  display: none !important;
+}
+.mc-mobile-tabbar .mc-tab-link[aria-current='page']::before {
+  display: none !important;
+}
+
+/* Bottom dock tabs. */
+.fin-dock {
+  width: 100%;
+}
+.mc-mobile-tabbar .fin-tab {
+  min-height: 56px;
+  gap: 3px;
+  padding: 5px 2px 4px;
+  border-radius: 17px;
+  color: var(--fin-ink-soft);
+  background: transparent;
+}
+.mc-mobile-tabbar .fin-tab:active {
+  background: var(--fin-line-soft);
+}
+.mc-mobile-tabbar .fin-tab-icon {
+  display: grid;
+  place-items: center;
+  height: 26px;
+}
+.mc-mobile-tabbar .fin-tab-label {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.mc-mobile-tabbar .fin-tab.is-active {
+  color: var(--fin-brand-deep);
+  background: var(--fin-brand-tint);
+}
+.dark .mc-mobile-tabbar .fin-tab.is-active {
+  color: var(--fin-brand);
+}
+.mc-mobile-tabbar .fin-tab-badge {
+  position: absolute;
+  top: 3px;
+  right: 12px;
+  display: grid;
+  height: 16px;
+  min-width: 16px;
+  place-items: center;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--fin-rose);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  box-shadow: 0 0 0 2px var(--fin-card);
+}
+
+/* ------------------------------------------------------ page headers ---- */
+/* A product screen title, not a magazine headline: sans, tight, confident.
+   Desktop keeps the editorial serif for its wider layouts. */
+@media (max-width: 1023px) {
+  /* `html .serif` wins on specificity, not source order: Vite can emit this
+     file before the tail of index.css, where `.serif` is declared. */
+  html .serif {
+    font-family: var(--app-font-sans);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .mc-page-intro {
+    margin-bottom: 14px !important;
+    padding-bottom: 14px !important;
+    gap: 8px !important;
+  }
+  .mc-page-intro h1 {
+    font-size: 27px !important;
+    line-height: 1.12 !important;
+  }
+  .mc-page-intro p {
+    margin-top: 6px !important;
+    font-size: 12.5px !important;
+    line-height: 1.55 !important;
+  }
+  .mc-page-intro > div:first-child > div:first-child {
+    margin-bottom: 6px !important;
+    font-size: 9.5px !important;
+  }
+  .mc-mobile-content {
+    padding-top: 12px !important;
+  }
+}
+
+/* ------------------------------------------------------- assistant bar --- */
+/* The chat route draws its own connection bar; bring it onto the ink/mint
+   identity so the header does not change colour between tabs. */
+section[aria-label='Compass model connection'] {
+  background: linear-gradient(120deg, #10302a 0%, #0b1620 72%) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+section[aria-label='Compass model connection'] svg:first-of-type {
+  color: var(--fin-mint) !important;
+}
+.dark section[aria-label='Compass model connection'] {
+  background: linear-gradient(120deg, #0d1a20 0%, #101a24 100%) !important;
+}
+
+/* ------------------------------------------------------ install banner --- */
+@media (max-width: 1023px) {
+  section[aria-label='Install Market Compass'] {
+    margin-top: 10px !important;
+    padding: 11px 12px !important;
+    border: 1px solid rgba(14, 122, 95, 0.16) !important;
+    border-radius: 18px !important;
+    background: linear-gradient(150deg, #eaf6ef 0%, #f4f9f6 100%) !important;
+  }
+}
+section[aria-label='Install Market Compass'] > div > span:first-child {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 11px !important;
+}
+section[aria-label='Install Market Compass'] .text-\[13px\] {
+  font-size: 12.5px !important;
+  line-height: 1.35 !important;
+}
+section[aria-label='Install Market Compass'] .text-\[12px\] {
+  font-size: 11.5px !important;
+  line-height: 1.5 !important;
+  margin-top: 3px !important;
+}
+section[aria-label='Install Market Compass'] button {
+  min-height: 30px !important;
+  font-size: 11.5px !important;
+}
+
+/* ------------------------------------------------------ button geometry --- */
+/* Ionic's structure.css declares an UNLAYERED `button{border:0;border-radius:0}`.
+   Unlayered rules beat everything inside Tailwind's `@layer utilities`, so every
+   Tailwind-rounded, bordered button in this app was rendering as a flat square.
+   These rules sit outside any layer and out-specify Ionic, restoring the intended
+   shape without touching Ionic's own components. */
+button.rounded-md {
+  border-radius: calc(var(--radius) - 2px);
+}
+button.rounded-lg {
+  border-radius: var(--radius);
+}
+button.rounded-xl {
+  border-radius: calc(var(--radius) + 4px);
+}
+button.rounded-2xl {
+  border-radius: var(--radius-2xl, 1rem);
+}
+button.rounded-3xl {
+  border-radius: var(--radius-3xl, 1.5rem);
+}
+button.rounded-full {
+  border-radius: 9999px;
+}
+button.rounded-\[22px\] {
+  border-radius: 22px;
+}
+button.rounded-\[20px\] {
+  border-radius: 20px;
+}
+button.rounded-\[18px\] {
+  border-radius: 18px;
+}
+button.rounded-\[16px\] {
+  border-radius: 16px;
+}
+button.rounded-\[15px\] {
+  border-radius: 15px;
+}
+button.rounded-\[14px\] {
+  border-radius: 14px;
+}
+/* Officially-published border utilities were flattened by the same rule; the
+   Ionic shorthand also left every button border on currentColor (dark ink).
+   Restore the neutral theme border, and keep the tinted variants that carry
+   meaning (primary, destructive) recognisable. */
+button.border {
+  border-width: 1px;
+  border-style: solid;
+}
+button.border-2 {
+  border-width: 2px;
+  border-style: solid;
+}
+button.border-t {
+  border-top-width: 1px;
+  border-top-style: solid;
+}
+button.border-b {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+}
+button.border:not([class*='border-primary']):not([class*='border-destructive']):not([class*='border-white']):not([class*='border-amber']):not([class*='border-transparent']) {
+  border-color: hsl(var(--border));
+}
+button.border-t,
+button.border-b {
+  border-color: hsl(var(--border));
+}
+button.border-primary {
+  border-color: hsl(var(--primary) / 0.45);
+}
+button.border-destructive {
+  border-color: hsl(var(--destructive) / 0.35);
+}
+
+/* --------------------------------------------------------- wallet hero --- */
+.mc-app-overview {
+  --mc-ui-ink: var(--fin-ink);
+  --mc-ui-soft: var(--fin-ink-soft);
+  --mc-ui-gold: var(--fin-mint);
+}
+ion-card.mc-wallet-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 0;
+  padding: 20px 20px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--fin-r-lg);
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(127, 227, 176, 0.22) 0%, rgba(127, 227, 176, 0) 46%),
+    radial-gradient(90% 70% at 0% 100%, rgba(47, 111, 237, 0.18) 0%, rgba(47, 111, 237, 0) 52%),
+    linear-gradient(152deg, #14352d 0%, #0d2621 42%, #0a1a22 74%, #0a141d 100%);
+  box-shadow: var(--fin-shadow-ink);
+}
+ion-card.mc-wallet-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 34%);
+}
+.mc-wallet-orbit {
+  border-color: rgba(127, 227, 176, 0.16);
+}
+.mc-wallet-orbit-first {
+  width: 300px;
+  height: 300px;
+  right: -168px;
+  top: -138px;
+}
+.mc-wallet-orbit-second {
+  width: 210px;
+  height: 210px;
+  right: -104px;
+  top: -62px;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.mc-wallet-eyebrow {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: rgba(127, 227, 176, 0.92);
+}
+.mc-wallet-lock {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  padding: 6px 10px;
+}
+.mc-wallet-number {
+  margin-top: 10px;
+  font-size: clamp(34px, 9.4vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  color: #fff;
+}
+.mc-wallet-footnote {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.mc-wallet-cta {
+  min-height: 42px;
+  padding: 0 15px;
+  border-radius: var(--fin-r-pill);
+  background: #ffffff;
+  color: #0a1a22;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.7);
+}
+.mc-wallet-cta:active {
+  background: #e9f3ee;
+}
+
+/* Hero sub-row: the small stat pair the redesigned hero carries. */
+.fin-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+.fin-hero-stat {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.fin-hero-stat span {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+.fin-hero-stat strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 780;
+  letter-spacing: -0.02em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------- section heads --- */
+.mc-app-section-heading {
+  margin: 0 2px 10px;
+  align-items: flex-end;
+}
+.mc-app-section-heading h2 {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+  color: var(--fin-ink);
+}
+.mc-app-section-heading > span {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fin-ink-faint);
+}
+.mc-app-heading-link {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--fin-brand);
+}
+
+/* -------------------------------------------------------- quick actions -- */
+.mc-quick-action {
+  min-height: 92px;
+  gap: 9px;
+  padding: 14px 6px 12px;
+  border: 1px solid var(--fin-line);
+  border-radius: 20px;
+  background: var(--fin-card);
+  color: var(--fin-ink);
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  box-shadow: var(--fin-shadow-card);
+}
+.mc-quick-action:active {
+  transform: scale(0.97);
+  background: var(--fin-line-soft);
+}
+.mc-quick-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  background: var(--fin-brand-tint);
+  color: var(--fin-brand-deep);
+}
+.mc-quick-action:nth-child(1) .mc-quick-icon,
+.col-4:nth-child(1) .mc-quick-icon {
+  background: var(--fin-brand-tint);
+  color: var(--fin-brand-deep);
+}
+.col-4:nth-child(2) .mc-quick-icon {
+  background: var(--fin-blue-tint);
+  color: #2456c4;
+}
+.col-4:nth-child(3) .mc-quick-icon {
+  background: var(--fin-gold-tint);
+  color: #96650c;
+}
+.dark .col-4:nth-child(2) .mc-quick-icon {
+  color: #8fb4ff;
+}
+.dark .col-4:nth-child(3) .mc-quick-icon {
+  color: var(--fin-gold);
+}
+
+/* ------------------------------------------------------------ stat deck -- */
+.mc-stat-card {
+  min-height: 142px;
+  padding: 15px;
+  border: 1px solid var(--fin-line);
+  border-radius: 20px;
+  background: var(--fin-card);
+  box-shadow: var(--fin-shadow-card);
+}
+.mc-stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--fin-line-soft);
+  color: var(--fin-ink-soft);
+}
+.mc-stat-number {
+  margin-top: 12px;
+  font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--fin-ink);
+}
+.mc-stat-label {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--fin-ink);
+}
+.mc-stat-meta {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--fin-ink-faint);
+}
+.mc-stat-strip {
+  min-height: 64px;
+  padding: 11px 14px;
+  border: 1px solid var(--fin-line);
+  border-radius: 18px;
+  background: var(--fin-card);
+  box-shadow: var(--fin-shadow-card);
+}
+.mc-stat-strip-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--fin-gold-tint);
+  color: #96650c;
+}
+.dark .mc-stat-strip-icon {
+  color: var(--fin-gold);
+}
+.mc-stat-strip strong {
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--fin-ink);
+}
+.mc-stat-strip small {
+  font-size: 10px;
+  color: var(--fin-ink-faint);
+}
+
+/* ------------------------------------------------------------ accounts --- */
+.mc-account-list {
+  border: 1px solid var(--fin-line);
+  border-radius: 20px;
+  background: var(--fin-card);
+  box-shadow: var(--fin-shadow-card);
+}
+.mc-account-row + .mc-account-row {
+  border-top: 1px solid var(--fin-line-soft);
+}
+.mc-account-row summary {
+  min-height: 74px;
+  padding: 12px 14px;
+}
+.mc-account-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--fin-brand-tint);
+  color: var(--fin-brand-deep);
+}
+.mc-account-label strong {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  color: var(--fin-ink);
+}
+.mc-account-label small {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fin-ink-faint);
+}
+.mc-account-right strong {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fin-ink);
+}
+.mc-account-details {
+  border-radius: 15px;
+  background: var(--fin-line-soft);
+}
+.mc-account-details > div > span {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fin-ink-faint);
+}
+.mc-account-details > div > strong {
+  font-size: 13px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.mc-account-more {
+  min-height: 50px;
+  padding: 0 16px;
+  border-top: 1px solid var(--fin-line);
+  color: var(--fin-brand);
+  font-size: 12.5px;
+}
+.mc-account-empty {
+  min-height: 116px;
+  padding: 16px;
+  border: 1px dashed var(--fin-line);
+  border-radius: 20px;
+  background: var(--fin-card);
+}
+.mc-account-empty-icon {
+  background: var(--fin-brand-tint);
+  color: var(--fin-brand-deep);
+}
+.mc-account-empty strong {
+  font-size: 13px;
+  font-weight: 780;
+}
+.mc-account-empty p {
+  font-size: 11.5px;
+  color: var(--fin-ink-soft);
+}
+.mc-account-empty-action {
+  background: var(--fin-line-soft);
+  color: var(--fin-brand);
+}
+
+/* -------------------------------------------------------------- market --- */
+.mc-app-market {
+  padding: 16px;
+  border: 1px solid var(--fin-line);
+  border-radius: 20px;
+  background: var(--fin-card);
+  box-shadow: var(--fin-shadow-card);
+}
+.mc-market-history-label {
+  background: var(--fin-line-soft);
+  color: var(--fin-ink-faint);
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mc-market-value {
+  border-radius: 16px;
+  background: var(--fin-line-soft);
+}
+.mc-market-value strong {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+.mc-app-market-link {
+  border-radius: 14px;
+  background: var(--fin-line-soft);
+  color: var(--fin-brand);
+  font-size: 12.5px;
+}
+.mc-app-privacy {
+  border-radius: 16px;
+  background: var(--fin-line-soft);
+  color: var(--fin-ink-soft);
+}
+.mc-app-privacy p {
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+.mc-app-privacy svg {
+  color: var(--fin-brand);
+}
+.dark .mc-quick-icon,
+.dark .mc-account-avatar {
+  background: var(--fin-brand-tint);
+  color: var(--fin-mint);
+}
+
+/* --------------------------------------------------------------- panels --- */
+.mc-ionic-app ion-card.mc-ionic-surface,
+.mc-ionic-app ion-card.mc-ui-panel,
+.mc-ionic-app .mc-ionic-finance-card {
+  border: 1px solid var(--fin-line);
+  border-radius: var(--fin-r-card);
+  background: var(--fin-card);
+  --background: var(--fin-card);
+  box-shadow: var(--fin-shadow-card);
+}
+.mc-ionic-panel-head {
+  border-bottom: 1px solid var(--fin-line-soft);
+}
+.mc-ionic-panel-head ion-card-title {
+  color: var(--fin-ink);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+}
+
+/* Page intro: tighter, less editorial, more product. */
+.serif {
+  font-family: var(--app-font-serif);
+}
+h1.serif,
+.serif.text-4xl {
+  letter-spacing: -0.03em;
+}
+
+/* ----------------------------------------------------------- vault entry -- */
+.fin-vault {
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(127, 227, 176, 0.16) 0%, rgba(127, 227, 176, 0) 54%),
+    radial-gradient(90% 60% at 0% 100%, rgba(47, 111, 237, 0.14) 0%, rgba(47, 111, 237, 0) 58%),
+    linear-gradient(168deg, #12302a 0%, #0b1620 58%, #080f16 100%) !important;
+}
+.fin-vault-card {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 24px 60px -30px rgba(4, 12, 20, 0.9);
+}
+.fin-vault .text-\[10px\] {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* --------------------------------------------------------- menu sheet ---- */
+.mc-quick-menu-panel {
+  border-radius: 26px 26px 0 0 !important;
+  background: var(--fin-card) !important;
+  box-shadow: 0 -22px 60px -30px rgba(6, 18, 26, 0.55) !important;
+}
+.mc-quick-menu-panel h2 {
+  letter-spacing: -0.025em;
+}
+/* Each menu destination reads as a row with a tinted icon chip. */
+.fin-menu-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--fin-brand-tint);
+  color: var(--fin-brand-deep);
+}
+.dark .fin-menu-icon {
+  color: var(--fin-mint);
+}
+
+/* --------------------------------------------------------- vault entry --- */
+@media (max-width: 1023px) {
+  .mc-vault-entry {
+    background-color: var(--fin-ink-card) !important;
+  }
+}
+
+/* ------------------------------------------------ desktop navigation ----- */
+@media (min-width: 1024px) {
+  aside[aria-label='Desktop navigation'] {
+    background: linear-gradient(180deg, #0b1620 0%, #0a1a22 46%, #08131a 100%) !important;
+    color: #e7eef5 !important;
+  }
+  aside[aria-label='Desktop navigation'] .border-r {
+    border-right-color: rgba(255, 255, 255, 0.07) !important;
+  }
+  aside[aria-label='Desktop navigation'] a[aria-current='page'] {
+    background: rgba(126, 227, 176, 0.14) !important;
+    color: #ffffff !important;
+    box-shadow: inset 2px 0 0 var(--fin-mint);
+  }
+  aside[aria-label='Desktop navigation'] a:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+  /* Status banner at the foot of the rail. */
+  aside[aria-label='Desktop navigation'] .rounded-xl {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.09) !important;
+  }
+}
+
+/* ----------------------------------------------------- legibility bump --- */
+/* The original UI used 9-10px meta text, which is hard to read on a phone at
+   arm's length. Nudge the two smallest steps up without reflowing layouts. */
+@media (max-width: 1023px) {
+  .mc-mobile-content [class*='text-[9px]'] {
+    font-size: 10px !important;
+  }
+  .mc-mobile-content [class*='text-[10px]'] {
+    font-size: 11px !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mc-quick-action,
+  .mc-stat-card,
+  .mc-account-row summary,
+  .mc-mobile-tabbar .mc-tab-link,
+  .mc-wallet-cta,
+  .fin-hero-stat {
+    transition:
+      background-color 160ms ease-out,
+      border-color 160ms ease-out,
+      transform 120ms ease-out,
+      color 160ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mc-quick-action,
+  .mc-stat-card,
+  .mc-account-row summary,
+  .mc-mobile-tabbar .mc-tab-link,
+  .mc-wallet-cta,
+  .fin-hero-stat {
+    transition: none !important;
+  }
+}
