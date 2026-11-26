@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {isChatKeyboardVisible,shouldBlockChatTouchScroll,assistantRestingViewportGeometry} from '../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts';
+import {isChatKeyboardVisible,shouldBlockChatTouchScroll,assistantRestingViewportGeometry,chatSurfaceVisibleTop} from '../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts';
 const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 const app=read('../artifacts/market-compass/src/App.tsx');
 const css=read('../artifacts/market-compass/src/ionic-shell.css');
@@ -121,4 +121,20 @@ test('both editions bind non-keyboard AI page and nav to visual viewport, then c
   assert.match(css,/height:calc\(var\(--mc-chat-resting-visible-bottom,100dvh\) - var\(--mc-chat-tabbar-height,100px\)\) !important/);
   assert.match(css,/padding-bottom:clamp\(10px,env\(safe-area-inset-bottom,0px\),34px\) !important/);
   assert.match(css,/html\.mc-chat-keyboard-open \.mc-mobile-content\.mc-assistant-page/);
+});
+
+test('focused chat surface follows the visible band, not a frozen page scroll',()=>{
+  // No panning: both agree.
+  assert.equal(chatSurfaceVisibleTop(0,0),0);
+  // WebKit panned the visual viewport and reports pageTop as 0 (frozen document):
+  // the surface must start at the pan, otherwise it ends above the keyboard and
+  // leaves an empty strip under the composer.
+  assert.equal(chatSurfaceVisibleTop(140,0),140);
+  assert.equal(chatSurfaceVisibleTop(88,0),88);
+  // A genuinely scrolled document wins when it is the larger of the two.
+  assert.equal(chatSurfaceVisibleTop(0,140),140);
+  assert.equal(chatSurfaceVisibleTop(120,120),120);
+  // Defensive: junk input never produces a negative or NaN offset.
+  assert.equal(chatSurfaceVisibleTop(Number.NaN,Number.NaN),0);
+  assert.equal(chatSurfaceVisibleTop(-40,-10),0);
 });
