@@ -66,7 +66,7 @@ import type { AssistantCommand, BacktestResult, Candle, DebtPlan, MarketAnalysis
 import {
   Activity, ArrowDownRight, ArrowLeftRight, ArrowRight, ArrowUpRight, Check, ChevronDown,
   CircleAlert, CircleHelp, Clock3, Compass, Database, FileClock, Gauge, Landmark, ListChecks,
-  LoaderCircle, Menu, Plus, ReceiptText, Search, ShieldCheck, Trash2, TrendingUp, Upload, WalletCards, X,
+  LoaderCircle, Menu, Plus, ReceiptText, Search, Share, ShieldCheck, Trash2, TrendingUp, Upload, WalletCards, X,
 } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { encryptWorkspace, decryptWorkspace, readVault, writeVault, shareVaultToFiles, storeDailySnapshot, validateRecord, compressionSummary, type EncryptedRecord } from '@/lib/localVault';
@@ -339,18 +339,16 @@ function InstallHelp() {
     return () => window.removeEventListener('beforeinstallprompt', onInstall);
   }, []);
   if (!visible || (!ios && !installPrompt)) return null;
-  return <section className="mx-4 mt-3 rounded-2xl border border-[hsl(154,40%,84%)] bg-[hsl(154,44%,96%)] p-3 sm:mx-6 lg:mx-10 lg:max-w-lg" aria-label="Install Market Compass">
-    <div className="flex items-start gap-3">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Compass size={19}/></span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-bold">Make it an app on your Home Screen</div>
-        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{ios ? 'Add it to your Home Screen to launch without the browser toolbar.' : 'Install it to open as a standalone app.'}</p>
-        {ios ? <button type="button" onClick={() => setDetails(!details)} className="mt-2 min-h-10 text-[12px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Show iPhone steps'}</button> :
-          <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="mt-2 min-h-9 rounded-lg bg-primary px-4 text-[12px] font-semibold text-primary-foreground">Install app</button>}
-      </div>
-      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={18}/></button>
+  return <section className="mx-4 mt-3 rounded-2xl border border-primary/15 bg-[hsl(154,44%,96%)] px-2.5 py-1.5 sm:mx-6 lg:mx-10 lg:max-w-lg" aria-label="Install Market Compass">
+    <div className="flex min-h-11 items-center gap-2.5">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary"><Share size={15} aria-hidden="true"/></span>
+      <span className="min-w-0 flex-1 text-[12px] font-bold leading-tight">Add to your Home Screen</span>
+      {ios
+        ? <button type="button" onClick={() => setDetails(!details)} className="min-h-10 shrink-0 px-1 text-[11.5px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Steps'}</button>
+        : <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="min-h-10 shrink-0 rounded-lg bg-primary px-3 text-[11.5px] font-semibold text-primary-foreground">Install</button>}
+      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={17}/></button>
     </div>
-    {details && <p className="mt-2 rounded-lg bg-white/60 p-3 text-[12px] leading-5">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
+    {details && <p className="mb-1 mt-1 rounded-lg bg-white/70 p-3 text-[12px] leading-5">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
   </section>;
 }
 

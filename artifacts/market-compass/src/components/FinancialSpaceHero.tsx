@@ -16,15 +16,15 @@ export default function FinancialSpaceHero({currency,totalDebt,accountsCount,onV
         <span className="mc-wallet-eyebrow">YOUR FINANCIAL SPACE</span>
         <span className="mc-wallet-lock"><LockKeyhole size={12} aria-hidden="true"/> Private workspace</span>
       </div>
-      {accountsCount
-        ? <p className="mt-6 text-[11.5px] font-semibold uppercase tracking-[.13em] text-white/55">Total entered debt balances</p>
-        : <p className="mt-2.5 text-[11.5px] leading-5 text-white/65">Add an account or import a statement to begin building your private picture.</p>}
+      {accountsCount > 0 && <p className="mt-6 text-[11.5px] font-semibold uppercase tracking-[.13em] text-white/55">Total entered debt balances</p>}
       <h1 className="mc-wallet-number" data-testid="financial-space-debt-total">
         {accountsCount ? formatDebt(totalDebt,currency) : 'Start with clarity'}
       </h1>
-      {accountsCount > 0 && <p className="mt-2.5 max-w-[440px] text-[11.5px] leading-5 text-white/65">
-        Based on amounts you entered. Not a live or bank-verified balance.
-      </p>}
+      <p className="mt-2.5 max-w-[440px] text-[11.5px] leading-5 text-white/65">
+        {accountsCount
+          ? 'Based on amounts you entered. Not a live or bank-verified balance.'
+          : 'Add an account or import a statement to begin building your private picture.'}
+      </p>
       <div className="fin-hero-stats">
         <div className="fin-hero-stat">
           <span>Accounts</span>

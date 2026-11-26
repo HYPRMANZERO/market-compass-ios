@@ -953,14 +953,21 @@ export default function VoiceAssistant({
 
 
   return <div className="mc-assistant flex min-h-0 min-w-0 max-w-full flex-col gap-0 lg:gap-2" data-testid="voice-assistant">
-    <section className="flex min-h-12 items-center gap-2 rounded-none bg-[#0b1620] px-3 py-1.5 text-white lg:rounded-[15px]" aria-label="Compass model connection">
-      <span className="flex min-w-0 items-center gap-2 text-[13px] font-bold"><BrainCircuit size={19} className="shrink-0 text-[#7fe3b0]" aria-hidden="true"/>{financeEdition?'Compass Advisor':'Compass Personal'}</span>
-      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 text-[11px] font-semibold" title={connected?'Compass connected':connectionMessage||'Compass private AI connection status'}>
-        <span className={connected?'h-2 w-2 shrink-0 rounded-full bg-emerald-400':connection==='checking'?'h-2 w-2 shrink-0 rounded-full bg-amber-300':'h-2 w-2 shrink-0 rounded-full bg-white/50'} aria-hidden="true"/>
-        <span className="min-w-0 max-w-[52vw] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>
+    {/* Same app bar as every other route: mint squircle brand mark, title with a
+        status line beneath it, and a control on the right. Keep the geometry in
+        step with .mc-mobile-header (58px + the 10px band) so the dark region
+        does not change height when switching tabs. */}
+    <section className="flex items-center gap-3 rounded-none bg-[#0b1620] px-3.5 py-1.5 text-white lg:rounded-[15px]" aria-label="Compass model connection">
+      <span className="fin-brandmark grid h-10 w-10 shrink-0 place-items-center" aria-hidden="true"><BrainCircuit size={19}/></span>
+      <span className="min-w-0 flex-1">
+        <span className="fin-hdr-title block truncate">{financeEdition?'Compass Advisor':'Compass Personal'}</span>
+        <span role="status" aria-live="polite" className="fin-hdr-meta" title={connected?'Compass connected':connectionMessage||'Compass private AI connection status'}>
+          <span className={connected?'fin-hdr-dot is-online':'fin-hdr-dot is-offline'} aria-hidden="true"/>
+          <span className="min-w-0 max-w-[52vw] truncate sm:max-w-none">{connected?'Connected':connection==='checking'?'Connecting':'Private link unavailable'}</span>
+        </span>
       </span>
       <button ref={optionsTrigger} type="button" aria-label="Toggle Compass tools" aria-controls="mc-chat-tools-drawer" aria-expanded={optionsOpen} onClick={()=>setOptionsOpen(open=>!open)}
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10"><LockKeyhole size={18}/></button>
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-white/10 active:bg-white/20"><LockKeyhole size={18}/></button>
     </section>
 
     <section className="mc-chat-panel flex min-h-0 flex-1 flex-col overflow-hidden border-0 bg-card lg:rounded-[18px] lg:border lg:border-border lg:shadow-sm" aria-label="AI chat interface">
@@ -1368,7 +1375,7 @@ export default function VoiceAssistant({
             </button>:
             <button type="button" onClick={toggleMic} disabled={!recognitionSupported||busy}
               aria-pressed={listening} aria-label={listening?'Stop listening':'Speak a question'}
-              className={'grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 '+(listening?'animate-pulse bg-[hsl(5,60%,47%)]':'bg-[#123c33]')}>
+              className={'grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 '+(listening?'animate-pulse bg-[hsl(5,60%,47%)]':'bg-[#0b1620]')}>
               {listening?<MicOff size={22}/>:<Mic size={23}/>}
             </button>}
         </form>
