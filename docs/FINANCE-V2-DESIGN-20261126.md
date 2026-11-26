@@ -144,7 +144,11 @@ button.border-destructive { border-color: hsl(var(--destructive) / .35); }
 ```
 
 **Extending it:** if a component starts using a radius or border utility that is not in the lists,
-add it. `rounded-none` and inline `style={{borderRadius}}` need no entry. The `:not()` chain exists
+add it. That includes **alpha steps**: `border-primary/30` and `border-white/15` are excluded from
+the neutral rule by the `:not()` chain (they are meant to be tinted), so they fall back to
+`currentColor` — a hard ink or white outline on a soft button. The tint rescue rules
+(`button[class*='border-primary/']` and friends) are what keep them soft; a new tint family needs a
+new entry. `rounded-none` and inline `style={{borderRadius}}` need no entry. The `:not()` chain exists
 because a plain `button.border` colour would flatten the meaningful tints; add a class there rather
 than removing it.
 
@@ -228,7 +232,7 @@ asserted by tests — read this before touching it.
 .mc-mobile-content.mc-assistant-page {
   background: linear-gradient(to bottom,
     #0b1620 0,
-    #10302a calc(env(safe-area-inset-top, 0px) + 10px),
+    #0b1620 calc(env(safe-area-inset-top, 0px) + 10px),
     #f2f5fa calc(env(safe-area-inset-top, 0px) + 10px));
 }
 ```
@@ -237,9 +241,11 @@ Three constraints, each one a bug we already shipped:
 
 1. The stop must be `safe-area + 10px` — the exact top edge of the assistant bar. It was
    `+ 11px`, which left a 1px light hairline between the status area and the header.
-2. The colour must be the ink ramp (`#0b1620 → #10302a`), not a leftover hue. v1's forest green
-   (`hsl(165 24% 20%)`) survived the palette sweep here and produced a visibly lighter band above
-   the bar.
+2. The colour must be the **same solid ink as the app bar** (`#0b1620`), not a leftover hue and not
+   a tint. v1's forest green (`hsl(165 24% 20%)`) survived the palette sweep here and produced a
+   visibly lighter band. A later attempt tinted the band green (`#10302a`) to match the bar's
+   gradient; because the bar's gradient ran 120° the two surfaces met at different colours and
+   showed a hard horizontal step. One colour, no seam.
 3. Below the band the fill must be `#f2f5fa` (conversation canvas), **not** white and not
    `transparent`. White flashes as a strip under the composer if any geometry ever leaves a
    sliver; `--fin-canvas` merges with the chat log.
@@ -284,7 +290,27 @@ or both. Covered by `tests/assistant-keyboard-viewport.test.mjs`.
 **Do not** replace the absolute positioning with `position: fixed`: iOS 26 pans fixed descendants
 while the keyboard animates, which is the same class of drift in reverse.
 
-### 5.4 No backdrop blur, anywhere in the shell
+### 5.4 The chat bar *is* the app bar
+
+The AI route renders its own bar (`section[aria-label="Compass model connection"]`) because it has no
+`IonHeader`. It must be indistinguishable from `.mc-mobile-header` on every other tab, or the dark
+region changes height and shape when you switch tabs — which is exactly what was reported. Parity is
+maintained by arithmetic and by reusing the header's own primitives:
+
+| property | app bar | chat bar |
+| --- | --- | --- |
+| surface | solid `#0b1620` | solid `#0b1620` (no gradient) |
+| height | `safe-area` + 68px | `safe-area` + 10px band + **58px** = the same total |
+| brand mark | `.fin-brandmark`, 40px squircle | `.fin-brandmark`, 40px squircle |
+| title | `.fin-hdr-title` — 800, 16.5px, white | `.fin-hdr-title` |
+| status line | `.fin-hdr-meta` + `.fin-hdr-dot is-online/is-offline` | same |
+| right-hand control | `.fin-chip` (currency) | 40px `bg-white/10` button (tools) |
+
+If you change the app bar's height, change the chat bar's `min-height` by the same amount, and
+re-check that `nav.top - page.bottom` is still within ±3px
+(`scripts/bootstrap-ui-smoke.mjs` asserts both that gap and a ≥9px header offset).
+
+### 5.5 No backdrop blur, anywhere in the shell
 
 The app bar and the dock are opaque. An earlier iteration learned that `backdrop-filter` on a
 sticky iOS surface softens the text underneath mid-scroll, and `ionic-shell.css` encodes that lesson
@@ -335,6 +361,8 @@ it. Check the physical device after every deployment.
   `summary:not(:has(svg))::after`. A row that already ships its own arrow icon is excluded — never
   add a second chevron to markup.
 - **Status is never colour-only:** chips carry a dot *and* a word.
+- **One header:** the chat route's bar is the app bar (see 5.4). A second, differently-shaped header
+  on one tab reads as a bug, not a feature.
 - **Release-gate hooks are frozen:** `aria-label="Mobile app tabs"`, the four `.mc-tab-link` tabs,
   `mobile-nav-*` test ids, `menuOpen && createPortal(`, the quick-menu label set, `mc-wallet-hero`,
   the Bootstrap `col-4`/`col-6` grids and the "No bank connection" line. A redesign may restyle
