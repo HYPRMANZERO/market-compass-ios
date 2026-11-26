@@ -55,6 +55,12 @@ ion-app.mc-ionic-app {
   --ion-safe-area-top: 0px;
   --ion-safe-area-bottom: 0px;
 }
+/* iOS 26+ standalone WebKit can report a stale oversized bottom inset after
+   returning from the keyboard. Cap footer *padding* at the known iPhone home
+   indicator clearance, and use the same value for the assistant height. */
+:root {
+  --mc-mobile-footer-safe: clamp(10px, env(safe-area-inset-bottom, 0px), 34px);
+}
 .mc-mobile-header {
   position: sticky !important;
   top: 0 !important;
@@ -92,9 +98,11 @@ ion-app.mc-ionic-app {
   --color-selected: #204b40;
   --border: 0;
   width: 100%;
+  box-sizing: border-box;
   min-height: 74px;
+  height: calc(66px + var(--mc-mobile-footer-safe));
   display: block !important;
-  padding: 8px 8px max(10px,env(safe-area-inset-bottom,0px)) !important;
+  padding: 8px 8px var(--mc-mobile-footer-safe) !important;
   background: #fffefa !important;
   box-shadow: 0 -7px 25px rgba(20,48,39,.08);
   border-top: 1px solid #e4e1d9;
@@ -454,8 +462,9 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     max-width:none;
     /* Tabbar = 58px button + 8px top + max(10px, iPhone home-indicator inset).
        Match its actual top edge so there is no dead strip under the composer. */
-    height:calc(100dvh - 66px - max(10px,env(safe-area-inset-bottom,0px)));
-    /* Nudge the Compass identity below the status bar without shrinking the bottom edge. */
+    height:calc(var(--mc-chat-resting-height, 100dvh) - 66px - var(--mc-mobile-footer-safe));
+    /* One footer size and one visual viewport height prevent the dead strip
+       seen on iPhone when navigating into AI after dismissing its keyboard. */
     padding:calc(env(safe-area-inset-top,0px) + 10px) 0 0 !important;
     margin:0 !important;
     overflow:hidden;
@@ -601,9 +610,9 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     position:fixed !important;
     inset:0 !important;
     width:100% !important;
-    height:100dvh !important;
+    height:var(--mc-chat-resting-height,100dvh) !important;
     min-height:0 !important;
-    max-height:100dvh !important;
+    max-height:var(--mc-chat-resting-height,100dvh) !important;
     overflow:hidden !important;
     overscroll-behavior:none !important;
   }
