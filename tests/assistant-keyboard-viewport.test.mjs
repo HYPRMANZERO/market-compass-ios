@@ -100,6 +100,7 @@ test('iPhone footer caps an inflated safe-area bottom and shares its height with
   assert.doesNotMatch(nav,/max\(10px,\s*env\(safe-area-inset-bottom/);
 });
 test('assistant viewport measurement survives navigation and clears private layout styles',()=>{
+  assert.match(app,/useLayoutEffect\(\(\)=>\{\s*if\(path!=='\/assistant'\)return;\s*return installAssistantKeyboardViewport\(\);/);
   const code=read('../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts');
   assert.match(code,/setProperty\('--mc-chat-resting-height'/);
   assert.match(code,/!keyboardOpen&&\(height>=baseline-110/);
