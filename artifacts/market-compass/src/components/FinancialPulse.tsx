@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useMemo,useState} from 'react';
 import {Link} from 'wouter';
 import {
   ArrowDownLeft,ArrowRight,ArrowUpRight,CalendarDays,FileText,Landmark,
@@ -32,7 +32,10 @@ export default function FinancialPulse({entries,documents,currency,settings}:Pro
   const today=localDate();
   const current=salaryCycle(today);
   const chosen=shiftSalaryCycle(current.start,offset);
-  const pulse=financialPulse(entries,documents,chosen.start,currency,settings);
+  // Imported files can be large; unrelated navigation/state changes should
+  // not re-validate every record or rebuild all category totals.
+  const pulse=useMemo(()=>financialPulse(entries,documents,chosen.start,currency,settings),
+    [entries,documents,chosen.start,currency,settings]);
   const lastImport=pulse.lastDocumentImport?.slice(0,10);
   const recent=pulse.recent;
   return <section className="mc-financial-pulse min-w-0 rounded-[22px] border border-border bg-card p-4 shadow-sm sm:p-5"
