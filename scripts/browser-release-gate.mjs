@@ -881,6 +881,56 @@ async function main(){
       link.click();
     });
     await expectText(tab,'Import & review','Spend import screen');
+    // On an empty synthetic workspace, Spend starts in Documents. The guide
+    // lives in Activity after the owner enters or approves transactions.
+    await waitFor(()=>tab.invoke(function(){
+      const buttons=[...document.querySelectorAll('ion-segment-button,[role="tab"],button')];
+      const activity=buttons.find(el=>el.value==='activity'||
+        el.getAttribute('value')==='activity'||
+        el.getAttribute('aria-label')==='Activity'||
+        (el.tagName.toLowerCase()==='ion-segment-button'&&el.textContent?.includes('Activity')));
+      if(!activity)return false;
+      activity.click();
+      return true;
+    }),'Spend Activity tab hydrated',15000);
+    // Cash-flow guide must deliver a safe intent, not a blank generic AI page.
+    await waitFor(()=>tab.invoke(function(){
+      return !![...document.querySelectorAll('a')].find(a=>
+        a.getAttribute('href')?.includes('/assistant?review=cashflow'));
+    }),'Spend-to-AI cash-flow review link');
+    await tab.invoke(function(){
+      const link=[...document.querySelectorAll('a')].find(a=>
+        a.getAttribute('href')?.includes('/assistant?review=cashflow'));
+      link.click();
+    });
+    await waitFor(()=>tab.invoke(function(){
+      return !!document.querySelector('[aria-label="Cash-flow review from Spend"]');
+    }),'cash-flow review appears in conversation');
+    const handoff=await tab.invoke(function(){
+      const panel=document.querySelector('[aria-label="Cash-flow review from Spend"]');
+      const editor=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
+      return {
+        query:editor?.value||'',path:location.pathname,search:location.search,
+        text:panel?.textContent||'',rootLocked:getComputedStyle(document.body).position==='fixed',
+        links:[...document.querySelectorAll('a[href]')].filter(a=>a.getAttribute('href')?.includes('10400')).length
+      };
+    });
+    assert.equal(handoff.search,'?review=cashflow','intent-only URL reaches assistant');
+    assert.ok(handoff.text.includes('No approved transactions')||
+      handoff.text.includes('approved entries'),'local ledger preview must be visible');
+    assert.ok(handoff.query.includes('recorded salary-cycle spending'),'cash-flow question must be drafted');
+    assert.ok(handoff.text.includes('not an AI-generated recommendation')||
+      handoff.text.includes('financial-context sharing is off')||
+      handoff.text.includes('Private Compass is connected'),'connection limitations shown');
+    assert.equal(handoff.rootLocked,true,'handoff must retain chat-only scroll lock');
+    assert.equal(handoff.links,0,'no financial amounts leaked into links');
+    await tab.invoke(function(){
+      const back=[...document.querySelectorAll('button')].find(b=>b.textContent?.includes('Back to Spend'));
+      if(!back)throw Error('Back to Spend button missing');
+      back.click();
+    });
+    await expectText(tab,'Import & review','return to Spend after preview');
+    console.log('PASS: cash-flow guide opens read-only approved-cycle preview and drafted question with no URL financial data');
     const picker='input[type="file"][multiple]';
     const firstCsv=syntheticCsv('synthetic-2026-11.csv','Synthetic groceries','2026-11-21','-125.25');
     const secondCsv=syntheticCsv('synthetic-2026-10.csv','Synthetic transit','2026-10-21','-80.00');

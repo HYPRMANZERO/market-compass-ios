@@ -16,6 +16,7 @@ export type CompassCommandContext = {
   privateBudget?: { monthlyIncome: string; monthlyEssentials: string; liquidFunds: string; reserveTarget: string } | null;
   marketCache?: { symbol: string; currency: string; candles?: { date: string; close: number }[] } | null;
   draftCount: number;
+  financialPulse?: {readOnly:true;currency:'ZAR';asOf:string;cycleStart:string;cycleEnd:string;entryCount:number;income:number;expenses:number;debtPayments:number;transfers:number;recordedDifference:number;entrySourceIds:string[];balanceQuality:'missing';bankVerified:false;commitmentsComplete:false;safeToSpend:null};
   expenseSummary?: {cycleStart:string;cycleEnd:string;income:number;expenses:number;debtPayments:number;transfers:number;recordedDifference:number;entryCount:number;cycleLimit:number|null;flags:string[];
     unsortedCount?:number;unsortedOutflow?:number;illustrativeSavings?:number;
     cutIdeas?:{category:string;recorded:number;illustrativeSavings:number;rate:number}[];

@@ -621,3 +621,58 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     touch-action:pan-y;
   }
 }
+
+
+/* 2026-11-26 mobile chat polish: preserve existing visualViewport keyboard
+   handling and chat-only scrolling. Compact the input and keep the area below
+   the iOS footer light if WebKit reveals its safe-area backing surface. */
+@media (max-width:1023px){
+  html.mc-assistant-route,
+  html.mc-assistant-route body { background:#fffefa !important; }
+  .mc-assistant-page .mc-assistant-composer {
+    grid-template-columns:44px minmax(0,1fr) 44px;
+    gap:8px;
+    align-items:center;
+  }
+  .mc-assistant-page .mc-assistant-composer > button {
+    box-sizing:border-box;
+    width:44px;
+    height:44px;
+    min-width:44px;
+    min-height:44px;
+    border-radius:13px;
+    align-self:center;
+  }
+  .mc-assistant-page .mc-composer-input {
+    display:block;
+    min-height:44px;
+    max-height:92px;
+    line-height:1.35;
+    overflow-y:auto;
+  }
+  .mc-assistant-page .mc-chat-composer-wrap {
+    padding:8px 10px 7px;
+  }
+  .mc-assistant-page .mc-composer-hint { display:none; }
+  .mc-assistant-page .mc-composer-status {
+    margin-top:6px;
+    padding:5px 8px;
+    max-width:100%;
+    line-height:1.4;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .mc-assistant-page .mc-response-label {
+    max-width:100%;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .mc-assistant-page .mc-chat-log { padding:12px 12px 10px; }
+  .mc-assistant-page .mc-chat-bubble {
+    max-width:92%;
+    font-size:13px;
+    line-height:1.45;
+  }
+}

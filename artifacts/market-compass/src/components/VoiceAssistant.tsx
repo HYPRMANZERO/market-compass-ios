@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type {ReactNode} from 'react';
 import CompassQuickActions from '@/components/CompassQuickActions';
+import AssistantMessageText from '@/components/AssistantMessageText';
 import {isPersonalOnlyAction,type CompassActionId} from '@/lib/compassActionMenu';
 import { ArrowRight, Plus, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
+import {
+  CASHFLOW_REVIEW_QUESTION,describeLocalCashflowReview,isCashflowReviewHandoff
+} from '@/lib/cashflowReviewHandoff';
 import { personalSessionActive,type PersonalTailnetSession } from '@/lib/personalTailnetAuto';
 import { approvedPersonalHosts,acquireAvailablePersonalNode } from '@/lib/personalTailnetFailover';
 import {
@@ -101,13 +105,17 @@ export default function VoiceAssistant({
   context,onNavigate,onImportDocuments,settings,onSettingsChange,
   queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion,auxiliaryPanel
 }: Props) {
+  // Only an intent marker travels in the route; all figures remain in the
+  // already-unlocked local ledger and are never embedded in the URL.
+  const [cashflowReview] = useState(()=>typeof window!=='undefined'&&
+    isCashflowReviewHandoff(window.location.search));
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', source: 'local',
     text: currentAssistantEdition() === 'finance'
       ? 'Welcome back to Compass Financial Advisor. Ask about your accounts, spending, debt, financial documents, markets and plans. My tools are read-only.'
       : 'Welcome back to Compass Personal, your personal and financial assistant. Ask about daily plans, writing, research, budgeting or markets. Private actions require permission.'
   }]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(cashflowReview?CASHFLOW_REVIEW_QUESTION:'');
   const [recognitionSupported] = useState(micAvailable);
   const [speakingSupported] = useState(voiceAvailable);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -193,8 +201,10 @@ export default function VoiceAssistant({
   useEffect(() => {
     // scrollIntoView can also scroll the root document on iOS; only move messages.
     const log=chatLog.current;
-    if(log)log.scrollTo({top:log.scrollHeight,behavior:'smooth'});
-  }, [messages]);
+    // Keep the linked cash-flow summary visible on first entry; subsequent
+    // replies continue to scroll within the conversation, not the page.
+    if(log && !(cashflowReview && messages.length===1))log.scrollTo({top:log.scrollHeight,behavior:'smooth'});
+  }, [messages,cashflowReview]);
 
   useEffect(() => {
     if (!speakingSupported) return;
@@ -657,7 +667,7 @@ export default function VoiceAssistant({
           typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0);
       // Sharing financial context is opt-in AND relevant-topic-only. A greeting or
       // unrelated question must not transmit salary, account or spending figures.
-      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|cashflow|costs?|cut(?:ting|s)?|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation)\b/i.test(prompt);
+      const wantsFinancialContext = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|salaries|hourly|earnings?|hours?\s*worked|pay\s*rate|income|cash\s*flow|cashflow|costs?|cut(?:ting|s)?|savings?|afford|repayments?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|investments?|markets?|financial|finances?|my\s*plan|my\s*situation|financial\s*pulse|after[ -]?bills|money\s*left|safe\s*to\s*spend|available\s*cash|cash\s*position)\b/i.test(prompt);
       const wantsDocuments=/\b(?:documents?|statements?|payslips?|invoices?|instalments?|quotations?)\b/i.test(prompt);
       const includeFacts=settings.shareFinancialContext&&shareDocumentFacts&&wantsDocuments;
       const documentFacts=includeFacts?(context.localFinanceDocuments??[]).slice().sort((a,b)=>b.importedAt.localeCompare(a.importedAt))
@@ -676,6 +686,7 @@ export default function VoiceAssistant({
         liquidFunds: context.privateBudget?.liquidFunds ?? '',
         reserveTarget: context.privateBudget?.reserveTarget ?? '',
         expenseSummary: context.expenseSummary,
+        financialPulse:context.financialPulse,
         documentFacts,
       } : undefined;
       const useAgent = agentMode; // The local model always handles online queries via read-only agent.
@@ -705,7 +716,7 @@ export default function VoiceAssistant({
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
-        setStatus(`Compass AI · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+        setStatus(`Read-only agent · ${agentResult.steps} source${agentResult.steps===1?'':'s'} checked (maximum ${agentResult.maxSteps}). No records changed.`);
       } else {
         if (!('reply' in payload) || typeof payload.reply !== 'string' ||
           !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model')
@@ -958,12 +969,33 @@ export default function VoiceAssistant({
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck size={13} aria-hidden="true"/> Agent on · read only</span>
       </div>
       <div ref={chatLog} className="mc-chat-log min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+        {cashflowReview&&<section aria-label="Cash-flow review from Spend" className="rounded-2xl border border-primary/25 bg-primary/5 p-3.5 text-[12px] leading-5">
+          <h3 className="text-[13px] font-bold">Cash-flow review from Spend</h3>
+          <p className="mt-2 whitespace-pre-line">{describeLocalCashflowReview(context)}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {connected
+              ? settings.shareFinancialContext
+                ? 'Private Compass is connected. Your question is prepared below. If you tap Send, Compass may use the approved aggregate figures you allowed it to see.'
+                : 'Private Compass is connected, but financial-context sharing is off. Turn it on in Compass tools before sending if you want advice based on these totals.'
+              : 'Private AI is not connected on this iPhone. This is a local, read-only summary, not an AI-generated recommendation. Your prepared question remains below until you choose to send it.'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="min-h-10 rounded-xl border border-border bg-background px-3 text-[11px] font-semibold" onClick={()=>onNavigate('/expenses')}>Back to Spend</button>
+            {!connected&&<button type="button" className="min-h-10 rounded-xl border border-primary/30 bg-background px-3 text-[11px] font-semibold" onClick={()=>{
+              setOptionsOpen(true);
+              window.requestAnimationFrame(()=>{
+                const advanced=document.querySelector<HTMLDetailsElement>('.mc-chat-advanced');
+                if(advanced)advanced.open=true;
+              });
+            }}>Private connection options</button>}
+          </div>
+        </section>}
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
-            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Private desktop</span>}
-            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Private desktop · Read-only agent</span>}
-            {message.text}
+            {message.source === 'ollama' && <span className="mc-response-label mb-1 block text-[10px] font-semibold uppercase tracking-[.08em] text-muted-foreground">Compass · Private desktop</span>}
+            {message.source === 'agent' && <span className="mc-response-label mb-1 block text-[10px] font-semibold uppercase tracking-[.08em] text-muted-foreground" title="Compass · Private desktop · Read-only agent">Compass · Private desktop · Agent</span>}
+            <AssistantMessageText text={message.text}/>
             {message.link && <a href={message.link.url} target="_blank" rel="noopener noreferrer"
               className="mt-2 inline-flex min-h-10 items-center rounded-xl border border-primary/35 bg-background px-3 py-2 text-[12px] font-semibold text-primary underline-offset-4 hover:underline"
               aria-label={message.link.label}>{message.link.label}</a>}
@@ -1326,7 +1358,7 @@ export default function VoiceAssistant({
             <Plus size={24} aria-hidden="true"/>
           </button>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
-            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask Compass about finances…" : "Message Compass…"} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
+            <textarea value={query} rows={1} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask Compass about finances…" : "Message Compass…"} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
               aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[52px] w-full resize-none rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
           {query.trim()&&!listening?
@@ -1340,9 +1372,9 @@ export default function VoiceAssistant({
               {listening?<MicOff size={22}/>:<Mic size={23}/>}
             </button>}
         </form>
-        <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
+        <p id="mc-composer-hint" className="mc-composer-hint mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
         {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use your device keyboard microphone to dictate.</p>}
-        {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
+        {status && <p role="status" title={status} className="mc-composer-status mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
 

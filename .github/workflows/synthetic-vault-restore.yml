@@ -1,0 +1,30 @@
+name: Synthetic encrypted vault restore
+
+on:
+  pull_request:
+    paths:
+      - 'tests/vault-synthetic-restore.test.mjs'
+      - 'artifacts/market-compass/src/lib/localVault.ts'
+      - '.github/workflows/synthetic-vault-restore.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vault-synthetic-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify encrypted owner data can round-trip and tampering fails 3 times
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in 1 2 3; do
+            echo "Synthetic encrypted vault restore pass ${pass}/3"
+            node --experimental-strip-types --test tests/vault-synthetic-restore.test.mjs
+          done
