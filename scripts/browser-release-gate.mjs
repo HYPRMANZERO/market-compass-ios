@@ -298,6 +298,105 @@ async function main(){
     await expectText(tab,'Encrypted vault & settings','synthetic vault created');
     console.log('PASS: isolated AES-GCM vault creation in actual browser');
 
+    // Focused route acceptance deliberately avoids unrelated Home/Spend test
+    // state. It still uses the same real production build, Edge/Chromium,
+    // encrypted synthetic vault, keyboard emulation and disposable profile.
+    if(process.env.MC_ASSISTANT_LAYOUT_ONLY==='1'){
+      const selectRoute=async name=>{
+        await tab.invoke(function(name){
+          const link=document.querySelector('[data-testid="mobile-nav-'+name+'"]');
+          if(!link)throw Error('Missing '+name+' tab');link.click();
+        },name);
+        await waitFor(()=>tab.invoke(function(name){
+          const active=document.querySelector('[data-testid="mobile-nav-'+name+'"]');
+          return active?.getAttribute('aria-current')==='page';
+        },name),'navigate to '+name);
+      };
+      const geometry=()=>tab.invoke(function(){
+        const page=document.querySelector('.mc-assistant-page')?.getBoundingClientRect();
+        const nav=document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect();
+        const composer=document.querySelector('.mc-chat-composer-wrap')?.getBoundingClientRect();
+        const html=document.documentElement;
+        return {
+          height:innerHeight,pageBottom:page?.bottom??null,
+          navTop:nav?.top??null,navBottom:nav?.bottom??null,
+          navHeight:nav?.height??null,composerBottom:composer?.bottom??null,
+          route:html.classList.contains('mc-assistant-route'),
+          bodyFixed:getComputedStyle(document.body).position==='fixed',
+          bodyOverflow:getComputedStyle(document.body).overflowY,
+          logOverflow:getComputedStyle(document.querySelector('.mc-chat-log')).overflowY
+        };
+      });
+      const assertResting=g=>{
+        assert.equal(g.route,true,'assistant-only viewport lock required');
+        assert.equal(g.bodyFixed,true,'outer document must not scroll');
+        assert.equal(g.bodyOverflow,'hidden');
+        assert.equal(g.logOverflow,'auto','only conversation scrolls');
+        assert.ok(g.navHeight!==null&&g.navHeight<=101,
+          'no oversized iPhone footer inset: '+JSON.stringify(g));
+        assert.ok(g.navTop!==null&&g.pageBottom!==null&&Math.abs(g.navTop-g.pageBottom)<=5,
+          'no blank band between composer and tabbar: '+JSON.stringify(g));
+        assert.ok(g.navBottom!==null&&Math.abs(g.navBottom-g.height)<=4,
+          'tabbar flush with visible viewport: '+JSON.stringify(g));
+        assert.ok(g.composerBottom!==null&&Math.abs(g.composerBottom-g.pageBottom)<=5,
+          'composer anchored to the bottom of conversation');
+      };
+      await selectRoute('assistant');
+      await waitFor(()=>tab.invoke(function(){
+        return !!document.querySelector('.mc-chat-composer-wrap') &&
+          document.documentElement.classList.contains('mc-assistant-route');
+      }),'AI chat ready');
+      assertResting(await geometry());
+      await tab.invoke(function(){
+        const field=document.querySelector('textarea.mc-composer-input');
+        if(!field)throw Error('AI composer absent');field.focus();
+      });
+      await waitFor(()=>tab.invoke(function(){
+        return document.documentElement.classList.contains('mc-chat-input-focused');
+      }),'composer focus');
+      await tab.command('Emulation.setDeviceMetricsOverride',{
+        width:390,height:520,deviceScaleFactor:3,mobile:true
+      });
+      await waitFor(()=>tab.invoke(function(){
+        return document.documentElement.classList.contains('mc-chat-keyboard-open');
+      }),'keyboard-open style');
+      const keyboard=await tab.invoke(function(){
+        const v=window.visualViewport;
+        const page=document.querySelector('.mc-assistant-page')?.getBoundingClientRect();
+        const nav=document.querySelector('.mc-mobile-tabbar');
+        const composer=document.querySelector('.mc-chat-composer-wrap')?.getBoundingClientRect();
+        return {pageMode:getComputedStyle(document.querySelector('.mc-assistant-page')).position,
+          visibleBottom:(v?.offsetTop??0)+(v?.height??innerHeight),
+          pageBottom:page?.bottom??null,composerBottom:composer?.bottom??null,
+          navHidden:getComputedStyle(nav).display==='none'};
+      });
+      assert.equal(keyboard.navHidden,true,'tabs must hide behind keyboard');
+      assert.equal(keyboard.pageMode,'absolute','keyboard mode follows the visual viewport');
+      assert.ok(Math.abs(keyboard.pageBottom-keyboard.visibleBottom)<=5,
+        'chat must end above keyboard: '+JSON.stringify(keyboard));
+      assert.ok(keyboard.composerBottom<=keyboard.visibleBottom+4,
+        'composer must not be covered by the keyboard');
+      await tab.command('Emulation.setDeviceMetricsOverride',{
+        width:390,height:844,deviceScaleFactor:3,mobile:true
+      });
+      await waitFor(()=>tab.invoke(function(){
+        return !document.documentElement.classList.contains('mc-chat-keyboard-open') &&
+          getComputedStyle(document.querySelector('.mc-mobile-tabbar')).display!=='none';
+      }),'keyboard closed and tabs restored');
+      assertResting(await geometry());
+      await selectRoute('home');
+      await waitFor(()=>tab.invoke(function(){
+        return !document.documentElement.classList.contains('mc-assistant-route');
+      }),'chat lock cleaned after Home navigation');
+      await selectRoute('assistant');
+      await waitFor(()=>tab.invoke(function(){
+        return document.documentElement.classList.contains('mc-assistant-route');
+      }),'AI lock restored after returning');
+      assertResting(await geometry());
+      console.log('AI VIEWPORT BROWSER PASS: entrance, keyboard open/close and Home-to-AI return; synthetic Chromium, not actual Safari');
+      return;
+    }
+
     const ui=await tab.invoke(function(){
       const hero=document.querySelector('.mc-wallet-hero');
       const actions=document.querySelector('.mc-bs-quick-actions');
