@@ -716,7 +716,7 @@ export default function VoiceAssistant({
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
-        setStatus(`Compass AI · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+        setStatus(`Read-only agent · ${agentResult.steps} source${agentResult.steps===1?'':'s'} checked (maximum ${agentResult.maxSteps}). No records changed.`);
       } else {
         if (!('reply' in payload) || typeof payload.reply !== 'string' ||
           !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model')
