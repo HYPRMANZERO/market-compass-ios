@@ -17,6 +17,8 @@ jobs:
           version: '10'
       - name: Resolve experimental dependencies (review lock before release)
         run: pnpm install --no-frozen-lockfile
+      - name: Regression tests including shared UI fixes
+        run: node --experimental-strip-types --test tests/*.test.mjs
       - name: Typecheck
         run: |
           pnpm run typecheck:libs
