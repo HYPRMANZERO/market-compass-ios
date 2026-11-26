@@ -1041,7 +1041,17 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
                 </button>
               </div>
             </details>)}
-          </div>:<EmptyState icon={WalletCards} title="No debt accounts yet" description="Add a debt account below. Nothing is saved until you tap Save account."/>}
+          </div>:<div className="fin-empty">
+            <span className="fin-empty-icon"><Landmark size={22} aria-hidden="true"/></span>
+            <h3>No debt accounts yet</h3>
+            <p>Add a balance, rate and minimum payment to see avalanche and snowball scenarios. Figures stay in this browser, and nothing is saved until you tap Save account.</p>
+            <div className="fin-empty-actions">
+              <button type="button" onClick={()=>{const form=document.getElementById('mc-add-debt-account');form?.scrollIntoView({behavior:'smooth',block:'start'});form?.querySelector<HTMLInputElement>('input')?.focus();}}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[12.5px] font-semibold text-primary-foreground">
+                <Plus size={15} aria-hidden="true"/> Add your first account
+              </button>
+            </div>
+          </div>}
           <div id="mc-add-debt-account" className="scroll-mt-24 border-t border-border p-4 sm:p-5" aria-label="Add a new debt account">
             <h3 className="text-[14px] font-bold">Add an account</h3>
             <p className="mb-3 mt-1 text-[11px] text-muted-foreground">This form stays blank after saving. Existing accounts stay collapsed above.</p>
