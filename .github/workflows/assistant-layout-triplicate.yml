@@ -1,0 +1,87 @@
+name: iPhone AI layout and keyboard triplicate
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/market-compass/src/ionic-shell.css'
+      - 'artifacts/market-compass/src/lib/assistantKeyboardViewport.ts'
+      - 'tests/assistant-keyboard-viewport.test.mjs'
+      - 'tests/chat-first-parity.test.mjs'
+      - 'scripts/browser-release-gate.mjs'
+      - '.github/workflows/assistant-layout-triplicate.yml'
+permissions:
+  contents: read
+jobs:
+  assistant-viewport:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - name: Install locked dependencies
+        shell: pwsh
+        run: |
+          Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
+          pnpm install --frozen-lockfile --force
+          if($LASTEXITCODE -ne 0){throw 'Dependency installation failed'}
+      - name: Three unit regression rounds
+        shell: pwsh
+        run: |
+          for($i=1;$i -le 3;$i++){
+            Write-Host "Safe-area, chat-only scroll and hook cleanup: $i/3"
+            node --experimental-strip-types --test tests/assistant-keyboard-viewport.test.mjs tests/chat-first-parity.test.mjs
+            if($LASTEXITCODE -ne 0){throw 'Assistant route regression failed'}
+          }
+      - name: Compile Compass Personal and prepare isolated offline shell
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: personal
+          NODE_ENV: production
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          if($LASTEXITCODE -ne 0){throw 'Personal build failed'}
+          node scripts/prepare-offline-shell.mjs
+          if($LASTEXITCODE -ne 0){throw 'Offline shell failed'}
+      - name: Three disposable Personal iPhone-sized Chromium browser rounds
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: personal
+          NODE_ENV: production
+        run: |
+          for($i=1;$i -le 3;$i++){
+            Write-Host "Personal fixed-footer browser gate $i/3"
+            node scripts/browser-release-gate.mjs
+            if($LASTEXITCODE -ne 0){throw 'Personal browser regression failed'}
+          }
+      - name: Compile Compass Finance to an isolated directory
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: finance
+          NODE_ENV: production
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+        run: |
+          pnpm --filter @workspace/market-compass run build
+          if($LASTEXITCODE -ne 0){throw 'Finance build failed'}
+          node scripts/prepare-offline-shell.mjs
+          if($LASTEXITCODE -ne 0){throw 'Finance offline shell failed'}
+      - name: Three disposable Finance iPhone-sized Chromium browser rounds
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: finance
+          NODE_ENV: production
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+        run: |
+          for($i=1;$i -le 3;$i++){
+            Write-Host "Finance fixed-footer browser gate $i/3"
+            node scripts/browser-release-gate.mjs
+            if($LASTEXITCODE -ne 0){throw 'Finance browser regression failed'}
+          }
