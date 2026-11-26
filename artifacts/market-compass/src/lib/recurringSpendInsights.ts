@@ -1,7 +1,7 @@
 /** Read-only recurring-spend candidates. Three dated, approved observations
  * are required. Never turn patterns into obligations or posted transactions.
  */
-import {salaryCycle,validateExpenseEntry,type ExpenseEntry} from './monthlyExpenses.ts';
+import {salaryCycle,shiftSalaryCycle,validateExpenseEntry,type ExpenseEntry} from './monthlyExpenses.ts';
 
 export type RecurringSpendCandidate={
   key:string;label:string;category:string;currency:string;
@@ -20,22 +20,36 @@ const safe=(entry:ExpenseEntry)=>{try{validateExpenseEntry(entry);return true;}c
 export function recurringSpendCandidates(entries:readonly ExpenseEntry[],asOf:string,currency='ZAR'):RecurringSpendCandidate[]{
   salaryCycle(asOf);
   const groups=new Map<string,ExpenseEntry[]>();
+  const seenIds=new Set<string>();
+  const currentCycle=salaryCycle(asOf).start;
+  const previousCycle=shiftSalaryCycle(currentCycle,-1).start;
   for(const entry of Array.isArray(entries)?entries:[]){
     if(!safe(entry)||entry.date>asOf||entry.currency!==currency||
       !['expense','debt-payment'].includes(entry.kind)||entry.amount<=0)continue;
+    // An ID identifies one approved record. Repeated IDs cannot supply
+    // independent recurring evidence and must not be counted twice.
+    if(typeof entry.id!=='string'||entry.id.trim()===''||seenIds.has(entry.id))continue;
+    seenIds.add(entry.id);
     const key=keyFor(entry);
     if(key.length<4||key==='[masked]')continue;
     const grouped=key+'|'+entry.kind+'|'+entry.category;
-    groups.set(grouped,[...(groups.get(grouped)||[]),entry]);
+    let records=groups.get(grouped);
+    if(!records){records=[];groups.set(grouped,records);}
+    records.push(entry);
   }
   const out:RecurringSpendCandidate[]=[];
   for(const [key,records] of groups){
     const byCycle=new Map<string,ExpenseEntry[]>();
     for(const entry of records){
       const c=salaryCycle(entry.date).start;
-      byCycle.set(c,[...(byCycle.get(c)||[]),entry]);
+      let observed=byCycle.get(c);
+      if(!observed){observed=[];byCycle.set(c,observed);}
+      observed.push(entry);
     }
     const ordered=[...byCycle.entries()].sort(([a],[b])=>b.localeCompare(a));
+    // Never show an old, stopped debit pattern as an active review candidate.
+    // An observation this cycle or the immediately prior cycle is necessary.
+    if(!ordered.length||![currentCycle,previousCycle].includes(ordered[0][0]))continue;
     // The three latest cycles must be consecutive and uniquely observed.
     if(ordered.length<3||ordered.slice(0,3).some(([,items])=>items.length!==1))continue;
     const three=ordered.slice(0,3);
