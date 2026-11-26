@@ -634,7 +634,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-bold">Upload financial documents</span>
           <span className="mt-1 block text-[11px] font-normal leading-5 text-muted-foreground">
-            Choose from iPhone Files · {docs.length} document(s) in this encrypted vault
+            Choose a file from this device · {docs.length} document(s) in this encrypted vault
           </span>
         </span>
         <ChevronDown size={19} className="shrink-0 text-muted-foreground"/>
