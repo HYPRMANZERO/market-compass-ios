@@ -72,74 +72,64 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* LIGHT MODE */
+/* LIGHT MODE — Compass finance v2 palette: cool graphite canvas, emerald brand. */
 :root {
-  --button-outline: rgba(0, 0, 0, 0.1);
-  --badge-outline: rgba(0, 0, 0, 0.05);
+  --button-outline: rgba(12, 22, 38, 0.1);
+  --badge-outline: rgba(12, 22, 38, 0.05);
 
   /* Automatic computation of border around primary / danger buttons */
   --opaque-button-border-intensity: -8; /* In terms of percentages */
 
   /* Backgrounds applied on top of other backgrounds when hovered/active */
-  --elevate-1: rgba(0, 0, 0, 0.03);
-  --elevate-2: rgba(0, 0, 0, 0.08);
+  --elevate-1: rgba(12, 22, 38, 0.035);
+  --elevate-2: rgba(12, 22, 38, 0.075);
 
-  --background: 42 30% 96%;
-  --foreground: 166 19% 17%;
-  --border: 39 17% 84%;
-  --card: 44 33% 99%;
-  --card-foreground: 166 19% 17%;
-  --card-border: 39 17% 84%;
-  --sidebar: 165 24% 19%;
-  --sidebar-foreground: 43 28% 92%;
-  --sidebar-border: 165 16% 29%;
-  --sidebar-primary: 43 65% 69%;
-  --sidebar-primary-foreground: 165 24% 19%;
-  --sidebar-accent: 165 18% 27%;
-  --sidebar-accent-foreground: 43 28% 92%;
-  --sidebar-ring: 43 65% 69%;
-  --popover: 44 33% 99%;
-  --popover-foreground: 166 19% 17%;
-  --popover-border: 39 17% 84%;
-  --primary: 165 24% 24%;
-  --primary-foreground: 42 30% 96%;
-  --secondary: 39 25% 89%;
-  --secondary-foreground: 166 19% 17%;
-  --muted: 39 20% 91%;
-  --muted-foreground: 160 8% 43%;
-  --accent: 37 42% 83%;
-  --accent-foreground: 166 19% 17%;
-  --destructive: 4 54% 48%;
+  --background: 217 44% 96%;
+  --foreground: 217 52% 10%;
+  --border: 220 32% 93%;
+  --card: 0 0% 100%;
+  --card-foreground: 217 52% 10%;
+  --card-border: 220 32% 93%;
+  --sidebar: 209 49% 8%;
+  --sidebar-foreground: 210 28% 92%;
+  --sidebar-border: 211 30% 18%;
+  --sidebar-primary: 165 79% 27%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 212 32% 15%;
+  --sidebar-accent-foreground: 210 28% 94%;
+  --sidebar-ring: 160 69% 52%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 217 52% 10%;
+  --popover-border: 220 32% 93%;
+  --primary: 165 79% 27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 216 36% 95%;
+  --secondary-foreground: 217 45% 14%;
+  --muted: 216 32% 95%;
+  --muted-foreground: 216 19% 44%;
+  --accent: 154 40% 92%;
+  --accent-foreground: 165 79% 20%;
+  --destructive: 2 72% 50%;
   --destructive-foreground: 0 0% 100%;
-  --input: 39 17% 78%;
-  --ring: 165 24% 34%;
-  --chart-1: 165 28% 36%;
-  --chart-2: 34 58% 56%;
-  --chart-3: 195 20% 46%;
-  --chart-4: 4 45% 56%;
-  --chart-5: 43 55% 65%;
-  --app-font-sans: 'DM Sans', sans-serif;
+  --input: 219 25% 89%;
+  --ring: 165 70% 33%;
+  --chart-1: 165 79% 32%;
+  --chart-2: 199 76% 45%;
+  --chart-3: 41 86% 56%;
+  --chart-4: 2 72% 58%;
+  --chart-5: 262 56% 60%;
+  --app-font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
   --app-font-serif: 'Newsreader', Georgia, serif;
-  --app-font-mono: 'DM Mono', monospace;
-  --radius: 0.5rem; /* 8px */
-  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0); /*replace with H S L */
-  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0); /*replace with H S L */
-  --shadow-sm:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-md:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-lg:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-xl:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+  --app-font-mono: 'DM Mono', ui-monospace, monospace;
+  --radius: 0.875rem; /* 14px */
+  --shadow-2xs: 0 1px 1px 0 hsl(218 45% 18% / 0.04);
+  --shadow-xs: 0 1px 2px 0 hsl(218 45% 18% / 0.05);
+  --shadow-sm: 0 1px 2px 0 hsl(218 45% 18% / 0.05), 0 1px 1px -1px hsl(218 45% 18% / 0.04);
+  --shadow: 0 1px 3px 0 hsl(218 45% 18% / 0.07), 0 1px 2px -1px hsl(218 45% 18% / 0.05);
+  --shadow-md: 0 4px 12px -4px hsl(218 45% 18% / 0.10), 0 2px 4px -2px hsl(218 45% 18% / 0.06);
+  --shadow-lg: 0 14px 30px -14px hsl(218 45% 18% / 0.18), 0 4px 8px -4px hsl(218 45% 18% / 0.08);
+  --shadow-xl: 0 22px 48px -22px hsl(218 45% 18% / 0.22), 0 8px 14px -8px hsl(218 45% 18% / 0.10);
+  --shadow-2xl: 0 30px 64px -28px hsl(218 45% 18% / 0.28);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -205,59 +195,49 @@
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  --background: 165 19% 12%;
-  --foreground: 43 25% 91%;
-  --border: 165 12% 28%;
-  --card: 165 17% 16%;
-  --card-foreground: 43 25% 91%;
-  --card-border: 165 12% 28%;
-  --sidebar: 165 24% 10%;
-  --sidebar-foreground: 43 25% 91%;
-  --sidebar-border: 165 12% 24%;
-  --sidebar-primary: 43 65% 69%;
-  --sidebar-primary-foreground: 165 24% 10%;
-  --sidebar-accent: 165 15% 20%;
-  --sidebar-accent-foreground: 43 25% 91%;
-  --sidebar-ring: 43 65% 69%;
-  --popover: 165 17% 16%;
-  --popover-foreground: 43 25% 91%;
-  --popover-border: 165 12% 28%;
-  --primary: 43 65% 69%;
-  --primary-foreground: 165 24% 10%;
-  --secondary: 165 15% 23%;
-  --secondary-foreground: 43 25% 91%;
-  --muted: 165 14% 21%;
-  --muted-foreground: 155 8% 65%;
-  --accent: 165 15% 25%;
-  --accent-foreground: 43 25% 91%;
-  --destructive: 4 54% 58%;
+  --background: 210 33% 6%;
+  --foreground: 212 39% 94%;
+  --border: 209 26% 16%;
+  --card: 212 31% 10%;
+  --card-foreground: 212 39% 94%;
+  --card-border: 209 26% 16%;
+  --sidebar: 210 34% 4%;
+  --sidebar-foreground: 212 30% 92%;
+  --sidebar-border: 209 24% 14%;
+  --sidebar-primary: 160 69% 52%;
+  --sidebar-primary-foreground: 210 40% 5%;
+  --sidebar-accent: 212 26% 13%;
+  --sidebar-accent-foreground: 212 32% 95%;
+  --sidebar-ring: 160 69% 52%;
+  --popover: 212 31% 10%;
+  --popover-foreground: 212 39% 94%;
+  --popover-border: 209 26% 16%;
+  --primary: 160 69% 45%;
+  --primary-foreground: 210 40% 5%;
+  --secondary: 212 26% 16%;
+  --secondary-foreground: 212 36% 94%;
+  --muted: 212 26% 14%;
+  --muted-foreground: 212 19% 63%;
+  --accent: 212 26% 18%;
+  --accent-foreground: 160 60% 78%;
+  --destructive: 2 72% 58%;
   --destructive-foreground: 0 0% 100%;
-  --input: 165 12% 32%;
-  --ring: 43 65% 69%;
-  --chart-1: 165 40% 58%;
-  --chart-2: 34 65% 63%;
-  --chart-3: 195 30% 65%;
-  --chart-4: 4 52% 66%;
-  --chart-5: 43 65% 69%;
+  --input: 209 22% 22%;
+  --ring: 160 69% 45%;
+  --chart-1: 160 69% 52%;
+  --chart-2: 199 70% 60%;
+  --chart-3: 41 86% 66%;
+  --chart-4: 2 70% 62%;
+  --chart-5: 262 62% 68%;
 
-  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-sm:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-md:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-lg:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-xl:
-    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
-    0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0);
-  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-2xs: 0 1px 1px 0 hsl(0 0% 0% / 0.4);
+  --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.45);
+  --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.5), 0 1px 1px -1px hsl(0 0% 0% / 0.4);
+  --shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.55), 0 1px 2px -1px hsl(0 0% 0% / 0.45);
+  --shadow-md: 0 4px 12px -4px hsl(0 0% 0% / 0.6), 0 2px 4px -2px hsl(0 0% 0% / 0.45);
+  --shadow-lg: 0 14px 30px -14px hsl(0 0% 0% / 0.7), 0 4px 8px -4px hsl(0 0% 0% / 0.5);
+  --shadow-xl: 0 22px 48px -22px hsl(0 0% 0% / 0.75), 0 8px 14px -8px hsl(0 0% 0% / 0.5);
+  --shadow-2xl: 0 30px 64px -28px hsl(0 0% 0% / 0.8);
 }
 
 @layer base {
@@ -412,8 +392,8 @@ select:focus-visible, textarea:focus-visible {
   /* Match the existing, known-good ngrok PWA launch/status backing.
      iOS black-translucent overlays the status bar on the document canvas:
      a light BODY can bleed through even when HTML is dark. Only the safe
-     area gets the green backing; #root keeps the actual page light. */
-  html, body { background-color: #253c36; }
+     area gets the ink backing; #root keeps the actual page light. */
+  html, body { background-color: #0b1620; }
   #root { background-color: hsl(var(--background)); }
   .mc-mobile-header { padding-top: calc(12px + env(safe-area-inset-top)); }
   .mc-mobile-header::before {
@@ -423,7 +403,7 @@ select:focus-visible, textarea:focus-visible {
     left: 0;
     right: 0;
     height: env(safe-area-inset-top, 0px);
-    background-color: #253c36;
+    background-color: #0b1620;
     pointer-events: none;
   }
 }
@@ -514,9 +494,9 @@ nav[aria-label="Spend sections"] button[aria-pressed="true"] {
    financial controls remain owned by the original Tailwind components.
    -------------------------------------------------------------------- */
 .mc-app-overview {
-  --mc-ui-ink: hsl(165 24% 19%);
-  --mc-ui-soft: hsl(159 14% 42%);
-  --mc-ui-gold: hsl(43 65% 74%);
+  --mc-ui-ink: hsl(217 52% 10%);
+  --mc-ui-soft: hsl(216 19% 44%);
+  --mc-ui-gold: hsl(160 69% 62%);
   padding-top: 2px;
 }
 .mc-app-overview .row { --bs-gutter-x: 0.75rem; --bs-gutter-y: 0.75rem; }

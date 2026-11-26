@@ -256,13 +256,13 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<void>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
-  return <main className="mc-vault-entry flex min-h-[100dvh] flex-col bg-[hsl(165,24%,19%)] px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] text-white sm:justify-center">
+  return <main className="mc-vault-entry fin-vault flex min-h-[100dvh] flex-col px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] text-white sm:justify-center">
     <div className="mx-auto w-full max-w-[390px]">
       <div className="mb-4 flex items-center gap-3 px-1">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={22}/></span>
-        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">{isFinanceEdition()?'Your private financial advisor':'Your personal AI + financial workspace'}</p></div>
+        <span className="fin-brandmark grid h-11 w-11 shrink-0 place-items-center"><Compass size={22}/></span>
+        <div><h1 className="text-[19px] font-extrabold leading-snug tracking-[-.02em]">Market Compass</h1><p className="mt-1 text-[9.5px] font-bold uppercase tracking-[.16em] text-white/50">{isFinanceEdition()?'Your private financial advisor':'Your personal AI + financial workspace'}</p></div>
       </div>
-      <div className="rounded-[22px] bg-[hsl(44,33%,99%)] p-4 text-foreground shadow-[0_16px_44px_rgba(0,0,0,.12)] sm:p-6">
+      <div className="fin-vault-card rounded-[22px] bg-card p-4 text-foreground sm:p-6">
         <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
         <p className="text-[12px] leading-[1.6] text-muted-foreground">Your debt plans, markets and notes are encrypted on this device. No bank login required.</p>
         <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-[11px] text-muted-foreground">
@@ -338,7 +338,7 @@ function InstallHelp() {
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Compass size={19}/></span>
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-bold">Make it an app on your Home Screen</div>
-        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{ios ? 'Open this page in Safari and choose Share → Add to Home Screen to launch it without the browser toolbar.' : 'Install Market Compass from your browser to open it as a standalone app.'}</p>
+        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{ios ? 'Add it to your Home Screen to launch without the browser toolbar.' : 'Install it to open as a standalone app.'}</p>
         {ios ? <button type="button" onClick={() => setDetails(!details)} className="mt-2 min-h-9 text-[12px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Show iPhone steps'}</button> :
           <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="mt-2 min-h-9 rounded-lg bg-primary px-4 text-[12px] font-semibold text-primary-foreground">Install app</button>}
       </div>
@@ -423,21 +423,21 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       {path!=='/assistant'&&(
       <IonHeader className="mc-mobile-header sticky top-0 z-30 lg:hidden" role="banner">
         <IonToolbar className="mc-ionic-toolbar">
-        <div className="flex min-h-[49px] items-center gap-3">
-          <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
+        <div className="flex min-h-[46px] items-center gap-3">
+          <Link href="/" className="fin-brandmark grid h-10 w-10 shrink-0 place-items-center" aria-label="Go to Market Compass home"><Compass size={21} strokeWidth={2}/></Link>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-bold leading-5">{isFinanceEdition()?'Compass Financial':'Compass Personal'}</div>
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
-              <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
-              <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
+            <div className="fin-hdr-title truncate">{isFinanceEdition()?'Compass Financial':'Compass Personal'}</div>
+            <div className="fin-hdr-meta">
+              <span className={`fin-hdr-dot ${online ? 'is-online' : 'is-offline'}`}/>
+              <span className="truncate">{online ? 'iPhone online' : 'iPhone offline'} · {active.label}</span>
             </div>
           </div>
-
+          <span className="fin-chip" aria-label={`Workspace currency ${currency}`}>{currency}</span>
         </div>
         </IonToolbar>
       </IonHeader>
       )}
-      {path==='/assistant'&&<div aria-hidden="true" className="fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top,0px)] bg-[hsl(165,24%,20%)] lg:hidden"/>}
+      {path==='/assistant'&&<div aria-hidden="true" className="fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top,0px)] bg-[#0b1620] lg:hidden"/>}
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
         <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">{isFinanceEdition()?'Financial advisor & markets':'Personal AI + finances'}</div>
         <div className="flex items-center gap-4">
@@ -449,18 +449,20 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
           </button>
         </div>
       </header>
-      <InstallHelp/>
+      {path==='/'&&<InstallHelp/>}
       {menuOpen && createPortal(
         <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
           <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
             <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
-            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
-            <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-extrabold tracking-[-.025em]">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-full bg-muted/70"><X size={19}/></button></div>
+            <p className="mb-4 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
             <div className="grid grid-cols-2 gap-2">
-              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
-              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
-              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
-              <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-[12.5px] font-bold text-primary-foreground active:scale-[.985]"><Plus size={18} className="shrink-0"/>Add account</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-3 text-[12.5px] font-bold active:scale-[.985]"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-card">
+              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map((item,index)=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className={`flex min-h-14 w-full items-center gap-3 px-4 text-left text-[13px] font-semibold active:bg-muted/60 ${index>0?'border-t border-border/70':''}`}><span className="fin-menu-icon"><item.icon size={17}/></span><span className="min-w-0 flex-1 truncate">{item.label}</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>)}
+              <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="flex min-h-14 w-full items-center gap-3 border-t border-border/70 px-4 text-left text-[13px] font-semibold active:bg-muted/60"><span className="fin-menu-icon"><ShieldCheck size={17}/></span><span className="min-w-0 flex-1 truncate">Vault &amp; backup</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>
             </div>
           </section>
         </div>,document.body)}
@@ -468,22 +470,22 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
-       <div className="mx-auto grid max-w-[550px] grid-cols-4 gap-1">
+       <div className="fin-dock mx-auto grid max-w-[550px] grid-cols-4 gap-1">
          {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
            const selected = href === path;
            const short = label === 'Overview' ? 'Home' : label === 'Local assistant' ? 'AI' : label;
            return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
              data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-             className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
-             <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
-             <span className="text-[10px] font-semibold leading-none">{short}</span>
+             className={`mc-tab-link fin-tab relative flex flex-col items-center justify-center text-center ${selected ? 'is-active' : ''}`}>
+             <span className="fin-tab-icon"><Icon size={21} strokeWidth={selected ? 2.4 : 1.9}/></span>
+             <span className="fin-tab-label">{short}</span>
            </Link>;
          })}
-         <button type="button" data-testid="mobile-nav-menu" aria-label="Open Market Compass menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
-           className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
-           <Menu size={21} strokeWidth={2}/>
-           <span className="text-[10px] font-semibold leading-none">Menu</span>
-           {pending > 0 && <span className="absolute right-3 top-1 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
+         <button type="button" data-testid="mobile-nav-menu" data-menu="true" aria-label="Open Market Compass menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+           className={`mc-tab-link fin-tab fin-tab-menu relative flex flex-col items-center justify-center text-center ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'is-active' : ''}`}>
+           <span className="fin-tab-icon"><Menu size={21} strokeWidth={2.1}/></span>
+           <span className="fin-tab-label">Menu</span>
+           {pending > 0 && <span className="fin-tab-badge">{pending > 99 ? '99+' : pending}</span>}
          </button>
 </div>
       </nav>
@@ -492,7 +494,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
 }
 
 function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string; title: string; description: string; trailing?: ReactNode }) {
-  return <div className="mb-5 flex flex-col justify-between gap-3 border-b border-border pb-5 sm:mb-8 sm:gap-5 sm:pb-7 sm:flex-row sm:items-end">
+  return <div className="mc-page-intro mb-5 flex flex-col justify-between gap-3 border-b border-border pb-5 sm:mb-8 sm:gap-5 sm:pb-7 sm:flex-row sm:items-end">
     <div><div className="mb-2 text-[11px] font-semibold uppercase tracking-[.16em] text-muted-foreground sm:mb-3">{eyebrow}</div>
       <h1 className="serif text-[30px] leading-[1.08] tracking-[-.025em] sm:text-[42px]">{title}</h1>
       <p className="mt-2 max-w-[620px] text-[13px] leading-6 text-muted-foreground sm:mt-3">{description}</p>
@@ -546,12 +548,12 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
-    {!isFinanceEdition() && <Link href="/assistant" aria-label="Open Compass Personal AI assistant" className="mb-5 flex items-center gap-3 rounded-[20px] border border-primary/20 bg-primary/5 px-4 py-4 shadow-sm">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Compass size={20}/></span>
-      <span className="min-w-0 flex-1"><span className="block text-[14px] font-bold">Ask Compass Personal</span><span className="mt-1 block text-[12px] leading-5 text-muted-foreground">Your everyday assistant and complete finance workspace. Ask, research, write, plan and review finances with approved private tools.</span></span>
-      <ArrowRight size={18} className="shrink-0 text-primary"/>
+    {!isFinanceEdition() && <Link href="/assistant" aria-label="Open Compass Personal AI assistant" className="mb-3 flex items-center gap-3 rounded-[18px] border border-primary/15 bg-primary/5 px-3.5 py-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-primary text-primary-foreground"><Compass size={18}/></span>
+      <span className="min-w-0 flex-1"><span className="block text-[13px] font-bold leading-tight">Ask Compass Personal</span><span className="mt-0.5 block text-[11.5px] leading-[1.45] text-muted-foreground">Research, plan and review your finances with private tools.</span></span>
+      <ArrowRight size={17} className="shrink-0 text-primary"/>
     </Link>}
-    <div className="mb-5 lg:hidden">
+    <div className="mb-3 lg:hidden">
       <MobileOverview currency={data.currency} totalDebt={debtTotal}
         accountsCount={data.accounts.length} accounts={data.accounts}
         documentsCount={docs.length} approvedEntryCount={entries.length}

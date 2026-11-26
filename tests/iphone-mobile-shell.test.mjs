@@ -36,14 +36,15 @@ test('header reports phone connectivity, not a potentially unverified desktop AI
   assert.doesNotMatch(app,/\{online \? 'Connected' : 'Offline'\} · \{active\.label\}/);
 });
 
-test('standalone iPhone system status area matches established ngrok dark green surface',()=>{
-  assert.match(html,/<meta name="theme-color" content="#253c36"\s*\/>/);
+test('standalone iPhone system status area paints one opaque ink surface',()=>{
+  // Finance v2 unified the app bar, status-bar backing and manifest on one ink value.
+  assert.match(html,/<meta name="theme-color" content="#0b1620"\s*\/>/);
   assert.match(html,/<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"\s*\/>/);
-  assert.equal(manifest.background_color,'#253c36');
-  assert.equal(manifest.theme_color,'#253c36');
-  assert.match(css,/html, body \{ background-color: #253c36; \}/);
+  assert.equal(manifest.background_color,'#0b1620');
+  assert.equal(manifest.theme_color,'#0b1620');
+  assert.match(css,/html, body \{ background-color: #0b1620; \}/);
   assert.match(css,/#root \{ background-color: hsl\(var\(--background\)\); \}/);
-  assert.match(css,/\.mc-mobile-header::before\s*\{[\s\S]*?position: fixed;[\s\S]*?height: env\(safe-area-inset-top, 0px\);[\s\S]*?background-color: #253c36;/);
+  assert.match(css,/\.mc-mobile-header::before\s*\{[\s\S]*?position: fixed;[\s\S]*?height: env\(safe-area-inset-top, 0px\);[\s\S]*?background-color: #0b1620;/);
   // Preserve the opaque non-blurred header and bottom navigation from PR #12.
   assert.match(css,/\.mc-mobile-header\s*\{[\s\S]*?-webkit-backdrop-filter: none;/);
   assert.match(css,/\.mc-mobile-tabbar\s*\{[\s\S]*?-webkit-backdrop-filter: none;/);

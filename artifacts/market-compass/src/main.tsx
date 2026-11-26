@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import './vendor/bootstrap/bootstrap-grid.min.css';
 import './index.css';
 import './ionic-shell.css';
+import './finance-v2.css';
 
 setupIonicReact({mode:'ios'});
 

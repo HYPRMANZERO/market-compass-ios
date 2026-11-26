@@ -1363,12 +1363,12 @@ export default function VoiceAssistant({
           </label>
           {query.trim()&&!listening?
             <button type="submit" disabled={busy} aria-label="Send question"
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40">
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[#7fe3b0] text-[#08201a] disabled:opacity-40">
               <Send size={19}/>
             </button>:
             <button type="button" onClick={toggleMic} disabled={!recognitionSupported||busy}
               aria-pressed={listening} aria-label={listening?'Stop listening':'Speak a question'}
-              className={'grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 '+(listening?'animate-pulse bg-[hsl(5,60%,47%)]':'bg-[hsl(165,24%,25%)]')}>
+              className={'grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 '+(listening?'animate-pulse bg-[hsl(5,60%,47%)]':'bg-[#123c33]')}>
               {listening?<MicOff size={22}/>:<Mic size={23}/>}
             </button>}
         </form>
