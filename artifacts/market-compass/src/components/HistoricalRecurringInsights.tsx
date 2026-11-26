@@ -2,7 +2,7 @@ import {Link} from 'wouter';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import type {LocalFinanceDocument} from '@/lib/localFinanceDocs';
 import {localDate} from '@/lib/dailyBackup';
-import {historicalEvidence,recurringPatterns} from '@/lib/historicalRecurring';
+import {historicalEvidence,recurringPatterns,recurringDisplayLabel} from '@/lib/historicalRecurring';
 
 type Props={documents:LocalFinanceDocument[];entries:ExpenseEntry[];currency:string};
 const cash=(n:number,currency:string)=>new Intl.NumberFormat('en-ZA',{
@@ -56,12 +56,12 @@ export default function HistoricalRecurringInsights({documents,entries,currency}
         <ul className="mt-3 space-y-2">
           {patterns.map(p=><li key={p.key} className="rounded-lg border border-border p-3 text-[11px]">
             <div className="flex flex-wrap justify-between gap-2">
-              <span className="font-semibold">{p.description}</span>
+              <span className="font-semibold">{recurringDisplayLabel(p.description)}</span>
               <span className="font-semibold">{cash(p.typicalAmount,currency)} typical</span>
             </div>
             <p className="mt-1 text-muted-foreground">
               {p.observedCycles} observed cycles · {p.firstDate} to {p.lastDate} · {p.kind}
-              {' · '}{p.confidence==='strong'?'3+ separate cycles':'2 separate cycles'}
+              {' · Historical observation'}
             </p>
             {p.minAmount!==p.maxAmount&&<p className="mt-1 text-muted-foreground">
               Recorded range: {cash(p.minAmount,currency)} – {cash(p.maxAmount,currency)}
