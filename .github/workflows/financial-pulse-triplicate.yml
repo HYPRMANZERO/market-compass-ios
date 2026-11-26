@@ -3,6 +3,9 @@ name: Validate Financial Pulse triplicate
 on:
   pull_request:
     paths:
+      - 'artifacts/market-compass/src/lib/financialPulse.ts'
+      - 'artifacts/market-compass/src/components/FinancialPulse.tsx'
+      - 'tests/financial-pulse.test.mjs'
       - 'artifacts/market-compass/src/lib/financialPulseForecast.ts'
       - 'artifacts/market-compass/src/components/FinancialPulseMini.tsx'
       - 'artifacts/market-compass/src/components/AssistantMessageText.tsx'
@@ -34,5 +37,5 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Financial Pulse deterministic regression attempt ${attempt}/3"
-            node --experimental-strip-types --test tests/financial-pulse-readonly.test.mjs tests/recurring-spend-insights.test.mjs tests/financial-pulse-guidance.test.mjs
+            node --experimental-strip-types --test tests/financial-pulse.test.mjs tests/financial-pulse-readonly.test.mjs tests/recurring-spend-insights.test.mjs tests/financial-pulse-guidance.test.mjs
           done
