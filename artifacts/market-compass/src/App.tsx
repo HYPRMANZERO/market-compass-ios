@@ -35,6 +35,7 @@ import MobileOverview from '@/components/MobileOverview';
 import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
+import FinancialPulseMini from '@/components/FinancialPulseMini';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import LedgerIntegrityPanel from '@/components/LedgerIntegrityPanel';
 import FinancialSourceStatusPanel from '@/components/FinancialSourceStatusPanel';
@@ -593,7 +594,8 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
         /></Suspense>}
       </div>
     </details>
-    <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
+    <FinancialPulseMini entries={entries} currency={data.currency}/>
+      <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
       currency={data.currency} settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}/></div>
     <FinancialSourceStatusPanel entries={entries} documents={docs}/>
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
