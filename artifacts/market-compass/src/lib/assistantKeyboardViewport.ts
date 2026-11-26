@@ -47,6 +47,21 @@ export function assistantRestingViewportGeometry(
   return {visibleBottom,bottomInset,tabbarHeight:nav};
 }
 
+/**
+ * The chat surface is absolutely positioned in document coordinates, but the
+ * region it has to fill is the VISUAL viewport band. Installed iOS WebKit keeps
+ * the document frozen while it pans the visual viewport down to keep the focused
+ * composer above the keyboard: scrollY stays 0, so visualViewport.pageTop reports
+ * 0 while offsetTop reports the pan. Using pageTop alone then draws the surface
+ * too high and leaves a strip of empty page between the composer and the
+ * keyboard. The band's top on screen is therefore the larger of the two.
+ */
+export function chatSurfaceVisibleTop(offsetTop:number,pageTop:number):number {
+  const offset=Number.isFinite(offsetTop)?Math.max(0,Math.round(offsetTop)):0;
+  const page=Number.isFinite(pageTop)?Math.max(0,Math.round(pageTop)):0;
+  return Math.max(offset,page);
+}
+
 export function installAssistantKeyboardViewport():()=>void {
   const root=document.documentElement;
   const visual=window.visualViewport;
@@ -109,7 +124,7 @@ export function installAssistantKeyboardViewport():()=>void {
     if(focused){
       root.style.setProperty('--mc-chat-visible-height',height+'px');
       root.style.setProperty('--mc-chat-visible-top',top+'px');
-      root.style.setProperty('--mc-chat-visible-page-top',pageTop+'px');
+      root.style.setProperty('--mc-chat-visible-page-top',chatSurfaceVisibleTop(top,pageTop)+'px');
     }else{
       root.style.removeProperty('--mc-chat-visible-height');
       root.style.removeProperty('--mc-chat-visible-top');

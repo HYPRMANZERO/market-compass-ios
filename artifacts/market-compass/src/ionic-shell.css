@@ -505,7 +505,7 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     background:linear-gradient(to bottom,
       #0b1620 0,
       #10302a calc(env(safe-area-inset-top,0px) + 10px),
-      transparent calc(env(safe-area-inset-top,0px) + 10px));
+      #f2f5fa calc(env(safe-area-inset-top,0px) + 10px));
   }
   .mc-assistant-page .mc-assistant-composer {
     grid-template-columns:52px minmax(0,1fr) 52px;
