@@ -3,6 +3,7 @@ import {Activity,ArrowRight,ShieldCheck} from 'lucide-react';
 import type {ExpenseEntry} from '@/lib/monthlyExpenses';
 import {calculateFinancialPulse} from '@/lib/financialPulseForecast';
 import {localDate} from '@/lib/dailyBackup';
+import {recurringSpendCandidates} from '@/lib/recurringSpendInsights';
 
 const zar=(n:number)=>new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:2}).format(n);
 
@@ -15,6 +16,7 @@ export default function FinancialPulseMini({entries,currency}:{entries:readonly 
   </section>;
   const pulse=calculateFinancialPulse({asOf:today,approvedEntries:entries});
   const out=pulse.recorded.expenses+pulse.recorded.debtPayments;
+  const patterns=recurringSpendCandidates(entries,today,'ZAR');
   return <section className="mb-4 rounded-[18px] border border-border bg-card p-4 lg:hidden" aria-label="Financial Pulse" data-testid="financial-pulse-mobile">
     <div className="flex items-center justify-between gap-2">
       <h2 className="flex items-center gap-2 text-[14px] font-extrabold"><Activity size={17} className="text-primary" aria-hidden="true"/>Financial Pulse</h2>
@@ -26,6 +28,14 @@ export default function FinancialPulseMini({entries,currency}:{entries:readonly 
       <div className="min-w-0 rounded-xl bg-muted/45 p-3"><p className="text-[10px] font-semibold text-muted-foreground">Recorded outflows</p><strong className="mt-1 block break-words text-[16px] font-bold tabular-nums">{out>0?zar(out):'Not recorded'}</strong></div>
     </div>
     <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={16} className="mt-0.5 shrink-0" aria-hidden="true"/><span><strong className="text-foreground">Safe to spend: unknown.</strong> Requires a fresh verified bank balance, complete approved bills and a safety buffer. Recorded differences are not bank balances.</span></p>
+    {patterns.length>0&&<details className="mt-3 rounded-xl border border-border p-3" aria-label="Observed recurring spending">
+      <summary className="cursor-pointer text-[11px] font-bold">Observed recurring spending ({patterns.length})</summary>
+      <p className="mt-2 text-[10px] leading-4 text-muted-foreground">Three consecutive approved salary-cycle observations. Patterns are not confirmed future bills or bank debits.</p>
+      <ul className="mt-2 space-y-2">{patterns.slice(0,4).map(item=><li key={item.key} className="flex items-start justify-between gap-3 text-[11px]">
+        <span className="min-w-0 break-words">{item.label}<span className="block text-[10px] text-muted-foreground">Last observed {item.lastDate} · Review in Spend</span></span>
+        <strong className="shrink-0 tabular-nums">{zar(item.recentAmount)}</strong>
+      </li>)}</ul>
+    </details>}
     <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{pulse.recorded.count} approved or manually recorded entry(s); {pulse.recorded.excludedInvalidOrDuplicate} excluded. Read-only; no live bank sync.</p>
   </section>;
 }
