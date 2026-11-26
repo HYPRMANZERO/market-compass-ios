@@ -1,0 +1,30 @@
+name: Protected ledger date integrity
+
+on:
+  pull_request:
+    paths:
+      - 'artifacts/market-compass/src/lib/reviewedDocumentLedger.ts'
+      - 'tests/document-ledger-boundary-guards.test.mjs'
+      - '.github/workflows/ledger-date-integrity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boundary-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run protected ledger approval checks 3 times
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in 1 2 3; do
+            echo "Ledger safety acceptance pass ${pass}/3"
+            node --experimental-strip-types --test               tests/document-ledger-boundary-guards.test.mjs               tests/reviewed-document-ledger.test.mjs               tests/document-reconciliation.test.mjs
+          done
