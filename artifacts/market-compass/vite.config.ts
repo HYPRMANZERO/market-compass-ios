@@ -1,7 +1,8 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { protectDeployedPwaDist } from '../../scripts/protect-gateway-dist.mjs';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
@@ -19,6 +20,14 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+const outDir = path.resolve(process.env.MC_PWA_OUT_DIR || path.resolve(import.meta.dirname, 'dist/public'));
+const protectLiveGateway:Plugin = {
+  name:'market-compass-protect-live-gateway-dist',
+  apply:'build',
+  // configResolved sees final CLI overrides, before Vite empties build.outDir.
+  configResolved(config){ protectDeployedPwaDist(path.resolve(config.root, config.build.outDir)); }
+};
+
 const basePath = process.env.BASE_PATH || "/";
 
 if (!basePath) {
@@ -30,6 +39,7 @@ if (!basePath) {
 export default defineConfig({
   base: basePath,
   plugins: [
+    protectLiveGateway,
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
@@ -61,8 +71,14 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   build: {
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
+    outDir,
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname,'index.html'),
+        ionicPreview: path.resolve(import.meta.dirname,'ionic-preview.html'),
+      },
+    },
   },
   server: {
     port,

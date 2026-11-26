@@ -7,8 +7,12 @@ const owner=await readFile(new URL('components/OwnerBudgetDraftEditor.tsx',root)
 const statements=await readFile(new URL('components/LocalFinanceFiles.tsx',root),'utf8');
 const assistant=await readFile(new URL('components/VoiceAssistant.tsx',root),'utf8');
 
-test('original PWA Home and Spend expose straightforward iPhone file access',()=>{
-  assert.match(app,/<Link href="\/expenses"[\s\S]*?Import private financial files from iPhone Files/);
+test('original PWA Home and Spend expose straightforward iPhone file access',async()=>{
+  const overview=await readFile(new URL('components/MobileOverview.tsx',root),'utf8');
+  assert.match(overview,/onClick=\{onImportDocuments\} className="mc-quick-action w-full"/);
+  assert.match(overview,/onClick=\{\(\)=>setAccountActionsOpen\(true\)\}/);
+  assert.match(app,/aria-label="Import and review financial documents"/);
+  assert.match(app,/id="mc-home-upload"/);
   assert.match(app,/<Route path="\/expenses"><ExpenseLedger data=\{data\} setData=\{setData\}/);
   assert.match(app,/<OwnerBudgetDraftEditor/);
   assert.match(app,/<LocalFinanceFiles/);
@@ -28,19 +32,20 @@ test('owner JSON chooser is visible, does not filter away iPhone Files, and offe
   assert.doesNotMatch(owner,/fetch\(|axios|XMLHttpRequest/);
 });
 test('financial statement picker needs no label before choosing, with explicit review and save',()=>{
-  assert.match(statements,/disabled=\{safe\.length>=MAX_FINANCE_FILES\|\|reading\}/);
+  assert.match(statements,/disabled=\{safe\.length>=MAX_FINANCE_FILES\|\|reading\|\|!!preview\|\|needsPassword\|\|!!pendingSaveId/);
   assert.doesNotMatch(statements,/disabled=\{[^}]*label\.trim\(\)\.length/);
-  assert.match(statements,/const privateLabel=label\.trim\(\) \|\| 'iPhone financial export'/);
+  assert.match(statements,/const privateLabel=maskDocumentPII\(label\.trim\(\) \|\|/);
   assert.match(statements,/extractLocalFinanceDocument\(file\.name,data,privateLabel\)/);
-  assert.match(statements,/onAdd\(preview\)/);
+  assert.match(statements,/onAdd\(checked,previewDecisions\)/);
   assert.match(statements,/not uploaded to GitHub/);
   assert.doesNotMatch(statements,/fetch\(|axios|XMLHttpRequest/);
 });
 
-test('local finance and owner budget replies remain local even with Agent mode enabled',()=>{
-  assert.match(assistant,/result\.source === 'local-finance-documents'/);
-  assert.match(assistant,/result\.source === 'local-owner-budget'/);
-  const check=assistant.indexOf("result.source === 'local-finance-documents'");
-  const send=assistant.indexOf('void askDesktop(question, id);');
-  assert.ok(check>0&&send>check,'Local replies must be handled before remote inference');
+test('private Ollama is mandatory for explanation; offline does not impersonate AI',()=>{
+  assert.match(assistant,/const agentMode = true/);
+  assert.match(assistant,/void askDesktop\(question, id\)/);
+  assert.match(assistant,/if \(!connected\)/);
+  assert.match(assistant,/onQueueReadOnlyQuestion\(question\)/);
+  assert.doesNotMatch(assistant,/if \(result\.source === 'local-finance-documents'\)/);
+  assert.doesNotMatch(assistant,/if \(result\.source === 'local-owner-budget'\)/);
 });

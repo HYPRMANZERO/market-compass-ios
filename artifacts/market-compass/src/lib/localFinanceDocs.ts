@@ -1,6 +1,7 @@
 import {detectFinanceDocument,extractVehicleFinanceLines,classifyFinanceLabel,type FinanceDocumentKind,type FinanceField,type FinanceRole} from './vehicleFinance.ts';
-import {makeAccountProfile,maskDocumentPII,safeAccountProfile,classifyDocument,type AccountProfile} from './documentIntelligence.ts';
+import {classifyDocument,makeAccountProfile,maskDocumentPII,safeAccountProfile,type AccountProfile} from './documentIntelligence.ts';
 import {bankStatementDate,parseBankStatementText} from './bankStatementParser.ts';
+import {documentTimeContext,type DocumentTimeContext} from './documentTimeContext.ts';
 
 /**
  * Local-only, owner-reviewed financial-file intake.
@@ -34,6 +35,8 @@ export type LocalFinanceDocument={
   truncated:boolean;
   documentKind?:FinanceDocumentKind;
   accountProfile?:AccountProfile;
+  /** Historical source reporting period, not a per-transaction date. */
+  timeContext?:DocumentTimeContext;
 };
 export const MAX_FINANCE_FILES=100;
 export const MAX_FINANCE_FILE_BYTES=16_000_000;
@@ -44,17 +47,37 @@ const asObject=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='ob
 function dateOf(value:unknown):string|null{
   if(typeof value!=='string')return null;
   const v=value.trim();
-  let match=v.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  // Accept exact bank-export dates such as '27 Mar 26' or '26/03/26'.
+  // Never mine a reporting-period date out of a larger narration.
+  const sourceDate=bankStatementDate(v);
+  if(sourceDate&&sourceDate.matched.toLowerCase()===v.toLowerCase())return sourceDate.date;
+  let match=v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})(?:T.*)?$/);
   let year:string,month:string,day:string;
   if(match){[year,month,day]=match.slice(1,4);}
   else {
     match=v.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-    if(!match)return null;
-    day=match[1].padStart(2,'0');month=match[2].padStart(2,'0');year=match[3];
+    if(match){
+      day=match[1].padStart(2,'0');month=match[2].padStart(2,'0');year=match[3];
+    }else{
+      const named=v.match(/^(\d{1,2})[\s-]+([a-z]{3,9})[\s,-]+(\d{4})$/i);
+      if(!named)return null;
+      const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      const monthIndex=months.indexOf(named[2].slice(0,3).toLowerCase());
+      if(monthIndex<0)return null;
+      day=named[1].padStart(2,'0');month=String(monthIndex+1).padStart(2,'0');year=named[3];
+    }
   }
   const date=year+'-'+month+'-'+day;
   const stamp=new Date(date+'T00:00:00Z');
   return Number.isFinite(stamp.getTime())&&stamp.toISOString().slice(0,10)===date?date:null;
+}
+/** Only an explicit payroll payment date may date an otherwise undated pay row.
+ * A statement period, contract date or import timestamp is never a debit date. */
+function payslipPayDate(text:string):string|null{
+  const matched=text.slice(0,30_000).match(
+    /(?:^|\n)\s*(?:pay date|payment date|date paid|payday)\s*[:=-]?\s*(\d{4}[-/]\d{2}[-/]\d{2}|\d{1,2}[/.]\d{1,2}[/.]\d{4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/im
+  );
+  return matched?dateOf(matched[1]):null;
 }
 function maskText(value:unknown,max=130):string{
   if(typeof value!=='string')return '';
@@ -111,7 +134,16 @@ function parseCsv(text:string):LocalFinanceLine[]{
   // Keep the row parser strict to one delimiter, not mixing column separators.
   const rows=splitCsv(text,delimiter);
   if(rows.length<2)throw Error('CSV must contain a header and at least one row.');
-  const header=rows[0].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
+  // Bank exports often prepend a statement period or account heading before
+  // the actual transaction table. Find the first explicit supported header,
+  // never interpret a heading or balance summary as a transaction row.
+  const headerIndex=rows.slice(0,20).findIndex(row=>{
+    const h=row.map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
+    return h.some(x=>['description','details','transaction description','narrative','reference','item','particulars','name','pay item'].includes(x))&&
+      h.some(x=>['amount','transaction amount','value','total','net amount','net pay','gross pay','debit','debits','withdrawal','money out','paid out','credit','credits','deposit','money in','paid in'].includes(x));
+  });
+  if(headerIndex<0)throw Error('No supported transaction table headings were found in this CSV.');
+  const header=rows[headerIndex].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g,' '));
   const find=(choices:string[])=>header.findIndex(x=>choices.includes(x));
   const labelIdx=find(['description','details','transaction description','narrative','reference','item','particulars','name','pay item']);
   const dateIdx=find(['date','transaction date','posting date','value date','pay date','period']);
@@ -121,17 +153,32 @@ function parseCsv(text:string):LocalFinanceLine[]{
   if(labelIdx<0 || (amountIdx<0&&(debitIdx<0&&creditIdx<0)))
     throw Error('Unsupported CSV columns. Export a table with Description and Amount (or Debit/Credit), optionally Date.');
   const out:LocalFinanceLine[]=[];
-  for(const row of rows.slice(1)){
+  for(const row of rows.slice(headerIndex+1)){
     if(out.length>=MAX_FINANCE_LINES+1)break;
     const description=maskText(row[labelIdx],130);
     if(!description)continue;
     let direction:LocalFinanceLine['direction']='unclassified';
-    let amount=amountIdx>=0?moneyOf(row[amountIdx]):null;
-    if(amount===null&&creditIdx>=0){const credit=moneyOf(row[creditIdx]);if(credit!==null&&credit!==0){amount=Math.abs(credit);direction='incoming';}}
-    if(amount===null&&debitIdx>=0){const debit=moneyOf(row[debitIdx]);if(debit!==null&&debit!==0){amount=Math.abs(debit);direction='outgoing';}}
-    if(amount===null)continue;
-    // Signed values are not always direction-labelled by banks. Do not guess
-    // when a generic Amount field has an unknown sign convention.
+    // Explicit Debit/Credit columns override an unsigned Amount column ONLY
+    // when exactly one column has a valid nonzero value. If both are filled
+    // or a filled column is malformed, fail closed rather than reversing cashflow.
+    const debitRaw=debitIdx>=0?String(row[debitIdx]??'').trim():'';
+    const creditRaw=creditIdx>=0?String(row[creditIdx]??'').trim():'';
+    const debit=debitRaw?moneyOf(debitRaw):null;
+    const credit=creditRaw?moneyOf(creditRaw):null;
+    if((debitRaw&&debit===null)||(creditRaw&&credit===null))continue;
+    const hasDebit=debit!==null&&debit!==0;
+    const hasCredit=credit!==null&&credit!==0;
+    if(hasDebit&&hasCredit)continue;
+    let amount:number|null=amountIdx>=0?moneyOf(row[amountIdx]):null;
+    if(hasDebit){amount=Math.abs(debit!);direction='outgoing';}
+    else if(hasCredit){amount=Math.abs(credit!);direction='incoming';}
+    else if((debitRaw||creditRaw)&&amount!==null) {
+      // Explicit zero columns do not establish a transaction direction.
+      direction='unclassified';
+    }
+    if(amount===null||amount===0)continue;
+    // Signed generic Amount fields can be either bank or customer-perspective;
+    // never guess their direction without an explicit source debit/credit field.
     out.push({label:description,amount,date:dateIdx>=0?dateOf(row[dateIdx]):null,direction});
   }
   return out;
@@ -143,11 +190,11 @@ function parseText(text:string):LocalFinanceLine[]{
     const trimmed=raw.trim();if(trimmed.length<3)continue;
     const sourceDate=bankStatementDate(trimmed);
     const body=sourceDate?trimmed.replace(sourceDate.matched,' '):trimmed;
-    // Read a complete numeric token. A date or a second currency value makes
-    // a poor substitute for the labelled amount.
+    // Read a complete numeric token. Dates and second currency values
+    // must never be interpreted as amounts.
     const currencyValues=[...body.matchAll(/(?:^|[^\w.,+-])([+-]?)\s*(?:ZAR|R)\s*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)/gi)];
     if(currencyValues.length>1)continue;
-    const known=body.match(/\b(?:salary|basic pay|gross pay|net pay|paye|tax|deduction|amount due|invoice total|total due|take home pay|payment|total|insurance|fuel|rent|car payment)\b[\s:=]*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)(?![\d.,%])/i);
+    const known=body.match(/\b(?:salary|basic pay|gross pay|gross earnings|net pay|paye|tax|deduction|amount due|invoice total|total due|take home pay|payment|total paid|receipt total|amount paid|subtotal|vat|insurance|fuel|rent|car payment)\b[\s:=]*([+-]?\d+(?:[.,]\d+|[ \u00a0]\d{3}\b)*)(?![\d.,%])/i);
     const match=currencyValues[0];
     let token=match?match[1]+match[2]:known?.[1];
     if(!token)continue;
@@ -174,10 +221,18 @@ function parseJson(text:string):LocalFinanceLine[]{
   for(const row of source.slice(0,MAX_FINANCE_LINES+1)){
     if(!asObject(row))continue;
     const label=maskText(row.description??row.label??row.details??row.name,130);
-    const amount=moneyOf(row.amount??row.value??row.total);
-    if(!label||amount===null)continue;
-    out.push({label,amount,date:dateOf(row.date??row.transactionDate),
-      direction:row.direction==='incoming'||row.direction==='outgoing'?row.direction:'unclassified'});
+    const debit=moneyOf(row.debit??row.withdrawal??row.moneyOut);
+    const credit=moneyOf(row.credit??row.deposit??row.moneyIn);
+    if(debit!==null&&debit!==0&&credit!==null&&credit!==0)continue;
+    const direction:LocalFinanceLine['direction']=
+      row.direction==='incoming'||row.direction==='credit'?'incoming':
+      row.direction==='outgoing'||row.direction==='debit'?'outgoing':
+      debit!==null&&debit!==0?'outgoing':credit!==null&&credit!==0?'incoming':'unclassified';
+    const amount=debit!==null&&debit!==0?Math.abs(debit):
+      credit!==null&&credit!==0?Math.abs(credit):moneyOf(row.amount??row.value??row.total);
+    if(!label||amount===null||amount===0)continue;
+    const sourceDate=row.transactionDate??row.postingDate??row.valueDate??row.paymentDate??row.date;
+    out.push({label,amount,date:dateOf(sourceDate),direction});
   }
   return out;
 }
@@ -220,6 +275,18 @@ export function validateLocalFinanceDocument(input:unknown):LocalFinanceDocument
     if(!profile)return null;
     validated.accountProfile=profile;
   }
+  if(input.timeContext!==undefined){
+    if(!asObject(input.timeContext)||
+      !['explicit-period','dated-rows','explicit-as-of'].includes(String(input.timeContext.basis))||
+      (input.timeContext.from!==null&&dateOf(input.timeContext.from)!==input.timeContext.from)||
+      (input.timeContext.to!==null&&dateOf(input.timeContext.to)!==input.timeContext.to)||
+      (input.timeContext.asOf!==null&&dateOf(input.timeContext.asOf)!==input.timeContext.asOf)||
+      Boolean(input.timeContext.from)!==Boolean(input.timeContext.to)||
+      (typeof input.timeContext.from==='string'&&typeof input.timeContext.to==='string'&&input.timeContext.from>input.timeContext.to))return null;
+    validated.timeContext={from:input.timeContext.from as string|null,
+      to:input.timeContext.to as string|null,asOf:input.timeContext.asOf as string|null,
+      basis:input.timeContext.basis as DocumentTimeContext['basis']};
+  }
   return validated;
 }
 export function extractLocalFinanceDocument(
@@ -234,17 +301,25 @@ export function extractLocalFinanceDocument(
   if(extension!=='csv'&&extension!=='txt'&&extension!=='json'&&extension!=='pdf')
     throw Error('Supported: CSV, TXT, transaction JSON and already-extracted PDF text. Photos, DOCX and spreadsheets need a separate offline extractor; nothing was uploaded.');
   const documentKind=extension==='pdf'?detectFinanceDocument(text,fileName+' '+ownerLabel):'unclassified';
-  const classified=classifyDocument(text,fileName+' '+ownerLabel);
+  const classified=classifyDocument(text);
   const bankStatement=(extension==='pdf'||extension==='txt')&&
     classified.category==='bank-statement'&&documentKind==='unclassified'?
       parseBankStatementText(text,MAX_FINANCE_LINES):null;
-  // Bank statements contain running balances: never use the generic R-amount
-  // matcher for these rows. Otherwise an account balance can become a fee.
-  const lines:LocalFinanceLine[]=documentKind!=='unclassified'?
+  // Preserve dedicated bank statement and vehicle finance parsers so running
+  // balances and contract amounts never masquerade as completed transactions.
+  let lines:LocalFinanceLine[]=documentKind!=='unclassified'?
     extractVehicleFinanceLines(text).map(line=>({...line,label:maskText(line.label,130)})):
     bankStatement?bankStatement.lines.map(line=>({...line,label:maskText(line.label,130)})):
     extension==='csv'?parseCsv(text):
     extension==='txt'||extension==='pdf'?parseText(text):parseJson(text);
+  // A payslip payment date is explicit evidence for payroll fields only,
+  // never a substitute for an undated bank statement transaction.
+  if(classified.category==='payslip'){
+    const paidOn=payslipPayDate(text);
+    if(paidOn)lines=lines.map(line=>line.date===null&&
+      /\b(?:net pay|take home pay|gross pay|gross earnings|basic pay|paye)\b/i.test(line.label)
+      ?{...line,date:paidOn}:line);
+  }
   if(!lines.length)throw Error(bankStatement?
     'Bank statement found, but no complete dated transaction or labelled balance rows were read. Try a bank CSV export or check the PDF layout; nothing was saved.':
     'No financial rows with recognisable amounts were found. Nothing was saved.');
@@ -254,7 +329,9 @@ export function extractLocalFinanceDocument(
     bankVerified:false as const,complete:false as const,
     lines:lines.slice(0,MAX_FINANCE_LINES),truncated:bankStatement?.truncated===true||lines.length>MAX_FINANCE_LINES,
     documentKind,
-    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified}
+    accountProfile:{...makeAccountProfile(text,ownerLabel,lines.slice(0,MAX_FINANCE_LINES)),...classified},
+    ...(documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))?{
+      timeContext:documentTimeContext(text,lines.slice(0,MAX_FINANCE_LINES))!}:{})
   };
   const validated=validateLocalFinanceDocument(document);
   if(!validated)throw Error('File review could not produce a safe bounded local document.');
@@ -279,6 +356,27 @@ export function reclassifySavedFinanceDocument(input:LocalFinanceDocument):Local
   return result;
 }
 
+/**
+ * Conservative local duplicate detector. Only COMPLETE, identically extracted
+ * summaries with the same recognised account category/provider are equivalent.
+ * Re-importing a truncated source can reveal previously omitted rows and must
+ * never be blocked just because the first saved excerpt happens to match.
+ * Compare validated, already-redacted fields; never retain filenames, paths
+ * or raw source document bytes as a persistent identifier.
+ */
+export function sameReviewedFinanceEvidence(a:LocalFinanceDocument,b:LocalFinanceDocument):boolean{
+  if(a.truncated||b.truncated||a.lines.length===0||a.lines.length!==b.lines.length||
+    a.format!==b.format||a.documentKind!==b.documentKind||
+    (a.accountProfile?.category??'')!==(b.accountProfile?.category??'')||
+    (a.accountProfile?.institution??'')!==(b.accountProfile?.institution??''))return false;
+  const fields=(left:LocalFinanceLine,right:LocalFinanceLine)=>
+    left.label===right.label&&left.amount===right.amount&&
+    left.date===right.date&&left.direction===right.direction&&
+    left.semanticRole===right.semanticRole&&left.semanticField===right.semanticField&&
+    left.ratePercent===right.ratePercent&&left.runningBalance===right.runningBalance;
+  return a.lines.every((line,index)=>fields(line,b.lines[index]));
+}
+
 export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDocument):LocalFinanceDocument[]{
   if(!Array.isArray(current))throw Error('Invalid existing encrypted document list. Export a backup first.');
   const checked=current.map(validateLocalFinanceDocument);
@@ -287,6 +385,8 @@ export function addLocalFinanceDocument(current:unknown,document:LocalFinanceDoc
   const checkedDocument=validateLocalFinanceDocument(document);
   if(!checkedDocument||safe.length>=MAX_FINANCE_FILES||
      safe.some(x=>x.id===checkedDocument.id))throw Error('Document is invalid, duplicate, or the device document-summary capacity has been reached.');
+  if(safe.some(previous=>sameReviewedFinanceEvidence(previous,checkedDocument)))
+    throw Error('This financial document appears to be already saved. Review the existing copy; no duplicate amounts were imported.');
   // Save the reconstructed allowlist object, NEVER the caller's untrusted
   // input. This prevents injected secrets, source paths or extra fields from
   // entering the encrypted workspace even if a caller uses type assertions.

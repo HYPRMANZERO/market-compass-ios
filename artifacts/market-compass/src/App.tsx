@@ -1,5 +1,7 @@
-import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
+import { IonApp, IonHeader, IonToolbar, IonFooter, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { parseCandleCsv } from '@/lib/candles';
 import { Toaster } from '@/components/ui/toaster';
@@ -14,15 +16,26 @@ import {
   type LocalFinanceDocument
 } from '@/lib/localFinanceDocs';
 import { summarizeOwnerBudgetDraft, type OwnerBudgetDraft } from '@/lib/ownerBudgetDraft';
+import {applyReviewedDocumentToLedger,mergeReviewedDocumentEntries} from '@/lib/reviewedDocumentLedger';
 import { enqueueOfflineQuestion, removeOfflineQuestion, type QueuedReadOnlyQuestion } from '@/lib/offlineAgentQueue';
 import { DEFAULT_DESKTOP_AI, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import type { CompassCommandContext } from '@/lib/compassCommands';
 import DebtPaymentHandoff from '@/components/DebtPaymentHandoff';
 import MobileOverview from '@/components/MobileOverview';
+import FinancialSpaceHero from '@/components/FinancialSpaceHero';
+import BankCarousel from '@/components/BankCarousel';
+import {maskDocumentPII} from '@/lib/documentIntelligence';
+import SavedCategoryReview from '@/components/SavedCategoryReview';
+import {applySavedCategoryChanges} from '@/lib/savedCategoryReview';
+import FinancialPulse from '@/components/FinancialPulse';
 import HomeFinancialEvidence from '@/components/HomeFinancialEvidence';
 import AccountEvidenceReview from '@/components/AccountEvidenceReview';
+import AccountTransactionHistory from '@/components/AccountTransactionHistory';
+import IncomeAllocation from '@/components/IncomeAllocation';
 import HistoricalRecurringInsights from '@/components/HistoricalRecurringInsights';
 import MonthlyExpenses from '@/components/MonthlyExpenses';
+import SpendingPortfolio from '@/components/SpendingPortfolio';
+const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 import { DEFAULT_EXPENSE_SETTINGS, type ExpenseEntry, type ExpenseSettings, cycleAnalysis, salaryCycle } from '@/lib/monthlyExpenses';
 import DebtAdvisor, { emptyPrivateBudget, type FinancialBaseline, type PrivateBudget } from '@/components/DebtAdvisor';
 import OzowMerchantGateway, { type MerchantRequestRecord } from '@/components/OzowMerchantGateway';
@@ -41,6 +54,7 @@ import {
 } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { encryptWorkspace, decryptWorkspace, readVault, writeVault, shareVaultToFiles, storeDailySnapshot, validateRecord, compressionSummary, type EncryptedRecord } from '@/lib/localVault';
+import {persistLatestAfterPending} from '@/lib/vaultWriteCoordinator';
 import { backupDue, localDate, loadDailyBackupSettings, persistDailyBackupSettings, type DailyBackupSettings } from '@/lib/dailyBackup';
 
 const queryClient = new QueryClient();
@@ -71,12 +85,19 @@ function useWorkspaceVault() {
   const [savedAt, setSavedAt] = useState('');
   const [lastRecord, setLastRecord] = useState<EncryptedRecord | null>(null);
   const [saving, setSaving] = useState(false);
+  const [locking, setLocking] = useState(false);
+  const writeEpoch = useRef(0);
+  const lockInProgress = useRef(false);
   const [backupSettings, setBackupSettings] = useState<DailyBackupSettings>(loadDailyBackupSettings);
   const [backupMessage, setBackupMessage] = useState('');
   const [dailyBackupPending, setDailyBackupPending] = useState(() => { const settings = loadDailyBackupSettings(); return settings.enabled && settings.lastSnapshotDate === localDate() && settings.lastExportRequestedAt.slice(0, 10) !== localDate(); });
   const snapshotRunning = useRef(false);
   const dataRef = useRef(data);
   dataRef.current = data;
+  // Referential dirty flag: blocks exporting an earlier ciphertext during
+  // the debounce before the next encrypted IndexedDB transaction completes.
+  const lastSavedDataRef = useRef<WorkspaceData|null>(null);
+  const unsavedChanges = password!==null && data!==lastSavedDataRef.current;
   const passwordRef = useRef(password);
   passwordRef.current = password;
 
@@ -96,7 +117,9 @@ function useWorkspaceVault() {
       if (!stored) throw new Error('There is no encrypted vault yet. Create one below.');
       const restored = await decryptWorkspace<WorkspaceData>(stored, entered);
       if (!restored || !Array.isArray(restored.drafts) || !Array.isArray(restored.accounts) || !Array.isArray(restored.queue)) throw new Error('Vault contains an invalid workspace.');
-      setEnabled(false); setData({ ...defaultData, ...restored }); setPassword(entered); setHasVault(true);
+      const restoredData={...defaultData,...restored};
+      lastSavedDataRef.current=restoredData;
+      setEnabled(false); setData(restoredData); setPassword(entered); setHasVault(true);
       setSavedAt(stored.updatedAt); setLastRecord(stored); setGeneration((n) => n + 1);
       // The saved vault is authoritative. Never restore old plaintext over it.
       localStorage.removeItem(STORE_KEY);
@@ -111,34 +134,75 @@ function useWorkspaceVault() {
       const initial = readLegacyWorkspace();
       const record = await encryptWorkspace(initial, entered);
       await writeVault(record);
+      lastSavedDataRef.current=initial;
       setEnabled(false); setData(initial); setPassword(entered); setHasVault(true);
       setSavedAt(record.updatedAt); setLastRecord(record); setGeneration((n) => n + 1);
       localStorage.removeItem(STORE_KEY); setHasLegacy(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
-  const lock = () => { setEnabled(false); setPassword(null); setData(defaultData); setGeneration((n) => n + 1); setRevision(0); };
+  const lock = async (): Promise<void> => {
+    const activePassword=passwordRef.current;
+    if(!activePassword||lockInProgress.current)return;
+    lockInProgress.current=true;
+    // Fence older debounce and queued jobs. Already-running writes finish
+    // before the final full snapshot is committed; failed final writes keep
+    // the workspace unlocked rather than discarding unsaved data.
+    writeEpoch.current++;
+    setLocking(true);
+    setSaving(true);
+    setError('');
+    try {
+      const snapshot=dataRef.current;
+      const operation=persistLatestAfterPending(
+        writeQueue.current,snapshot,
+        value=>encryptWorkspace(value,activePassword),
+        record=>writeVault(record)
+      );
+      writeQueue.current=operation.then(()=>{});
+      const record=await operation;
+      setSavedAt(record.updatedAt);
+      setLastRecord(record);
+      lastSavedDataRef.current=snapshot;
+      setEnabled(false);
+      setPassword(null);
+      setData(defaultData);
+      setGeneration(n=>n+1);
+      setRevision(0);
+    }catch(e){
+      setError('Lock prevented to protect unsaved changes: '+
+        (e instanceof Error?e.message:String(e))+'. Retry after checking local storage.');
+    }finally{
+      lockInProgress.current=false;
+      setLocking(false);
+      setSaving(false);
+    }
+  };
   // Debounced, serialized saves. The active generation is invalidated on lock/unlock.
   useEffect(() => {
-    if (!enabled || !password) return;
+    if (!enabled || !password || locking) return;
+    const epoch=writeEpoch.current;
     let cancelled = false;
     setSaving(true);
     const t = window.setTimeout(async () => {
       try {
         const record = await encryptWorkspace(data, password);
-        if (cancelled) return;
+        if (cancelled || writeEpoch.current!==epoch) return;
         // Serialize IndexedDB commits so an older auto-save cannot land after a newer one.
         const next = writeQueue.current.catch(() => {}).then(async () => {
-          if (cancelled) return;
+          if (cancelled || writeEpoch.current!==epoch) return;
           await writeVault(record);
         });
         writeQueue.current = next;
         await next;
-        if (!cancelled) { setSavedAt(record.updatedAt); setLastRecord(record); setError(''); }
+        if (!cancelled && writeEpoch.current===epoch) {
+          lastSavedDataRef.current=data;
+          setSavedAt(record.updatedAt); setLastRecord(record); setError('');
+        }
       } catch (e) { if (!cancelled) setError(`Auto-save failed: ${e instanceof Error ? e.message : String(e)}. Export a backup.`); }
       finally { if (!cancelled) setSaving(false); }
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [data, password, enabled, generation, revision]);
+  }, [data, password, enabled, generation, revision, locking]);
   // Enables saving only after the restored workspace has rendered, so default data
   // can never overwrite an existing encrypted vault before unlock.
   useEffect(() => { if (password) setEnabled(true); }, [password, generation]);
@@ -163,18 +227,17 @@ function useWorkspaceVault() {
         // Run behind pending auto-saves and serialize against future saves.
         const operation = writeQueue.current.catch(() => {}).then(async () => {
           if (disposed) return;
-          await writeVault(record);
+          // Daily snapshots must NEVER rewrite the live workspace: a snapshot
+          // was captured at an earlier instant and may now be stale.
           await storeDailySnapshot(record, localDate());
         });
         writeQueue.current = operation;
         await operation;
         if (disposed) return;
-        if (disposed) return;
         const updated = { ...settings, lastSnapshotDate: localDate() };
         persistDailyBackupSettings(updated); setBackupSettings(updated);
         setDailyBackupPending(true);
-        setBackupMessage('Daily encrypted backup prepared locally. Tap Save to Files to export it.');
-        setSavedAt(record.updatedAt); setLastRecord(record);
+        setBackupMessage('Daily encrypted restore point saved locally. Use Export encrypted backup to share the current live vault.');
       } catch (e) {
         if (!disposed) setError(`Scheduled backup failed: ${e instanceof Error ? e.message : String(e)}`);
       } finally { snapshotRunning.current = false; }
@@ -187,7 +250,10 @@ function useWorkspaceVault() {
   }, [password, backupSettings.enabled, backupSettings.time]);
   const exportBackup = async (): Promise<boolean> => {
     if (!password || !lastRecord) return false;
-    if (saving) { setBackupMessage('Please wait for the encrypted auto-save to finish before exporting.'); return false; }
+    if (saving || locking || lockInProgress.current || unsavedChanges) {
+      setBackupMessage('Unsaved changes are pending. Confirm Last saved has updated before exporting.');
+      return false;
+    }
     try {
       // Safari's navigator.share requires direct user activation. Call it before
       // any await, using the already-encrypted latest saved record.
@@ -210,12 +276,14 @@ function useWorkspaceVault() {
       if (!restored || !Array.isArray(restored.drafts) || !Array.isArray(restored.accounts) || !Array.isArray(restored.queue)) throw new Error('Backup is not a Market Compass workspace.');
       setEnabled(false);
       await writeVault(incoming);
-      setData({ ...defaultData, ...restored }); setHasVault(true); setPassword(entered);
+      const restoredData={...defaultData,...restored};
+      lastSavedDataRef.current=restoredData;
+      setData(restoredData); setHasVault(true); setPassword(entered);
       setSavedAt(incoming.updatedAt); setLastRecord(incoming); setGeneration((n) => n + 1);
       localStorage.removeItem(STORE_KEY); setHasLegacy(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
-  return { data, setData, password, initializing, hasVault, hasLegacy, error, savedAt, saving, compressionInfo: compressionSummary(lastRecord), backupSettings, setSchedule, backupMessage, dailyBackupPending, unlock, create, lock, exportBackup, importBackup };
+  return { data, setData, password, initializing, hasVault, hasLegacy, error, savedAt, saving, locking, unsavedChanges, compressionInfo: compressionSummary(lastRecord), backupSettings, setSchedule, backupMessage, dailyBackupPending, unlock, create, lock, exportBackup, importBackup };
 }
 
 function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
@@ -225,36 +293,41 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<void>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
-  return <main className="flex min-h-[100dvh] flex-col bg-[hsl(165,24%,19%)] px-4 pb-[calc(26px+env(safe-area-inset-bottom))] pt-[calc(32px+env(safe-area-inset-top))] text-white sm:justify-center">
-    <div className="mx-auto w-full max-w-[430px]">
-      <div className="mb-7 flex items-center gap-3 px-1">
-        <span className="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={27}/></span>
-        <div><h1 className="serif text-[27px] leading-none">Market Compass</h1><p className="mt-1 text-[11px] uppercase tracking-[.17em] text-white/60">Your private finance app</p></div>
+  return <main className="mc-vault-entry flex min-h-[100dvh] flex-col bg-[hsl(165,24%,19%)] px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-[calc(16px+env(safe-area-inset-top))] text-white sm:justify-center">
+    <div className="mx-auto w-full max-w-[390px]">
+      <div className="mb-4 flex items-center gap-3 px-1">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]"><Compass size={22}/></span>
+        <div><h1 className="serif text-[22px] leading-tight">Market Compass</h1><p className="mt-0.5 text-[10px] uppercase tracking-[.14em] text-white/65">Your private finance app</p></div>
       </div>
-      <div className="rounded-[26px] bg-[hsl(44,33%,99%)] p-5 text-foreground shadow-[0_20px_60px_rgba(0,0,0,.12)] sm:p-7">
-        <div className="mb-4 flex items-center gap-2"><ShieldCheck className="text-primary" size={23}/><h2 className="text-[21px] font-bold">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
-        <p className="text-[13px] leading-6 text-muted-foreground">Debt plans, saved markets and notes are stored encrypted on this device. No bank sign-in is required.</p>
-        <p role="note" className="mt-3 rounded-xl border border-border bg-muted/30 p-3 text-[11px] leading-5 text-muted-foreground">
-          Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>.
-          The browser tab, installed Home Screen app and different HTTPS addresses can have
-          separate encrypted vaults. If the password works in one but not here,
-          reopen the original session where your documents were saved.
-          Do not clear website data or overwrite either vault.
-        </p>
-        {!vault.hasVault && <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
-          Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
-        </p>}
-        {vault.hasLegacy && !vault.hasVault && <p className="mt-3 rounded-xl bg-muted p-3 text-[12px] leading-5">Older unencrypted workspace detected. Creating a vault will encrypt it and remove the old local copy once saved.</p>}
+      <div className="rounded-[22px] bg-[hsl(44,33%,99%)] p-4 text-foreground shadow-[0_16px_44px_rgba(0,0,0,.12)] sm:p-6">
+        <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
+        <p className="text-[12px] leading-[1.6] text-muted-foreground">Your debt plans, markets and notes are encrypted on this device. No bank login required.</p>
+        <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">{isStandalone?'Home Screen app':'Safari browser tab'} · Vault & privacy information</summary>
+          <p role="note" className="mt-2 leading-[1.6]">
+            Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>.
+            Browser tabs, Home Screen apps and different HTTPS addresses can have separate encrypted vaults.
+            If your password works elsewhere, open the original session where your documents were saved.
+            Do not clear website data or overwrite either vault.
+          </p>
+        </details>
+        {!vault.hasVault && <details className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px]">
+          <summary className="cursor-pointer font-semibold text-foreground">Already have a vault? Restore it instead</summary>
+          <p role="note" className="mt-2 leading-[1.6] text-muted-foreground">
+            Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
+          </p>
+        </details>}
+        {vault.hasLegacy && !vault.hasVault && <p className="mt-3 rounded-xl bg-muted p-3 text-[11px] leading-[1.6]">Older unencrypted workspace detected. Creating a vault will encrypt it and remove the old local copy once saved.</p>}
         {vault.error && <p role="alert" className="mt-3 rounded-xl bg-destructive/10 p-3 text-[12px] text-destructive">{vault.error}</p>}
-        {vault.initializing ? <p className="mt-6 text-[13px]">Opening your encrypted storage…</p> : <>
-          <label className="mt-5 block text-[13px] font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Choose a password (12+ characters)'}</label>
+        {vault.initializing ? <p className="mt-4 text-[12px]">Opening your encrypted storage…</p> : <>
+          <label className="mt-4 block text-[12px] font-semibold" htmlFor="vault-password">{vault.hasVault ? 'Vault password' : 'Choose a password (12+ characters)'}</label>
           <input id="vault-password" type="password" autoComplete="off" value={entered} onChange={e => setEntered(e.target.value)}
-            className="mt-2 h-13 w-full rounded-xl border border-input bg-background px-4 text-[16px]" placeholder="Enter your private password" />
+            className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3.5 text-[16px]" placeholder="Enter your private password" />
           <button type="button" disabled={busy || !entered} onClick={() => { void run(() => vault.hasVault ? vault.unlock(entered) : vault.create(entered)); }}
-            className="mt-4 flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[14px] font-bold text-primary-foreground disabled:opacity-40">
+            className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-[13px] font-bold text-primary-foreground disabled:opacity-40">
             <ShieldCheck size={17}/>{busy ? 'Opening…' : vault.hasVault ? 'Unlock Market Compass' : 'Create encrypted workspace'}
           </button>
-          <details className="mt-5 rounded-xl border border-border bg-muted/30 p-3 text-[12px]">
+          <details className="mt-4 rounded-xl border border-border bg-muted/30 px-3 py-3 text-[12px]">
             <summary className="cursor-pointer font-semibold">Restore from encrypted backup</summary>
             <p className="mt-2 leading-5 text-muted-foreground">Enter the backup password above. Restoring replaces the saved vault on this device.</p>
             <input aria-label="Import encrypted vault backup" type="file" accept=".json,application/json" disabled={busy}
@@ -262,8 +335,8 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
           </details>
         </>}
       </div>
-      <div className="mt-5 flex items-center justify-center gap-2 text-center text-[11px] text-white/70"><ShieldCheck size={14}/> Encrypted on your device · Offline-ready</div>
-      <p className="mt-2 text-center text-[11px] leading-5 text-white/55">If your password is lost, the vault cannot be recovered without a backup and its password.</p>
+      <div className="mt-4 flex items-center justify-center gap-2 text-center text-[10px] text-white/70"><ShieldCheck size={13}/> Encrypted on your device · Offline-ready</div>
+      <p className="mt-1.5 text-center text-[10px] leading-4 text-white/60">Keep your password and exported encrypted backup safe.</p>
     </div>
   </main>;
 }
@@ -309,8 +382,11 @@ function InstallHelp() {
   </section>;
 }
 
-function AppShell({ children, pending, currency }: { children: ReactNode; pending: number; currency: string }) {
-  const [path] = useLocation();
+function AppShell({ children, pending, currency, onImportDocuments, onAddAccount }: {
+  children: ReactNode;pending:number;currency:string;onImportDocuments:()=>void;onAddAccount:()=>void;
+}) {
+  const [menuOpen,setMenuOpen]=useState(false);
+  const [path,navigate] = useLocation();
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const active = navItems.find((item) => item.href === path) ?? navItems[0];
   useEffect(() => {
@@ -328,6 +404,14 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
     const frame = window.requestAnimationFrame(reset);
     return () => window.cancelAnimationFrame(frame);
   }, [path]);
+  useEffect(() => {
+    if(!menuOpen)return;
+    const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setMenuOpen(false);};
+    document.documentElement.classList.add('mc-menu-open');
+    document.body.classList.add('mc-menu-open');
+    window.addEventListener('keydown',key);
+    return ()=>{document.documentElement.classList.remove('mc-menu-open');document.body.classList.remove('mc-menu-open');window.removeEventListener('keydown',key);};
+  },[menuOpen]);
   const openSettings = () => {
     const el = document.getElementById('mc-backup-controls') as HTMLDetailsElement | null;
     if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -348,6 +432,13 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
             {label === 'Drafts' && pending > 0 && <span className="mono rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] text-sidebar-primary-foreground">{pending}</span>}
           </Link>)}
         </nav>
+        <button type="button" data-testid="desktop-nav-menu" aria-label="Open Market Compass menu"
+          aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+          className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-3 text-left text-[13px] font-semibold text-sidebar-foreground hover:bg-sidebar-accent">
+          <Menu size={17} strokeWidth={1.8}/><span className="flex-1">Menu</span>
+          {pending>0&&<span className="mono rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] text-sidebar-primary-foreground">{pending}</span>}
+        </button>
+
         <div className="mt-auto rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-4">
           <div className="flex items-center gap-2 text-[11px] font-semibold"><ShieldCheck size={15} className="text-sidebar-primary"/> Deliberate by design</div>
           <p className="mt-2 text-[11px] leading-[1.65] text-sidebar-foreground/55">Your workspace stays on this device. Payments and trades always require separate approval.</p>
@@ -357,41 +448,70 @@ function AppShell({ children, pending, currency }: { children: ReactNode; pendin
     </aside>
 
     <main className="min-w-0">
-      <header className="mc-mobile-header sticky top-0 z-30 border-b border-white/10 bg-[hsl(165,24%,19%)] px-4 pb-3 pt-3 text-white lg:hidden">
+      <IonHeader className="mc-mobile-header sticky top-0 z-30 lg:hidden" role="banner">
+        <IonToolbar className="mc-ionic-toolbar">
         <div className="flex min-h-[49px] items-center gap-3">
           <Link href="/" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[hsl(43,65%,73%)] text-[hsl(165,24%,19%)]" aria-label="Go to Market Compass home"><Compass size={23} strokeWidth={1.8}/></Link>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-bold leading-5">Market Compass</div>
+            <div className="truncate text-[16px] font-extrabold tracking-[-.02em] leading-5">Market Compass</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/70">
               <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(150,65%,70%)]' : 'bg-[hsl(43,65%,73%)]'}`}/>
               <span>{online ? 'iPhone online' : 'iPhone offline'} · {active.label} · {currency}</span>
             </div>
           </div>
-          <button type="button" onClick={openSettings} aria-label="Open vault, backups and settings" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white active:bg-white/20"><ShieldCheck size={21}/></button>
         </div>
-      </header>
+        </IonToolbar>
+      </IonHeader>
       <header className="sticky top-0 z-20 hidden h-[65px] items-center justify-between border-b border-border/80 bg-background/95 px-10 backdrop-blur lg:flex">
         <div className="text-[11px] uppercase tracking-[.16em] text-muted-foreground">Personal finance &amp; markets</div>
+        <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-[hsl(158,31%,42%)]' : 'bg-amber-500'}`}/>{online ? 'Connected' : 'Offline'} · Local vault</div>
+          <button type="button" data-testid="desktop-header-menu" aria-label="Open Market Compass menu"
+            aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-[12px] font-semibold text-foreground hover:bg-muted">
+            <Menu size={17}/>Menu
+          </button>
+        </div>
       </header>
       <InstallHelp/>
+      {menuOpen && createPortal(
+        <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
+          <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={19}/></button></div>
+            <p className="mb-3 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map(item=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><item.icon size={18} className="shrink-0 text-primary"/>{item.label}</button>)}
+              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Plus size={18} className="shrink-0 text-primary"/>Add account</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="flex min-h-14 items-center gap-2 rounded-xl border border-border bg-background px-3 text-left text-[12px] font-semibold"><ShieldCheck size={18} className="shrink-0 text-primary"/>Vault &amp; backup</button>
+            </div>
+          </section>
+        </div>,document.body)}
       <div className="mc-mobile-content mx-auto min-w-0 max-w-[1440px] px-4 pt-4 sm:px-7 lg:px-11 lg:pb-16 lg:pt-9">{children}</div>
     </main>
-    <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-[hsl(39,17%,83%)] bg-[hsl(44,33%,99%)] px-1.5 pt-2 shadow-[0_-5px_16px_rgba(17,39,33,.05)] lg:hidden">
-      <div className="mx-auto grid max-w-[550px] grid-cols-6 gap-0.5">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const selected = href === path;
-          const short = label === 'Overview' ? 'Home' : label === 'Debt plan' ? 'Debt' : label === 'Local assistant' ? 'AI' : label === 'Expenses' ? 'Spend' : label;
-          return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
-            data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-            className={`relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
-            <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
-            <span className="text-[10px] font-semibold leading-none">{short}</span>
-            {label === 'Drafts' && pending > 0 && <span className="absolute right-1 top-0 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
-          </Link>;
-        })}
-      </div>
-    </nav>
+    <IonFooter className="mc-ionic-footer lg:hidden">
+      <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
+       <div className="mx-auto grid max-w-[550px] grid-cols-4 gap-1">
+         {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
+           const selected = href === path;
+           const short = label === 'Overview' ? 'Home' : label === 'Local assistant' ? 'AI' : label;
+           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
+             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
+             className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors active:bg-[hsl(165,20%,91%)] ${selected ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+             <Icon size={21} strokeWidth={selected ? 2.3 : 1.8}/>
+             <span className="text-[10px] font-semibold leading-none">{short}</span>
+           </Link>;
+         })}
+         <button type="button" data-testid="mobile-nav-menu" aria-label="Open Market Compass menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+           className={`mc-tab-link relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-center transition-colors ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'bg-[hsl(165,20%,91%)] text-[hsl(165,26%,20%)]' : 'text-muted-foreground'}`}>
+           <Menu size={21} strokeWidth={2}/>
+           <span className="text-[10px] font-semibold leading-none">Menu</span>
+           {pending > 0 && <span className="absolute right-3 top-1 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[hsl(43,65%,68%)] px-0.5 text-[9px] font-bold text-[hsl(165,24%,20%)]">{pending > 99 ? '99+' : pending}</span>}
+         </button>
+</div>
+      </nav>
+    </IonFooter>
   </div>;
 }
 
@@ -406,11 +526,12 @@ function PageIntro({ eyebrow, title, description, trailing }: { eyebrow: string;
 }
 
 function Panel({ children, className = '', title, action }: { children: ReactNode; className?: string; title?: string; action?: ReactNode }) {
-  return <section className={`min-w-0 overflow-hidden rounded-2xl border border-border bg-card ${className}`}>
-    {(title || action) && <div className="flex min-h-12 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
-      <h2 className="text-[13px] font-semibold tracking-[.01em]">{title}</h2>{action}
-    </div>}<div>{children}</div>
-  </section>;
+  return <IonCard className={`mc-ui-panel mc-ionic-surface min-w-0 overflow-hidden rounded-[22px] border border-border bg-card shadow-sm ${className}`}>
+    {(title || action) && <IonCardHeader className="mc-ionic-panel-head">
+      <IonCardTitle className="text-[13px] font-semibold tracking-[.01em]">{title}</IonCardTitle>{action}
+    </IonCardHeader>}
+    <IonCardContent className="mc-ionic-panel-content">{children}</IonCardContent>
+  </IonCard>;
 }
 
 function EmptyState({ icon: Icon, title, description, action }: { icon: typeof Search; title: string; description: string; action?: ReactNode }) {
@@ -437,14 +558,32 @@ function money(value: number, currency = 'USD') {
 }
 function num(value: string) { return value.trim() === '' ? NaN : Number(value); }
 
-function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
+function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccount }: {
+  data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>>;
+  onImportDocuments:()=>void; onRecoverVault:()=>void; onAddAccount:()=>void;
+}) {
+  const [,navigate] = useLocation();
   const openDrafts = data.drafts.filter((draft) => draft.status === 'pending').length;
   const debtTotal = data.accounts.reduce((sum, account) => sum + (Number(account.balance) || 0), 0);
   const feed = data.marketCache;
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
-    <details id="mc-home-upload" className="mb-4 rounded-2xl border border-primary/30 bg-card p-3 shadow-sm sm:p-4">
+    <div className="mb-5 lg:hidden">
+      <MobileOverview currency={data.currency} totalDebt={debtTotal}
+        accountsCount={data.accounts.length} accounts={data.accounts}
+        documentsCount={docs.length} approvedEntryCount={entries.length}
+        entries={entries} documents={docs} expenseSettings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
+        currencyReviewRequired={data.currencyReviewRequired}
+        pendingDrafts={openDrafts} market={feed}
+        onImportDocuments={onImportDocuments} onRecoverVault={onRecoverVault} onAddAccount={onAddAccount}
+        fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
+    </div>
+    <div className="mb-5 hidden lg:block" data-testid="desktop-financial-overview">
+      <FinancialSpaceHero currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
+        onViewAccounts={()=>navigate('/debt')}/>
+    </div>
+    <details id="mc-home-upload" className="mc-app-upload mb-4 rounded-[22px] border border-border bg-card p-3 shadow-sm sm:p-4">
       <summary className="flex min-h-14 cursor-pointer items-center gap-3 text-[13px] font-semibold">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Upload size={20}/></span>
         <span className="min-w-0 flex-1">
@@ -458,37 +597,35 @@ function Overview({ data, setData }: { data: WorkspaceData; setData: Dispatch<Se
       <div className="mt-3 border-t border-border pt-4">
         <p className="mb-3 text-[12px] leading-5 text-muted-foreground">
           Import and review PDF, CSV, TXT or transaction JSON on this device.
-          Confirm the extracted lines to save encrypted excerpts. Approve actual
-          dated transactions separately before they change salary-cycle totals.
+          One approval saves reviewed document evidence and eligible source-dated transactions.
+          Check for overlapping statements before recording amounts in Spend.
         </p>
         <LocalFinanceFiles
           documents={docs}
-          onAdd={document=>setData(old=>({
-            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          onAdd={(document,approvals)=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+            expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])
           }))}
           onRemove={id=>setData(old=>({
             ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
           }))}
+          onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
           ledgerEntries={entries}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
-          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
         />
       </div>
     </details>
-    <div className="lg:hidden">
-      <MobileOverview currency={data.currency} totalDebt={debtTotal} accountsCount={data.accounts.length}
-        pendingDrafts={openDrafts} market={feed} fxQuote={feed ? data.fxRates?.[fxKey(feed.currency,data.currency)] ?? null : null} />
-      <Link href="/expenses"
-        aria-label="Go to Spend to import private financial files"
-        className="mb-4 mt-3 flex min-h-12 items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3 text-[12px] font-semibold shadow-sm">
-        <span>{data.ownerBudgetDraft?'View or update my private finance imports':'Import private financial files from iPhone Files'}</span>
-        <ArrowRight size={17} className="shrink-0" />
-      </Link>
-    </div>
+    <div className="mb-5 hidden lg:block"><FinancialPulse entries={entries} documents={docs}
+      currency={data.currency} settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}/></div>
     <HomeFinancialEvidence documents={data.localFinanceDocuments??[]} entries={data.expenseEntries??[]}
       settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS} accounts={data.accounts??[]}
       budget={data.privateBudget??emptyPrivateBudget} currency={data.currency}/>
+    <AccountTransactionHistory accounts={data.accounts} entries={entries} currency={data.currency}
+      onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
+        ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
+      }:old)}/>
     <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
       currency={data.currency}
       onCreate={account=>setData(old=>({...old,accounts:[
@@ -786,7 +923,24 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
   const [errorMessage, setErrorMessage] = useState('');
   const accounts = data.accounts;
   const update = (id: string, key: keyof Omit<DebtAccount, 'id'>, value: string) => setData((old) => ({ ...old, accounts: old.accounts.map((account) => account.id === id ? { ...account, [key]: value } : account) }));
-  const addAccount = () => setData((old) => ({ ...old, accounts: [...old.accounts, { id: crypto.randomUUID(), name: '', balance: '', apr: '', minimumPayment: '' }] }));
+  // The add form is a temporary draft. Opening it never creates an empty
+  // persisted account; saved accounts appear in a separate collapsed list.
+  const blankAccount=()=>({name:'',balance:'',apr:'',minimumPayment:''});
+  const [newAccount,setNewAccount]=useState(blankAccount);
+  const [accountError,setAccountError]=useState('');
+  const addAccount=()=>{
+    const next=newAccount;
+    const fields=[next.balance,next.apr,next.minimumPayment];
+    if(!next.name.trim() || fields.some(value=>value.trim()==='' || !Number.isFinite(Number(value)) || Number(value)<0) ||
+       Number(next.apr)>200){
+      setAccountError('Enter an account name, balance, APR (0–200), and minimum monthly payment before saving.');
+      return;
+    }
+    if(accounts.length>=50){setAccountError('The maximum of 50 saved accounts has been reached.');return;}
+    setData(old=>({...old,accounts:[...old.accounts,{id:crypto.randomUUID(),...next,name:next.name.trim()}]}));
+    setNewAccount(blankAccount());
+    setAccountError('');
+  };
   const removeAccount = (id: string) => setData((old) => ({ ...old, accounts: old.accounts.filter((account) => account.id !== id) }));
   const hasMoneyEntered = accounts.some(a => Number(a.balance) > 0 || Number(a.minimumPayment) > 0) || Number(data.monthlyExtra) > 0 || Number(data.emergencyReserve) > 0;
   const changeCurrency = (next: string, nextRegion?: string) => {
@@ -822,11 +976,46 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
     <FinancialReadinessChecklist data={data} />
     <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,.65fr)]">
       <div className="space-y-4">
-        <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50</span>}>
-          {accounts.length ? <div className="divide-y divide-border">
-            {accounts.map((account, index) => <div key={account.id} className="p-4 sm:p-5"><div className="mb-4 flex items-center justify-between"><span className="mono text-[10px] text-muted-foreground">ACCOUNT {String(index + 1).padStart(2, '0')}</span><button type="button" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label={`Remove ${account.name || 'account'}`} onClick={() => removeAccount(account.id)}><Trash2 size={15} /></button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Field label="Account name" value={account.name} onChange={(v) => update(account.id, 'name', v)} placeholder="e.g. Card" /><Field label="Balance" value={account.balance} onChange={(v) => update(account.id, 'balance', v)} type="number" min="0" step="0.01" placeholder="0.00" /><Field label="APR (%)" value={account.apr} onChange={(v) => update(account.id, 'apr', v)} type="number" min="0" step="0.01" placeholder="0.00" /><Field label="Minimum / month" value={account.minimumPayment} onChange={(v) => update(account.id, 'minimumPayment', v)} type="number" min="0" step="0.01" placeholder="0.00" /></div></div>)}
-          </div> : <EmptyState icon={WalletCards} title="No debt accounts yet" description="Start with the balances, rates, and minimum payments you know. You can adjust these at any time." />}
-          <div className="border-t border-border p-4"><button type="button" disabled={accounts.length >= 50} onClick={addAccount} className="inline-flex items-center gap-2 text-[11px] font-semibold text-primary disabled:opacity-40"><Plus size={15} /> Add an account</button></div>
+        <Panel title="Your accounts" action={<span className="mono text-[10px] text-muted-foreground">{accounts.length} / 50 saved</span>}>
+          {accounts.length ? <div className="divide-y divide-border" aria-label="Saved debt accounts">
+            {accounts.map((account,index)=><details key={account.id} className="group">
+              <summary className="flex min-h-14 cursor-pointer items-center justify-between gap-3 px-4 py-3 text-[13px]">
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate">{maskDocumentPII(account.name.trim())||`Incomplete saved account ${index+1}`}</strong>
+                  <small className="text-[10px] text-muted-foreground">Saved account · Tap to edit</small>
+                </span>
+                <strong className="shrink-0 tabular-nums">{account.balance.trim()?money(Number(account.balance)||0,data.currency):'Balance missing'}</strong>
+                <ChevronDown size={17} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true"/>
+              </summary>
+              <div className="border-t border-border bg-muted/20 px-4 py-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label="Account name" value={account.name} onChange={v=>update(account.id,'name',v)} placeholder="e.g. Personal loan"/>
+                  <Field label="Balance" value={account.balance} onChange={v=>update(account.id,'balance',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                  <Field label="APR (%)" value={account.apr} onChange={v=>update(account.id,'apr',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                  <Field label="Minimum / month" value={account.minimumPayment} onChange={v=>update(account.id,'minimumPayment',v)} type="number" min="0" step="0.01" placeholder="0.00"/>
+                </div>
+                <button type="button" onClick={()=>{if(window.confirm('Remove this saved account from the encrypted workspace? This does not delete historic transactions.'))removeAccount(account.id);}}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-destructive/30 px-3 text-[11px] font-semibold text-destructive">
+                  <Trash2 size={14}/> Remove saved account
+                </button>
+              </div>
+            </details>)}
+          </div>:<EmptyState icon={WalletCards} title="No debt accounts yet" description="Add a debt account below. Nothing is saved until you tap Save account."/>}
+          <div id="mc-add-debt-account" className="scroll-mt-24 border-t border-border p-4 sm:p-5" aria-label="Add a new debt account">
+            <h3 className="text-[14px] font-bold">Add an account</h3>
+            <p className="mb-3 mt-1 text-[11px] text-muted-foreground">This form stays blank after saving. Existing accounts stay collapsed above.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Account name" value={newAccount.name} onChange={v=>setNewAccount(old=>({...old,name:v}))} placeholder="e.g. Capfin loan"/>
+              <Field label="Balance" value={newAccount.balance} onChange={v=>setNewAccount(old=>({...old,balance:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+              <Field label="APR (%)" value={newAccount.apr} onChange={v=>setNewAccount(old=>({...old,apr:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+              <Field label="Minimum / month" value={newAccount.minimumPayment} onChange={v=>setNewAccount(old=>({...old,minimumPayment:v}))} type="number" min="0" step="0.01" placeholder="0.00"/>
+            </div>
+            <button type="button" disabled={accounts.length>=50} onClick={addAccount}
+              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+              <Plus size={16}/> Save account
+            </button>
+            {accountError&&<p role="alert" className="mt-2 text-[11px] text-destructive">{accountError}</p>}
+          </div>
         </Panel>
         <Panel title="Monthly guardrails">
           <div className="grid gap-4 p-5 sm:grid-cols-2">
@@ -872,6 +1061,7 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
     </form>
     <div className="mt-6">
       <DebtAdvisor accounts={accounts} currency={data.currency} baseline={data.financialBaseline ?? null}
+        savedAi={data.desktopAi}
         budget={data.privateBudget ?? emptyPrivateBudget}
         onBudgetChange={next => setData(old => ({ ...old, privateBudget: next }))}
         onImport={historical => {
@@ -906,6 +1096,9 @@ function Debt({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetSta
 
 function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
   const [notice, setNotice] = useState('');
+  const [lastReviewAt,setLastReviewAt]=useState('');
+  const savedClose=data.marketCache?.candles?.at(-1);
+  const marketEvidence=Boolean(savedClose&&Number.isFinite(savedClose.close)&&savedClose.close>0);
   const setStatus = (draft: Draft, status: DraftStatus) => {
     if (status === 'approved' && !window.confirm('Approve this local draft for your records? No order will be sent, and no trade will occur.')) return;
     setData((old) => ({ ...old, drafts: old.drafts.map((item) => item.id === draft.id ? { ...item, status } : item) }));
@@ -919,6 +1112,17 @@ function Drafts({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetS
     <PageIntro eyebrow="Nothing leaves this workspace" title="Order drafts" description="These are personal notes for review only. Approving a draft changes its local status and never sends an order." trailing={<StatusTag>{data.drafts.filter((d) => d.status === 'pending').length} pending</StatusTag>} />
     {notice && <div role="status" className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/60 px-4 py-3 text-[11px]"><span>{notice}</span><button aria-label="Dismiss notice" onClick={() => setNotice('')}><X size={14} /></button></div>}
     <div className="mb-5 flex items-start gap-3 rounded-xl border border-[hsl(38,45%,72%)] bg-[hsl(42,56%,91%)] p-4"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-[hsl(34,52%,39%)]" /><p className="text-[11px] leading-5 text-[hsl(166,19%,25%)]"><strong>Local review only.</strong> “Approve” records your review in this browser. There is no brokerage connection, order submission, or automatic trading.</p></div>
+    <section aria-label="Order review progress" className="mb-5 rounded-[22px] border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-[14px] font-bold">Order review readiness</h2><button type="button" onClick={()=>setLastReviewAt(new Date().toISOString())} className="min-h-11 rounded-xl border border-border px-3 text-[12px] font-semibold">Check progress now</button></div>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">This is an instant, local readiness check. It does not ask an AI to recommend a trade, obtain an executable broker quote, or submit an order.</p>
+      <dl className="mt-3 grid gap-2 text-[12px]">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/35 p-3"><dt>Historical market evidence</dt><dd className="font-semibold">{marketEvidence?`${data.marketCache?.symbol} · ${savedClose?.date}`:'Not saved'}</dd></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/35 p-3"><dt>Local draft proposals</dt><dd className="font-semibold">{data.drafts.length} record(s)</dd></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/35 p-3"><dt>Executable brokerage access</dt><dd className="font-semibold">Not configured · no orders</dd></div>
+      </dl>
+      {lastReviewAt&&<p role="status" className="mt-2 text-[11px] text-muted-foreground">Checked {formatTime(lastReviewAt)}. {marketEvidence?'Market history is available for manual research; it is not a buy/sell signal.':'Get dated market evidence first.'} Broker onboarding remains unavailable.</p>}
+      <div className="mt-3 flex flex-wrap gap-3"><Link href="/markets" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-[12px] font-semibold">Review markets <ArrowRight size={14} className="ml-1"/></Link><Link href="/assistant" className="inline-flex min-h-11 items-center rounded-xl border border-border px-3 text-[12px] font-semibold">Ask Compass to explain research <ArrowRight size={14} className="ml-1"/></Link></div>
+    </section>
     {data.drafts.length ? <div className="space-y-3">{data.drafts.map((draft) => <Panel key={draft.id} className="overflow-hidden"><div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center"><div className="flex min-w-[180px] items-center gap-3"><span className={`grid h-10 w-10 place-items-center rounded-xl ${draft.side === 'buy' ? 'bg-[hsl(155,30%,90%)] text-[hsl(158,36%,29%)]' : 'bg-[hsl(5,48%,92%)] text-[hsl(4,52%,41%)]'}`}>{draft.side === 'buy' ? <ArrowUpRight size={19} /> : <ArrowDownRight size={19} />}</span><div><div className="mono text-[15px] font-medium">{draft.symbol}</div><div className="text-[10px] capitalize text-muted-foreground">{draft.side} · {draft.quantity} units</div></div></div><div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-3"><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Limit price</div><div className="mono mt-1 text-[12px]">{money(draft.limitPrice)}</div></div><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Created</div><div className="mt-1 text-[11px]">{formatTime(draft.createdAt)}</div></div><div><div className="text-[9px] uppercase tracking-[.12em] text-muted-foreground">Status</div><div className="mt-1"><StatusTag tone={draft.status === 'approved' ? 'good' : draft.status === 'rejected' ? 'bad' : 'warn'}>{draft.status}</StatusTag></div></div></div><div className="flex flex-wrap items-center gap-2 lg:justify-end">{draft.status === 'pending' && <><ActionButton onClick={() => setStatus(draft, 'approved')}><Check size={14} /> Approve locally</ActionButton><ActionButton variant="quiet" onClick={() => setStatus(draft, 'rejected')}><X size={14} /> Reject</ActionButton></>}{draft.status !== 'pending' && <ActionButton variant="quiet" onClick={() => setStatus(draft, 'pending')}>Reopen</ActionButton>}<button className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-destructive" onClick={() => remove(draft)} aria-label={`Delete ${draft.symbol} draft`}><Trash2 size={15} /></button></div></div>{draft.rationale && <div className="border-t border-border bg-muted/30 px-5 py-3 text-[10px] leading-5 text-muted-foreground"><span className="mr-2 font-semibold text-foreground">Rationale</span>{draft.rationale}</div>}</Panel>)}</div> : <Panel><EmptyState icon={FileClock} title="No drafts saved" description="Create an explicitly local draft from a market view, or wait until you have a real provider price to reference." action={<Link href="/markets" className="text-[11px] font-semibold text-primary">Go to markets <ArrowRight size={13} className="ml-1 inline" /></Link>} /></Panel>}
   </>;
 }
@@ -927,7 +1131,7 @@ type SpendSection='documents'|'activity'|'plan';
 function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetStateAction<WorkspaceData>>}){
   // A mobile-first workflow: documents and parsing first, then the dated
   // transaction ledger, then the read-only planning evidence checklist.
-  const [section,setSection]=useState<SpendSection>('documents');
+  const [section,setSection]=useState<SpendSection>((data.expenseEntries??[]).length?'activity':'documents');
   const docs=Array.isArray(data.localFinanceDocuments)?data.localFinanceDocuments:[];
   const ledger=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   const options=[
@@ -939,7 +1143,7 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
     <PageIntro eyebrow="Evidence first, decisions second" title="Your finances"
       description="Start with a document, review its information, and decide what should become a transaction. Your local financial plan updates only from the records you approve."
       trailing={<StatusTag tone="warn">Owner-reviewed · not bank verified</StatusTag>} />
-    <section aria-label="Spend workspace" className="mb-6 rounded-[24px] border border-border bg-card p-3 shadow-sm sm:p-5">
+    <IonCard role="region" aria-label="Spend workspace" className="mc-ionic-surface mb-6 rounded-[24px] border border-border bg-card p-3 shadow-sm sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-3 px-1 sm:mb-4">
         <div>
           <h2 className="text-[14px] font-bold">Your workspace</h2>
@@ -947,24 +1151,27 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         </div>
         <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">Private · on device</span>
       </div>
-      <nav aria-label="Spend sections" className="grid grid-cols-3 gap-2">
-        {options.map(({id,title,subtitle,count,Icon})=><button key={id} type="button"
-          aria-pressed={section===id}
-          onClick={()=>setSection(id)}
-          className={`flex min-h-[104px] min-w-0 flex-col items-start justify-between rounded-[18px] border px-3 py-3 text-left transition-colors sm:min-h-[112px] sm:px-4 ${section===id?
-            'border-primary/40 bg-primary/[.07] text-foreground shadow-sm':
-            'border-border bg-background text-foreground hover:bg-muted/50'}`}>
-          <div className="flex w-full items-center justify-between gap-1">
-            <Icon size={19} className={section===id?'text-primary':'text-muted-foreground'} aria-hidden="true"/>
-            {count!==null&&<span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{count}</span>}
-          </div>
-          <span className="mt-2 block min-w-0">
-            <span className="block truncate text-[12px] font-bold sm:text-[14px]">{title}</span>
-            <span className="mt-1 block text-[10px] leading-[1.4] text-muted-foreground">{subtitle}</span>
-          </span>
-        </button>)}
+      <nav aria-label="Spend sections">
+        <IonSegment className="mc-spend-tabs" value={section}
+          onIonChange={event=>{
+            const next=event.detail.value;
+            if(next==='documents'||next==='activity'||next==='plan')setSection(next);
+          }}>
+          {options.map(({id,title,subtitle,count,Icon})=><IonSegmentButton key={id} value={id}
+            aria-pressed={section===id} aria-label={title} onClick={()=>setSection(id)}>
+            <Icon size={18} className="mc-spend-tab-icon" aria-hidden="true"/>
+            <IonLabel className="mc-spend-tab-label">{title}</IonLabel>
+            <span className="mc-spend-tab-meta">{count===null?subtitle:count+' saved'}</span>
+          </IonSegmentButton>)}
+        </IonSegment>
       </nav>
-    </section>
+    </IonCard>
+    {section==='documents'&&ledger.length>0&&<button type="button"
+      onClick={()=>setSection('activity')}
+      className="mb-5 flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[.065] px-4 py-3 text-left text-[12px] font-semibold">
+      <span>{ledger.length} approved or manually recorded transaction(s) are ready in your spending portfolio. View purchases and history by category.</span>
+      <ArrowRight size={19} className="shrink-0" aria-hidden="true"/>
+    </button>}
     <div aria-label={section==='documents'?'Document importer and reviewed files':
       section==='activity'?'Dated transactions and cash flow':'Financial readiness and planning'}
       className="min-w-0 space-y-5">
@@ -972,22 +1179,23 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
         <div className="rounded-2xl border border-primary/15 bg-primary/[.045] px-4 py-3">
           <p className="text-[12px] font-semibold">1. Import · 2. Review · 3. Add approved lines to Spend</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            Saving an excerpt alone does not alter your ledger. Open a saved document
-            and choose Review and add to Spend to classify real entries.
+            Approving a document also records safely classified, source-dated transactions in Spend. Older saved statements can be approved below without re-uploading or entering dates.
           </p>
         </div>
         <LocalFinanceFiles
           documents={docs}
-          onAdd={document=>setData(old=>({
-            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document)
+          onAdd={(document,approvals)=>setData(old=>({
+            ...old,localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+            expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])
           }))}
           onRemove={id=>setData(old=>({
             ...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)
           }))}
+          onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
           ledgerEntries={ledger}
           currency={data.currency}
           currencyReviewRequired={data.currencyReviewRequired}
-          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:approved}))}
+          onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
         />
         <AccountEvidenceReview documents={docs} existingAccounts={data.accounts}
           currency={data.currency}
@@ -996,6 +1204,14 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
           ]}))}/>
       </>}
       {section==='activity'&&<>
+        <Suspense fallback={<p role="status" className="rounded-xl bg-card p-4 text-[12px]">Loading transactions…</p>}>
+          <IonicSpendPreview entries={ledger} currency={data.currency} debtAccounts={data.accounts}
+            onOpenDocuments={()=>setSection('documents')}/>
+        </Suspense>
+        <SavedCategoryReview entries={ledger} currency={data.currency}
+          onApprove={approved=>setData(old=>({...old,expenseEntries:applySavedCategoryChanges(old.expenseEntries??[],approved)}))}/>
+        <SpendingPortfolio entries={ledger} documents={docs} currency={data.currency}/>
+        <IncomeAllocation entries={ledger} currency={data.currency}/>
         <div className="rounded-2xl border border-border bg-card px-4 py-3">
           <p className="text-[12px] font-semibold">Transactions you have recorded or approved</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
@@ -1003,6 +1219,10 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
             dated but not reconciled with a live bank; confirm the selected cycle.
           </p>
         </div>
+        <AccountTransactionHistory accounts={data.accounts} entries={ledger} currency={data.currency}
+          onAssign={(id,accountId)=>setData(old=>old.accounts.some(account=>account.id===accountId)?{
+            ...old,expenseEntries:old.expenseEntries.map(entry=>entry.id===id?{...entry,debtAccountId:accountId}:entry)
+          }:old)}/>
         <MonthlyExpenses
           entries={ledger}
           settings={data.expenseSettings??DEFAULT_EXPENSE_SETTINGS}
@@ -1034,7 +1254,10 @@ function ExpenseLedger({data,setData}:{data:WorkspaceData;setData:Dispatch<SetSt
   </>;
 }
 
-function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>> }) {
+function Assistant({ data, setData, onImportDocuments }: {
+  data: WorkspaceData; setData: Dispatch<SetStateAction<WorkspaceData>>;
+  onImportDocuments:()=>void;
+}) {
   const [, navigate] = useLocation();
   const context: CompassCommandContext = {
     currency: data.currency,
@@ -1063,7 +1286,7 @@ function Assistant({ data, setData }: { data: WorkspaceData; setData: Dispatch<S
     })(),
   };
   return <>
-    <VoiceAssistant context={context} onNavigate={navigate} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
+    <VoiceAssistant context={context} onNavigate={navigate} onImportDocuments={onImportDocuments} settings={data.desktopAi ?? DEFAULT_DESKTOP_AI}
       onSettingsChange={next => setData(old => ({ ...old, desktopAi: next }))}
       queuedReadOnlyQuestions={Array.isArray(data.offlineAgentQuestions)?data.offlineAgentQuestions:[]}
       onQueueReadOnlyQuestion={question=>{
@@ -1127,7 +1350,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(165,19%,91%)] text-primary"><ShieldCheck size={18}/></span>
       <span className="min-w-0 flex-1">
         <span className="block text-[12px] font-bold">Encrypted vault &amp; settings</span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.saving ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.locking ? 'Securing changes before lock…' : vault.saving || vault.unsavedChanges ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>
       </span>
       <ChevronDown size={18} className="text-muted-foreground transition-transform group-open:rotate-180"/>
     </summary>
@@ -1157,10 +1380,12 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
         {data.currencyReviewRequired && <p className="mt-2 font-semibold text-[11px] text-destructive">Review previously entered amounts in Debt Plan before calculating.</p>}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
+        <button type="button" disabled={vault.saving || vault.locking || vault.unsavedChanges || !vault.savedAt} onClick={() => { void vault.exportBackup(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[12px] font-semibold text-primary-foreground disabled:opacity-40">
           <ShieldCheck size={16}/> Export encrypted backup
         </button>
-        <button type="button" disabled={vault.saving || !vault.savedAt} onClick={() => { void vault.exportBackup().then(saved => { if (saved) vault.lock(); }); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-[12px] font-semibold disabled:opacity-40">Backup &amp; lock app</button>
+        <button type="button" disabled={vault.saving || vault.locking || vault.unsavedChanges || !vault.savedAt} onClick={() => { void vault.exportBackup().then(saved => {
+          if(saved && window.confirm('Confirm you saved the encrypted backup to Files before locking. A completed share sheet is not proof a file was kept. Lock this workspace now?'))void vault.lock();
+        }); }} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-[12px] font-semibold disabled:opacity-40">Backup &amp; lock app</button>
       </div>
       <button type="button" onClick={() => setDailyOpen(value => !value)} className="flex min-h-11 w-full items-center justify-between rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
         <span>Daily backup settings</span><ChevronDown size={17} className={dailyOpen ? 'rotate-180' : ''}/>
@@ -1190,16 +1415,78 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
 
 function UnlockedRouter({ vault }: { vault: ReturnType<typeof useWorkspaceVault> }) {
   const { data, setData } = vault;
+  const [,navigate]=useLocation();
+  const addAccount=()=>{
+    // Navigate to the blank draft form; never create an empty vault account.
+    navigate('/debt');
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>
+      document.getElementById('mc-add-debt-account')?.scrollIntoView({behavior:'smooth',block:'start'})
+    ));
+  };
+  const [importOpen,setImportOpen]=useState(false);
+  const [recoveryOpen,setRecoveryOpen]=useState(false);
   const pending = data.drafts.filter((draft) => draft.status === 'pending').length;
-  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency}><OfflineOnlyBanner /><BackupControls vault={vault} /><Switch>
-    <Route path="/"><Overview data={data} setData={setData} /></Route>
+  return <RoutedErrorBoundary><AppShell pending={pending} currency={data.currency} onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}><OfflineOnlyBanner /><Switch>
+    <Route path="/"><Overview data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)} onRecoverVault={()=>setRecoveryOpen(true)} onAddAccount={addAccount}/></Route>
     <Route path="/markets"><Markets data={data} setData={setData} /></Route>
     <Route path="/debt"><Debt data={data} setData={setData} /></Route>
     <Route path="/expenses"><ExpenseLedger data={data} setData={setData} /></Route>
     <Route path="/drafts"><Drafts data={data} setData={setData} /></Route>
-    <Route path="/assistant"><Assistant data={data} setData={setData} /></Route>
+    <Route path="/assistant"><Assistant data={data} setData={setData} onImportDocuments={()=>setImportOpen(true)}/></Route>
+    <Route path="/banks"><div className="mx-auto max-w-2xl"><PageIntro eyebrow="Accounts" title="Choose your bank" description="Select a bank or provider to organize your account documents. Live bank connections are not enabled."/><BankCarousel onImportDocuments={()=>setImportOpen(true)} onAddAccount={addAccount}/></div></Route>
     <Route component={NotFound} />
-  </Switch></AppShell></RoutedErrorBoundary>;
+  </Switch><div className="mt-8"><BackupControls vault={vault} /></div></AppShell>
+    {importOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 px-3 py-[max(20px,env(safe-area-inset-top))]" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}}>
+      <section role="dialog" aria-modal="true" aria-label="Import and review financial documents" className="flex max-h-[78dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-[24px] border border-border bg-card shadow-2xl sm:max-h-[82dvh]" onClick={event=>event.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div><h2 className="text-[16px] font-bold">Import financial documents</h2><p className="text-[11px] text-muted-foreground">Select files · review locally · approve explicitly</p></div>
+          <button type="button" aria-label="Close document importer" onClick={()=>{if(window.confirm('Close document review? Any unsaved review progress will be discarded.'))setImportOpen(false);}} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border"><X size={19}/></button>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
+          <LocalFinanceFiles
+            documents={data.localFinanceDocuments??[]}
+            onAdd={(document,approvals)=>setData(old=>({...old,
+              localFinanceDocuments:addLocalFinanceDocument(old.localFinanceDocuments??[],document),
+              expenseEntries:approvals.length?applyReviewedDocumentToLedger(document,old.expenseEntries??[],approvals,old.currency):(old.expenseEntries??[])}))}
+            onRemove={id=>setData(old=>({...old,localFinanceDocuments:removeLocalFinanceDocument(old.localFinanceDocuments??[],id)}))}
+            onUpdate={updated=>setData(old=>({...old,localFinanceDocuments:(old.localFinanceDocuments??[]).map(document=>document.id===updated.id?updated:document)}))}
+            ledgerEntries={data.expenseEntries??[]}
+            currency={data.currency}
+            currencyReviewRequired={data.currencyReviewRequired}
+            onApplyEntries={approved=>setData(old=>({...old,expenseEntries:mergeReviewedDocumentEntries(old.expenseEntries??[],approved)}))}
+          />
+        </div>
+      </section>
+    </div>}
+    {recoveryOpen&&<div role="presentation" className="fixed inset-0 z-[75] flex items-end justify-center bg-black/65 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center" onClick={()=>setRecoveryOpen(false)}>
+      <section role="dialog" aria-modal="true" aria-label="Encrypted vault recovery instructions" className="w-full max-w-md rounded-[24px] border border-border bg-card p-5 shadow-2xl" onClick={event=>event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-bold">Restore your financial records</h2><button type="button" aria-label="Close vault recovery" onClick={()=>setRecoveryOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-border"><X size={18}/></button></div>
+        <p className="mt-2 text-[12px] leading-6 text-muted-foreground">This unlocked workspace has no saved accounts, approved Spend records or documents. Data in another PWA is not automatically copied here.</p>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-[12px] leading-5">
+          <li>Keep the working PWA and its encrypted backup in Files unchanged.</li>
+          <li>Export a backup of this workspace before replacing it, even if its dashboard is empty.</li>
+          <li>Lock this workspace, then select “Restore from encrypted backup” on the login screen and enter that backup's password.</li>
+          <li>Confirm the restored counts after unlocking. Never clear website data to force a reload.</li>
+        </ol>
+        <button type="button" className="mt-4 min-h-12 w-full rounded-xl bg-primary px-3 text-[12px] font-semibold text-primary-foreground" onClick={()=>{
+          setRecoveryOpen(false);
+          const el=document.getElementById('mc-backup-controls') as HTMLDetailsElement|null;
+          if(el){el.open=true;window.requestAnimationFrame(()=>el.scrollIntoView({behavior:'smooth',block:'start'}));}
+        }}>Open backup &amp; lock controls</button>
+      </section>
+    </div>}
+    {vault.locking&&<div role="alertdialog" aria-modal="true" aria-label="Securing encrypted workspace"
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/70 px-5">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-5 text-center text-foreground shadow-xl">
+        <ShieldCheck className="mx-auto text-primary" size={28}/>
+        <p className="mt-3 text-[15px] font-bold">Saving changes before locking</p>
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+          The app stays unlocked if its final encrypted write fails. Keep this page open
+          until the workspace has locked.
+        </p>
+      </div>
+    </div>}
+  </RoutedErrorBoundary>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
@@ -1208,7 +1495,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <IonApp className="mc-ionic-app"><QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider></IonApp>;
 }
 
 export default App;

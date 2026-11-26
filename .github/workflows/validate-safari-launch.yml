@@ -23,8 +23,9 @@ jobs:
       - run: node --experimental-strip-types --test tests/ios-speech-playback.test.mjs
       - run: node --experimental-strip-types --test tests/monthly-expenses.test.mjs
       - run: node --experimental-strip-types --test tests/home-financial-evidence.test.mjs tests/historical-recurring-insights.test.mjs
-      - run: node --test tests/home-document-upload.test.mjs
+      - run: node --test tests/home-document-upload.test.mjs tests/bootstrap-app-shell.test.mjs tests/protected-dist-build.test.mjs tests/compact-vault-login.test.mjs tests/assistant-mobile-bank-readiness.test.mjs tests/financial-pulse.test.mjs tests/evidence-review-inbox.test.mjs
       - run: node --experimental-strip-types --test tests/document-intelligence.test.mjs
+      - run: node --experimental-strip-types --test tests/consented-document-intake.test.mjs tests/launch-batch-safety.test.mjs tests/import-hardening.test.mjs tests/vault-safety-smoke.test.mjs
       - run: node --experimental-strip-types --test tests/bank-statement-rows.test.mjs
       - run: node --experimental-strip-types --test tests/standard-bank-layout.test.mjs
       - run: node --experimental-strip-types --test tests/financial-source-normalization.test.mjs
@@ -33,6 +34,8 @@ jobs:
       - run: node --experimental-strip-types --test tests/financial-source-health.test.mjs
       - run: node --experimental-strip-types --test tests/live-crypto-quotes.test.mjs
       - run: node --experimental-strip-types --test tests/local-finance-docs.test.mjs tests/reviewed-document-ledger.test.mjs tests/mobile-spend-workspace.test.mjs tests/local-pdf-intake.test.mjs tests/pdfjs-password-engine.test.mjs tests/financial-readiness.test.mjs tests/local-launch-guideline.test.mjs tests/offline-owner-budget-analysis.test.mjs tests/iphone-finance-import-access.test.mjs tests/iphone-mobile-shell.test.mjs
+      - name: Run complete owner-consented finance and UI regression suite
+        run: node --experimental-strip-types --test tests/*.test.mjs
       - run: pnpm run typecheck:libs
       - run: pnpm --filter @workspace/market-compass run typecheck
       - name: Build static iPhone PWA
@@ -85,3 +88,11 @@ jobs:
           node scripts/verify-private-ui-css.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Windows production CSS missing Tailwind layout utilities' }
           if (-not (Test-Path 'artifacts/market-compass/dist/public/index.html')) { throw 'No built index.html' }
+      - name: Synthetic Edge browser release gate
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          NODE_ENV: production
+        run: |
+          node scripts/browser-release-gate.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic Edge browser release gate failed' }

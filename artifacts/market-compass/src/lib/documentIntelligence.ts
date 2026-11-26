@@ -4,15 +4,16 @@
  * Store only masked/allowlisted summary facts, never the source document.
  */
 export type DocumentCategory='bank-statement'|'vehicle-finance'|'payslip'|
-  'credit-card'|'personal-loan'|'mortgage'|'utility-bill'|'invoice'|
+  'credit-card'|'personal-loan'|'mortgage'|'utility-bill'|'invoice'|'receipt'|
   'investment-statement'|'tax-document'|'unclassified';
 export type DocumentFactField='statement-balance'|'settlement-quotation'|
   'original-principal'|'instalment'|'previous-instalment'|'residual-value'|
-  'annual-rate'|'net-pay'|'amount-due'|'running-balance';
+  'annual-rate'|'net-pay'|'gross-pay'|'tax-withheld'|'receipt-total'|
+  'amount-due'|'running-balance';
 export type DocumentFact={field:DocumentFactField;amount:number|null;ratePercent?:number;
   asOf:string|null;sourceLabel:string;historical:true};
 export type AccountProfile={name:string;institution:string;category:DocumentCategory;
-  confidence:'matched-terms'|'uncertain';facts:DocumentFact[]};
+  accountType?:string;confidence:'matched-terms'|'uncertain';facts:DocumentFact[]};
 const institutions=[
   ['ABSA',/\babsa\b/i],['FNB',/\bfnb\b|\bfirst national bank\b/i],
   ['Standard Bank',/\bstandard bank\b/i],['Nedbank',/\bnedbank\b/i],
@@ -23,7 +24,7 @@ const names:Record<DocumentCategory,string>={
   'bank-statement':'Bank account','vehicle-finance':'Vehicle finance',
   'payslip':'Employment income','credit-card':'Credit card',
   'personal-loan':'Personal loan','mortgage':'Home loan',
-  'utility-bill':'Utilities','invoice':'Invoice',
+  'utility-bill':'Utilities','invoice':'Invoice','receipt':'Purchase receipt',
   'investment-statement':'Investment account','tax-document':'Tax document',
   'unclassified':'Unclassified document'
 };
@@ -44,8 +45,8 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
     /\bpayslip\b|\bpay slip\b|\bpay advice\b/i,
     /\bnet pay\b|\bgross pay\b|\bPAYE\b/i]},
   {category:'bank-statement',matches:[
-    /\bbank statement\b|\bstatement of account\b|\b3.month statement\b|\bthree.month statement\b/i,
-    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bavailable balance\b|\bpayments\s+deposits\s+balance\b|\bSTDBANK\b/i]},
+    /\bbank statement\b|\bstatement of account\b|\bbank export\b|\b3.month statement\b|\bthree.month statement\b/i,
+    /\btransaction date\b|\bopening balance\b|\bclosing balance\b|\bdate[,;]\s*description[,;]\s*(?:debit|credit)\b|\bavailable balance\b|\bpayments\s+deposits\s+balance\b|\bSTDBANK\b/i]},
   {category:'investment-statement',matches:[
     /\binvestment statement\b|\bportfolio statement\b/i,
     /\bunits held\b|\bholdings statement\b|\bmarket value\b/i]},
@@ -55,13 +56,31 @@ const patterns:ReadonlyArray<{category:DocumentCategory;matches:RegExp[]}>=[
   {category:'invoice',matches:[
     /\btax invoice\b|\binvoice number\b/i,
     /\binvoice date\b|\bamount payable\b/i]},
+  {category:'receipt',matches:[
+    /\breceipt\b|\btill slip\b|\bproof of purchase\b/i,
+    /\btotal paid\b|\bpayment receipt\b|\bchange given\b/i]},
   {category:'tax-document',matches:[
     /\bIRP5\b|\bIT3\b|\bincome tax assessment\b/i,
     /\bSARS\b|\btax return\b/i]}
 ];
-export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'name'|'institution'|'category'|'confidence'>{
+export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'name'|'institution'|'category'|'confidence'|'accountType'>{
   const haystack=(text+'\n'+fileHint).slice(0,2_000_000);
-  const institution=institutions.find(([,r])=>r.test(haystack))?.[0]??'Unidentified provider';
+  // Issuing bank must be identifiable in the document heading, never simply
+  // mentioned as a merchant/payee elsewhere or inferred from a file name.
+  const firstLines=text.split(/\r?\n/).slice(0,14);
+  // Payment narrations can mention other banks. Never treat a bank name in a
+  // dated transfer or beneficiary line as the source institution.
+  const headerLines=firstLines.filter((line,index)=>{
+    if(index>5||/\b(?:transfer|payment to|beneficiary|merchant|debit|withdrawal|deposit|pos purchase|eft to)\b/i.test(line)||
+      /^\s*(?:\d{4}-\d{2}-\d{2}|\d{2}[\/-]\d{2}[\/-]\d{2,4}|\d{2}\s+[a-z]{3}\s+\d{2,4})\b/i.test(line))return false;
+    return /\b(?:statement|account|finance|bank|credit card|savings|cheque|current|issued by)\b/i.test(line)||
+      institutions.some(([,pattern])=>pattern.test(line)&&line.trim().length<=32);
+  });
+  const heading=headerLines.join(' ').slice(0,1500);
+  const foundInstitutions=institutions.filter(([,pattern])=>pattern.test(heading));
+  const institution=foundInstitutions.length===1?foundInstitutions[0][0]:'Unidentified provider';
+  const accountTypeMatch=heading.match(/\b(cheque|current|savings|transmission|transactional|credit card|business)\s+(?:bank\s+)?(?:account|statement)\b|\baccount\s+type\s*[:\-]?\s*(cheque|current|savings|transmission|transactional|credit card|business)\b/i);
+  const accountType=accountTypeMatch?(accountTypeMatch[1]??accountTypeMatch[2]).toLowerCase():undefined;
   // File names may contain identifiers; do not reuse them as account names.
   const ranked=patterns.map(p=>({kind:p.category,
     score:p.matches.reduce((score,re)=>score+(re.test(haystack)?1:0),0)}))
@@ -75,8 +94,8 @@ export function classifyDocument(text:string,fileHint=''):Pick<AccountProfile,'n
     ranked.some(candidate=>candidate.kind==='bank-statement'&&candidate.score===best.score)?'bank-statement':'unclassified'):
     best.score>0?best.kind:'unclassified';
   return {name:institution==='Unidentified provider'?names[category]:
-    category==='bank-statement'?institution+' account':institution+' '+names[category],
-    institution,category,confidence:!tied&&best.score>=2?'matched-terms':'uncertain'};
+    category==='bank-statement'?institution+' '+(accountType?accountType+' ':'')+'account':institution+' '+names[category],
+    institution,category,accountType,confidence:!tied&&best.score>=2&&institution!=='Unidentified provider'?'matched-terms':'uncertain'};
 }
 /** Strong PII redaction for stored excerpts: never save full account/ID numbers. */
 export function maskDocumentPII(text:string):string{
@@ -91,7 +110,8 @@ export function maskDocumentPII(text:string):string{
 }
 const factFields=new Set<DocumentFactField>([
   'statement-balance','settlement-quotation','original-principal','instalment',
-  'previous-instalment','residual-value','annual-rate','net-pay','amount-due','running-balance'
+  'previous-instalment','residual-value','annual-rate','net-pay','gross-pay',
+  'tax-withheld','receipt-total','amount-due','running-balance'
 ]);
 export function isFactField(x:unknown):x is DocumentFactField{
   return typeof x==='string'&&factFields.has(x as DocumentFactField);
@@ -104,7 +124,9 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
   const v=input as Record<string,unknown>;
   if(typeof v.name!=='string'||v.name.length<3||v.name.length>80||
     /[0-9@<>]/.test(v.name)||typeof v.institution!=='string'||v.institution.length>40||
-    /[0-9@<>]/.test(v.institution)||!isDocumentCategory(v.category)||
+    /[0-9@<>]/.test(v.institution)||
+    (v.accountType!==undefined&&(typeof v.accountType!=='string'||v.accountType.length>30||!/^(cheque|current|savings|transmission|transactional|credit card|business|unspecified)$/i.test(v.accountType)))||
+    !isDocumentCategory(v.category)||
     !['matched-terms','uncertain'].includes(String(v.confidence))||
     !Array.isArray(v.facts)||v.facts.length>32)return null;
   const facts:DocumentFact[]=[];
@@ -124,6 +146,7 @@ export function safeAccountProfile(input:unknown):AccountProfile|null{
     facts.push(fact);
   }
   return {name:v.name,institution:v.institution,category:v.category,
+    ...(typeof v.accountType==='string'?{accountType:v.accountType}:{}),
     confidence:v.confidence as AccountProfile['confidence'],facts};
 }
 export function makeAccountProfile(
@@ -132,7 +155,7 @@ export function makeAccountProfile(
     ratePercent?:number;runningBalance?:number
   }>
 ):AccountProfile{
-  const info=classifyDocument(text,label);
+  const info=classifyDocument(text);
   const facts:DocumentFact[]=[];
   for(const e of excerpts){
     let field:DocumentFactField|undefined=isFactField(e.semanticField)?e.semanticField:undefined;
@@ -140,6 +163,9 @@ export function makeAccountProfile(
       const l=e.label.toLowerCase();
       if(/\b(?:closing balance|outstanding balance|statement balance)\b/.test(l))field='statement-balance';
       else if(/\b(?:net pay|take home pay)\b/.test(l))field='net-pay';
+      else if(/\b(?:gross pay|gross earnings|gross salary)\b/.test(l))field='gross-pay';
+      else if(/\b(?:paye|tax withheld|income tax deduction)\b/.test(l))field='tax-withheld';
+      else if(/\b(?:receipt total|total paid|amount paid)\b/.test(l))field='receipt-total';
       else if(/\b(?:amount due|total due|payment due)\b/.test(l))field='amount-due';
     }
     if(!field || (e.amount===null&&e.ratePercent===undefined))continue;

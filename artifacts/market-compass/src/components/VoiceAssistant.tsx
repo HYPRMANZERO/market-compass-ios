@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ArrowRight, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
+import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
 import { validateDesktopAiSettings, type DesktopAiSettings } from '@/lib/desktopAiSettings';
 import { parseFinancialSourceHealth, sourceLabels, statusLabels, type FinancialSourceHealth } from '@/lib/financialSourceHealth';
@@ -27,7 +28,7 @@ type RecognitionWindow = Window & {
   webkitSpeechRecognition?: new () => BrowserRecognition;
   SpeechRecognition?: new () => BrowserRecognition;
 };
-type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string };
+type Message = { id: string; source: 'owner' | 'local' | 'ollama' | 'agent'; text: string; link?:{label:string;url:string} };
 type AgentRunResult = {
   ok: true; stage: number; readOnly: true; steps: number; maxSteps: number;
   answer: string; answerSource:'private-desktop-model'; workspaceWritten: false; approvalExecutionEnabled: false;
@@ -64,6 +65,7 @@ type ConnectionStatus = 'not-configured' | 'paused' | 'checking' | 'connected' |
 type Props = {
   context: CompassCommandContext;
   onNavigate: (path: string) => void;
+  onImportDocuments?: () => void;
   settings: DesktopAiSettings;
   onSettingsChange: (settings: DesktopAiSettings) => void;
   queuedReadOnlyQuestions: QueuedReadOnlyQuestion[];
@@ -82,7 +84,7 @@ const voiceAvailable = () => typeof window !== 'undefined' && 'speechSynthesis' 
 const explainError = (error: unknown) => error instanceof Error ? error.message : 'The private desktop is unreachable.';
 
 export default function VoiceAssistant({
-  context,onNavigate,settings,onSettingsChange,
+  context,onNavigate,onImportDocuments,settings,onSettingsChange,
   queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([{
@@ -103,14 +105,18 @@ export default function VoiceAssistant({
     /^[a-z0-9-]+\.ngrok-free\.(?:dev|app)$/.test(window.location.hostname)
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
+  // Explicit, reversible owner-only trial; the default private agent remains unchanged.
+  const ownerPreviewModel = Boolean(protectedSameOrigin) && typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('compassAI') === 'qwen35-4b';
   const [secret, setSecret] = useState(settings.token);
   const [shareDocumentFacts,setShareDocumentFacts]=useState(false);
   const [shareFinancialContext, setShareFinancialContext] = useState(settings.shareFinancialContext);
   const [connection, setConnection] = useState<ConnectionStatus>('not-configured');
   const [reconnectNonce, setReconnectNonce] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [activeModel,setActiveModel]=useState('');
   const [busy, setBusy] = useState(false);
-  const [agentMode, setAgentMode] = useState(false);
+  const agentMode = true; // Model-backed read-only agent always active.
   const [lastAgent, setLastAgent] = useState<AgentRunResult | null>(null);
   const [sourceInventory, setSourceInventory] = useState<SourceInventory | null>(null);
   const [ownerBudget, setOwnerBudget] = useState<OwnerBudgetView | null>(null);
@@ -131,8 +137,8 @@ export default function VoiceAssistant({
   const probeSerial = useRef(0);
   const sendRef = useRef<(text: string) => void>(() => {});
   const connected = settings.enabled && connection === 'connected';
-  const add = (source: Message['source'], text: string) => setMessages(old => [...old, {
-    id: crypto.randomUUID(), source, text,
+  const add = (source: Message['source'], text: string, link?:Message['link']) => setMessages(old => [...old, {
+    id: crypto.randomUUID(), source, text, ...(link?{link}:{}),
   }].slice(-35));
 
   // The encrypted vault is the ONLY persistence layer. Never use localStorage,
@@ -173,12 +179,17 @@ export default function VoiceAssistant({
   // Reconnect after every vault unlock, and on visibility/network changes.
   // A failed connection does not discard or disable the encrypted settings.
   useEffect(() => {
+    if (publicPagesEdition) {
+      setConnection('paused');
+      setConnectionMessage('Private Compass AI is not available on the unauthenticated public edition.');
+      return;
+    }
     if (!settings.enabled) {
       setConnection(settings.url ? 'paused' : 'not-configured');
       setConnectionMessage('');
       return;
     }
-    const url = privateTailnetOrigin(settings.url);
+    const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!url || settings.token.length < 48) {
       setConnection('offline');
       setConnectionMessage('Saved desktop details are incomplete. Edit and save the connection below.');
@@ -207,8 +218,8 @@ export default function VoiceAssistant({
       // requests in Firefox (NS_BINDING_ABORTED).
       setConnection(previous => previous === 'connected' ? previous : 'checking');
       try {
-        const response = await fetch(url + '/api/session', {
-          method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+        const response = await fetch(url + (ownerPreviewModel ? '/api/session/preview' : '/api/session'), {
+          method: 'GET', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
           signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` },
         });
@@ -229,12 +240,14 @@ export default function VoiceAssistant({
           throw Error('The desktop AI service is not responding as an authorized session.');
         if (!('modelAvailable' in payload) || payload.modelAvailable !== true) {
           const why = 'reason' in payload && typeof payload.reason === 'string'
-            ? payload.reason : 'The configured Ollama model is not available.';
+            ? payload.reason : 'The configured Compass model is not available.';
           throw Error(why);
         }
         if (!active || probeSerial.current !== id) return;
+        const reportedModel='model' in payload && typeof payload.model==='string' && /^[a-z0-9.:-]{1,80}$/i.test(payload.model)?payload.model:'';
+        setActiveModel(reportedModel);
         setConnection('connected');
-        setConnectionMessage('Private desktop AI connected. Reconnection is automatic while the app is open and unlocked.');
+        setConnectionMessage(`Private desktop AI connected${reportedModel?` (${reportedModel})`:''}. Reconnection is automatic while the app is open and unlocked.`);
       } catch (err) {
         if (!active || probeSerial.current !== id || controller.signal.aborted && !navigator.onLine) return;
         setConnection('offline');
@@ -261,7 +274,7 @@ export default function VoiceAssistant({
       window.removeEventListener('offline', whenOffline);
       document.removeEventListener('visibilitychange', whenVisible);
     };
-  }, [settings.enabled, settings.url, settings.token, reconnectNonce]);
+  }, [settings.enabled, settings.url, settings.token, reconnectNonce, protectedSameOrigin, publicPagesEdition, ownerPreviewModel]);
 
   // Sensitive source data stays on the private desktop. The UI fetches only
   // a brief inventory and a GET-only Luno balance, never raw emails or statements.
@@ -274,7 +287,7 @@ export default function VoiceAssistant({
       setOwnerBudgetAvailable(false);
       return;
     }
-    const origin = privateTailnetOrigin(settings.url);
+    const origin = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!origin) return;
     // Avoid showing a private snapshot from a previously connected host/token.
     setOwnerBudget(null);
@@ -288,7 +301,7 @@ export default function VoiceAssistant({
       const timer = window.setTimeout(() => controller.abort(), 15000);
       try {
         const response = await fetch(origin + path, {
-          mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', signal: controller.signal,
+          mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store', signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.token}` }
         });
         if (!response.ok) throw Error('The desktop source service returned HTTP ' + response.status);
@@ -365,16 +378,16 @@ export default function VoiceAssistant({
       active=false; controllers.forEach(x=>x.abort()); window.clearInterval(interval);
       document.removeEventListener('visibilitychange',resume);
     };
-  }, [connected, settings.url, settings.token, sourceRefresh]);
+  }, [connected, settings.url, settings.token, sourceRefresh, protectedSameOrigin]);
 
   async function readCompactMemory(loadHistory = false) {
     if (!connected) return;
-    const origin = privateTailnetOrigin(settings.url);
+    const origin = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!origin) return;
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + '/api/memory', {
-        method: 'GET', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+        method: 'GET', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory returned HTTP ' + response.status);
@@ -402,12 +415,12 @@ export default function VoiceAssistant({
     if (method === 'DELETE' && !window.confirm(
       'Permanently clear the encrypted desktop conversation history AND archived documents? Your original financial source files will not be deleted.'
     )) return;
-    const origin = privateTailnetOrigin(settings.url);
+    const origin = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!origin) return;
     setMemoryBusy(true);
     try {
       const response = await fetch(origin + (method === 'POST' ? '/api/memory/archive' : '/api/memory'), {
-        method, mode:'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache:'no-store',
+        method, mode:'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache:'no-store',
         headers: { Authorization: 'Bearer ' + settings.token },
       });
       if (!response.ok) throw Error('Desktop memory operation returned HTTP ' + response.status);
@@ -506,10 +519,10 @@ export default function VoiceAssistant({
   }
 
   async function askDesktop(prompt: string, id: number, queuedId?:string) {
-    const url = privateTailnetOrigin(settings.url);
+    const url = protectedSameOrigin || privateTailnetOrigin(settings.url);
     if (!url || !settings.token || !connected) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 65000);
+    const timer = window.setTimeout(() => controller.abort(), 105000); // Qwen 4B on HYPRBOX can require a cold CPU load.
     try {
       const validAccount = (a: CompassCommandContext['accounts'][number]) =>
         a.name.trim().length > 0 && [a.balance, a.apr, a.minimumPayment].every(v =>
@@ -537,10 +550,9 @@ export default function VoiceAssistant({
         expenseSummary: context.expenseSummary,
         documentFacts,
       } : undefined;
-      const agentIntent = /\b(debts?|loans?|credit\s*cards?|budgets?|spend(?:ing)?|expenses?|salary|earnings?|hourly|hours?\s*worked|pay\s*rate|overtime|income|cash\s*flow|savings?|luno|wallets?|balances?|bank(?:ing)?|accounts?|transactions?|markets?|financial|sources?|documents?|statements?|remind|notify|schedule|record|log|create)\b/i.test(prompt);
-      const useAgent = Boolean(queuedId) || (agentMode && agentIntent);
-      const response = await fetch(url + (useAgent ? '/api/agent/run' : '/api/chat'), {
-        method: 'POST', mode: 'cors', credentials: privateTailnetOrigin(settings.url) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
+      const useAgent = agentMode; // Every AI reply comes from the authenticated private Compass model, with read-only agent safety.
+      const response = await fetch(url + (useAgent ? (ownerPreviewModel ? '/api/agent/preview' : '/api/agent/run') : '/api/chat'), {
+        method: 'POST', mode: 'cors', credentials: (protectedSameOrigin || privateTailnetOrigin(settings.url)) === window.location.origin ? 'same-origin' : 'omit', cache: 'no-store',
         signal: controller.signal,
         headers: { Authorization: `Bearer ${settings.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: prompt, financialContext: summary }),
@@ -561,17 +573,17 @@ export default function VoiceAssistant({
         const agentResult = payload as AgentRunResult;
         setLastAgent(agentResult);
         add('agent', agentResult.answer.slice(0,1600)); speak(agentResult.answer);
-        setStatus(`Desktop Ollama · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
+        setStatus(`Compass AI · read-only agent: ${agentResult.steps}/${agentResult.maxSteps} tool checks. No financial records changed or actions executed.`);
       } else {
         if (!('reply' in payload) || typeof payload.reply !== 'string' ||
           !('answerSource' in payload) || payload.answerSource !== 'private-desktop-model')
-          throw Error('Desktop did not confirm an Ollama-generated chat response.');
+          throw Error('Desktop did not confirm an model-generated chat response.');
         const reply = payload.reply.slice(0,1800);
         const answerSource = 'answerSource' in payload && typeof payload.answerSource === 'string'
           ? payload.answerSource : 'private-desktop-model';
         add(answerSource === 'private-desktop-model' ? 'ollama' : 'local', reply); speak(reply);
         setStatus(answerSource === 'private-desktop-model'
-          ? 'Answered by your desktop Ollama model. Independently verify financial claims.'
+          ? 'Answered by your desktop Compass model. Independently verify financial claims.'
           : answerSource === 'private-assistant-shortcut'
             ? 'Market Compass answered your greeting locally without accessing financial records.'
             : answerSource === 'official-luno-api'
@@ -585,7 +597,7 @@ export default function VoiceAssistant({
       if (messageSerial.current !== id) return;
       setConnection('offline');
       setConnectionMessage(`Desktop unavailable: ${explainError(error)}. Reconnection will be retried automatically.`);
-      add('local', 'The desktop AI is temporarily unavailable. Offline questions about your saved debt plan and markets still work.');
+      add('local', 'Compass AI is unavailable. Read-only questions can be saved locally for your approval and sent when the private gateway reconnects.');
     } finally { window.clearTimeout(timer); if (messageSerial.current === id) setBusy(false); }
   }
 
@@ -596,26 +608,27 @@ export default function VoiceAssistant({
     setQuery(''); setStatus('');
     add('owner', question);
     setLastAgent(null);
-    const result = interpretCompassCommand(question, context);
+    // Jarvis's browser-safe shortcuts are deterministic and never invoke
+    // server-side desktop actions. The user must explicitly tap an external link.
+    const personal = interpretJarvisPersonalCommand(question);
+    if(personal){
+      add('local', personal.text,personal.kind==='link'?{url:personal.url,label:personal.label}:undefined);
+      speak(personal.text);
+      return;
+    }
+    const cleanQuestion=stripCompassWakeWord(question);
+    const result = interpretCompassCommand(cleanQuestion, context);
     // Safeguards and navigation remain local, but a private Luno balance must
     // not be confused with a historical cryptocurrency market candle.
-    const asksLiveWallet = /\b(luno|crypto|wallet|bitcoin|ethereum|solana)\b/i.test(question) &&
-      /\b(balance|holdings|available|portfolio|how much|current|currently|have|own)\b/i.test(question);
-    const asksPublicResearch = /^(?:search public (?:reference|information|info)|research (?:public )?(?:topic|information)|search wikipedia for)\b/i.test(question);
     // Navigation and non-negotiable payment/trading refusals remain local even
     // with Agent mode enabled: a model must never override these guards.
     const localSafetyRefusal = result.type === 'answer' &&
       result.reply.startsWith('I cannot transfer money');
-    if (result.type === 'navigate' || localSafetyRefusal ||
-      // Already derived from the encrypted iPhone workspace: do not send these
-      // device-local excerpts to HYPRBOX just because Agent mode is enabled.
-      result.source === 'local-finance-documents' ||
-      result.source === 'local-owner-budget' ||
-      ((!agentMode || !connected) && result.type !== 'unknown' &&
-      !(!connected && result.needsHistoricalSources) &&
-      !(connected && (result.needsHistoricalSources || asksLiveWallet || asksPublicResearch)))) {
-      add('local', result.reply); speak(result.reply);
-      if (result.destination) onNavigate(result.destination);
+    // Device-local navigation and fixed safety refusals do not need model inference.
+    // Any financial explanation must come from the authenticated private Compass model, not a local AI substitute.
+    if (result.type === 'navigate' || localSafetyRefusal) {
+      add('local',result.reply);
+      if(result.destination)onNavigate(result.destination);
       return;
     }
     if (!connected) {
@@ -683,64 +696,54 @@ export default function VoiceAssistant({
     } catch (err) { setListening(false); setStatus(explainError(err)); }
   }
 
-  return <div className="space-y-4" data-testid="voice-assistant">
-    <section className="overflow-hidden rounded-[24px] bg-[hsl(165,24%,20%)] px-5 py-5 text-white">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[hsl(43,65%,74%)]"><BrainCircuit size={15}/> Compass AI</div>
-          <h1 className="serif mt-3 text-[30px] leading-[1.05]">Just ask.</h1>
-          <p className="mt-2 max-w-[330px] text-[13px] leading-5 text-white/75">Your private finance companion on every device.</p>
-        </div>
-        <button type="button" aria-label={settings.speakReplies ? 'Turn off spoken replies' : 'Turn on spoken replies'} aria-pressed={settings.speakReplies}
-          onClick={() => {
-            if (!speakingSupported) return;
-            if (settings.speakReplies) window.speechSynthesis.cancel();
-            onSettingsChange({ ...settings, speakReplies: !settings.speakReplies });
-          }} disabled={!speakingSupported}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 disabled:opacity-40">
-          {settings.speakReplies ? <Speaker size={20}/> : <VolumeX size={20}/>}
-        </button>
-      </div>
-      <div className="mt-4 flex items-center gap-2 text-[11px] text-white/75">
-        <WifiOff size={16}/> Offline calculations + queued questions
-        <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1">
-          {connected ? 'Ollama connected' : connection === 'checking' ? 'Connecting…' : settings.enabled ? 'Auto reconnect on' : 'Local mode'}
-        </span>
-      </div>
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (!busy && query.trim()) submit(query);
+  }
+
+  return <div className="mc-assistant space-y-3" data-testid="voice-assistant">
+    <section className="flex min-h-[66px] items-center justify-between gap-2 rounded-[18px] bg-[hsl(165,24%,20%)] px-3.5 py-2.5 text-white" aria-label="Compass AI model connection">
+      <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold"><BrainCircuit size={20} className="shrink-0 text-[hsl(43,65%,74%)]"/> Compass AI</span>
+      <span role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold" title={connectionMessage||"Private Compass model connection status"}>
+        <span className={connected?"h-2 w-2 shrink-0 rounded-full bg-emerald-400":connection==="checking"?"h-2 w-2 shrink-0 rounded-full bg-amber-300":"h-2 w-2 shrink-0 rounded-full bg-white/50"} aria-hidden="true"/>
+        {connected?(activeModel==='qwen3.5:4b'?(ownerPreviewModel?'Compass preview':'Compass connected'):'Compass connected'):connection==="checking"?'Connecting Compass':settings.enabled?(ownerPreviewModel?'Compass preview offline':'Compass offline'):'Compass not connected'}
+      </span>
+      <button type="button" aria-label={settings.speakReplies?"Turn off spoken replies":"Turn on spoken replies"} aria-pressed={settings.speakReplies}
+        onClick={()=>{if(!speakingSupported)return;if(settings.speakReplies)window.speechSynthesis.cancel();onSettingsChange({...settings,speakReplies:!settings.speakReplies});}}
+        disabled={!speakingSupported} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-transparent disabled:opacity-40">
+        {settings.speakReplies?<Speaker size={18}/>:<VolumeX size={18}/>}</button>
     </section>
 
-    <section className="rounded-[20px] border border-border bg-card shadow-sm">
+    <section className="flex min-h-[min(64dvh,650px)] flex-col overflow-hidden rounded-[20px] border border-border bg-card shadow-sm" aria-label="AI chat interface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[13px] font-semibold">Conversation</h2>
         <button type="button" className="text-[11px] font-semibold text-muted-foreground" onClick={() => {
           setMessages([]); setLastAgent(null); setStatus('Conversation cleared from page memory.');
         }}><X size={14} className="mr-1 inline"/>Clear</button>
       </div>
-      <div className="border-b border-border px-4 py-3">
-        <label className="flex min-h-9 items-center gap-3 text-[12px] font-semibold">
-          <input type="checkbox" checked={agentMode} disabled={busy}
-            onChange={event => { setAgentMode(event.target.checked); setLastAgent(null); }}
-            aria-label="Enable read-only agent mode"/>
-          <span>Agent mode <span className="font-normal text-muted-foreground">· max 3 read-only tools</span></span>
-        </label>
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-          Financial records and sources can be reviewed, not edited. Reminders and expense entries are drafts only; banking and trading are disabled.
-        </p>
-        {agentMode && !settings.shareFinancialContext && (
-          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-            Your unlocked iPhone vault entries are not automatically shared with HYPRBOX. To analyse those entries, enable financial-context sharing below. The shared HYPRBOX owner budget is read-only and does not synchronize separate browser vaults.
-          </p>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <span className="flex min-h-8 items-center gap-2 text-[12px] font-semibold" aria-label="Read-only agent mode always active">
+          <ShieldCheck size={15} className="text-primary" aria-hidden="true"/> Agent mode on
+          <span className="text-[10px] font-normal text-muted-foreground">Compass · 3 read-only tools max</span>
+        </span>
+        <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer">Safety</summary>
+          <p className="max-w-[330px] py-2 leading-5">Tools only review sources. No trading, banking or payment changes. Sharing iPhone vault entries requires separate permission in settings.</p>
+        </details>
       </div>
-      <div className="max-h-[340px] min-h-[160px] space-y-3 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="AI conversation">
+      <div className="mc-chat-log min-h-[min(40dvh,340px)] max-h-[min(62dvh,650px)] flex-1 space-y-2.5 overflow-y-auto p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+        {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
-          <div className={`max-w-[92%] rounded-[16px] px-4 py-3 text-[13px] leading-6 ${message.source === 'owner' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted/75 text-foreground'}`}>
-            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama</span>}
-            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Private desktop Ollama · Read-only agent</span>}
+          <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
+            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass</span>}
+            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Read-only agent</span>}
             {message.text}
+            {message.link && <a href={message.link.url} target="_blank" rel="noopener noreferrer"
+              className="mt-2 inline-flex min-h-10 items-center rounded-xl border border-primary/35 bg-background px-3 py-2 text-[12px] font-semibold text-primary underline-offset-4 hover:underline"
+              aria-label={message.link.label}>{message.link.label}</a>}
           </div>
         </div>)}
-        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for desktop Ollama…'}</div>}
+        {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for Compass…'}</div>}
         <div ref={bottom}/>
       </div>
       {reviewedQueue.length>0 && <section className="mx-3 mb-3 rounded-xl border border-border bg-muted/40 p-3" aria-label="Encrypted offline agent questions">
@@ -798,73 +801,31 @@ export default function VoiceAssistant({
         </section>
       )}
       <div className="border-t border-border p-3">
-        <form className="flex items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
+        <form className="mc-assistant-composer grid grid-cols-[minmax(0,1fr)_44px_44px] items-end gap-2" onSubmit={event => { event.preventDefault(); submit(query); }}>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
-            <textarea value={query} rows={2} maxLength={500} placeholder="Ask about debt, markets or your budget…" onChange={e=>setQuery(e.target.value)}
-              className="max-h-28 min-h-[54px] w-full resize-none rounded-[15px] border border-input bg-background px-3 py-3 text-[16px] leading-5"/>
+            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder="Ask about debt or your budget…" onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
+              aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[64px] w-full resize-y rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
           <button type="button" onClick={toggleMic} disabled={!recognitionSupported || busy} aria-pressed={listening} aria-label={listening ? 'Stop listening' : 'Speak a question'}
-            className={`grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-white disabled:opacity-30 ${listening ? 'animate-pulse bg-[hsl(5,60%,47%)]' : 'bg-[hsl(165,24%,25%)]'}`}>
             {listening ? <MicOff size={22}/> : <Mic size={23}/>}
           </button>
           <button type="submit" disabled={!query.trim() || busy} aria-label="Send question"
-            className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={20}/></button>
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[hsl(43,65%,73%)] text-[hsl(165,26%,19%)] disabled:opacity-40"><Send size={19}/></button>
         </form>
-        {!recognitionSupported && <p className="mt-2 text-[11px] text-muted-foreground">Use your iPhone keyboard microphone for dictation. Offline typed questions still work.</p>}
-        {status && <p role="status" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{status}</p>}
+        <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
+        {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use the iPhone keyboard microphone to dictate.</p>}
+        {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Spoken response voice preferences">
-      <summary className="cursor-pointer text-[13px] font-bold">Spoken replies · voice &amp; pace</summary>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-        Choose an English voice offered by this iPhone or browser. Preview voices without sending your financial replies to another speech service.
-      </p>
-      <label className="mt-3 block text-[12px] font-semibold">
-        Spoken voice
-        <select value={settings.voiceURI===DEVICE_DEFAULT_VOICE ? DEVICE_DEFAULT_VOICE :
-          availableVoices.some(v=>v.voiceURI===settings.voiceURI) ? settings.voiceURI : ''}
-          onChange={e=>onSettingsChange({...settings,voiceURI:e.target.value})}
-          disabled={!speakingSupported}
-          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="">Automatic · best Safari-listed English voice</option>
-          <option value={DEVICE_DEFAULT_VOICE}>Use iPhone system default voice</option>
-          {availableVoices.map(v=><option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}
-        </select>
-      </label>
-      <label className="mt-3 block text-[12px] font-semibold">
-        Speaking pace
-        <select value={settings.voicePace||'natural'}
-          onChange={e=>onSettingsChange({...settings,voicePace:e.target.value as VoicePace})}
-          disabled={!speakingSupported}
-          className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px] font-normal">
-          <option value="natural">Natural · relaxed</option>
-          <option value="calm">Calm · slower</option>
-          <option value="brisk">Brisk · quicker</option>
-        </select>
-      </label>
-      <button type="button" disabled={!speakingSupported}
-        onClick={()=>speak('Hello. I am Compass. This is your iPhone voice preview. Your historical financial plan is dated the fifteenth of October. No current bank balance is verified.',true)}
-        className="mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
-        <Speaker size={15} className="mr-1 inline"/> Preview this voice
-      </button>
-      <button type="button" disabled={!speakingSupported}
-        onClick={()=>setAvailableVoices(sortedEnglishVoices(window.speechSynthesis.getVoices()))}
-        className="ml-2 mt-3 min-h-11 rounded-xl border border-border px-4 text-[12px] font-semibold disabled:opacity-40">
-        <RefreshCw size={14} className="mr-1 inline"/> Refresh iPhone voices
-      </button>
-      {voicePreviewStatus && <p role="status" aria-live="polite" className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] leading-5 text-muted-foreground">{voicePreviewStatus}</p>}
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-        Safari reports {availableVoices.length} English voices on this device. The iPhone system default
-        option lets iOS choose instead. Safari may not expose all downloaded Enhanced/Premium
-        iPhone voices; unavailable voices cannot be forced by a web app. Try voice previews
-        and keep the one you prefer. No financial reply is sent to a new voice service.
-      </p>
-    </details>
+    <div className="mc-assistant-dock flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-4" aria-label="AI tools and connections">
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Encrypted desktop conversation memory">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[14px] font-bold">Compact Vault · private memory</h2>
+
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Encrypted desktop conversation memory"><summary className="cursor-pointer text-[13px] font-bold">Private memory</summary>
+    <section className="mt-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="min-w-0 text-[14px] font-bold leading-5">Compact Vault · private memory</h2>
         <button type="button" className="min-h-10 rounded-xl border border-border px-3 text-[12px] font-semibold disabled:opacity-40"
           disabled={!connected || memoryBusy} onClick={() => void readCompactMemory(false)}>
           <RefreshCw size={14} className="mr-1 inline"/> Refresh
@@ -902,9 +863,10 @@ export default function VoiceAssistant({
         Archiving permitted local files is a separate action. Keys remain protected by Windows DPAPI.
         Compression is measured; no fixed ratio is guaranteed.
       </p>
-    </section>
+    </section></details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm" aria-label="Private financial sources">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm" aria-label="Private financial sources"><summary className="cursor-pointer text-[13px] font-bold">Financial sources</summary>
+    <section className="mt-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-bold">My connected financial sources</h2>
         <button type="button" onClick={() => setSourceRefresh(n => n + 1)} disabled={!connected || sourceLoading}
@@ -912,6 +874,27 @@ export default function VoiceAssistant({
           <RefreshCw size={15}/> Refresh
         </button>
       </div>
+      <details className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-3" aria-label="Bank connectivity and consent status">
+        <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-[12px] font-semibold">
+          <span>Bank connections</span>
+          <span className="rounded-full bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+            {sourceInventory?.bankOAuthConnected ? 'Authorization reported · verify scope' : 'Not connected'}
+          </span>
+        </summary>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Direct bank feeds are not activated in this release. Partner-approved, account-scoped,
+          read-only consent is required before transactions can be retrieved. No banking passwords
+          or payment permissions should be entered into this app.
+        </p>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Planned: provider approval, consent expiry and revocation, dated sync, duplicate checks,
+          and explicit review before saving transactions. Missing bank data is unknown, not R0.
+        </p>
+        <button type="button" onClick={()=>onImportDocuments ? onImportDocuments() : onNavigate('/expenses')}
+          className="mt-3 min-h-11 rounded-xl border border-border bg-background px-3 text-[12px] font-semibold">
+          Import a statement now <ArrowRight size={13} className="ml-1 inline"/>
+        </button>
+      </details>
       {sourceLoading && <p className="mt-3 text-[12px] text-muted-foreground">Reading the private source inventory…</p>}
       <OwnerBudgetPanel view={ownerBudget} connected={connected} available={ownerBudgetAvailable}/>
       {sourceHealth ? <div className="mt-3 rounded-xl border border-border p-3" aria-label="Financial source freshness">
@@ -943,6 +926,9 @@ export default function VoiceAssistant({
         This bridge has not supplied the source-freshness report yet. Inventory counts below are not evidence of current balances.
       </p> : null}
 
+      {sourceInventory&&<p className="mt-3 rounded-xl border border-border bg-muted/35 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+        The counts below describe HYPRBOX desktop source folders only. This iPhone's encrypted vault is separate: it contains {context.accounts.length} entered debt account(s) and {context.localFinanceDocuments?.length??0} saved document(s). A missing desktop source does not mean your phone records are missing. No automatic syncing occurs.
+      </p>}
       {sourceInventory ? <div className="mt-3 space-y-2 text-[12px]">
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Financial Advisor documents</span><strong>{sourceInventory.documentSources.length} local files</strong></div>
         <div className="flex flex-wrap items-center justify-between gap-2"><span>Historic baseline</span><strong>{sourceInventory.historicalSnapshotDate ?? 'Not found'}</strong></div>
@@ -972,9 +958,10 @@ export default function VoiceAssistant({
       </div>}
       {sourceError && <p role="status" className="mt-3 text-[11px] leading-5 text-muted-foreground">{sourceError}</p>}
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Statements and exported emails are read only from your private desktop. To connect a bank account directly, use an approved bank-data provider; never enter your banking password or full card information here. Historical documents are not live balances.</p>
-    </section>
+    </section></details>
 
-    <section className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-3 shadow-sm"><summary className="cursor-pointer text-[13px] font-bold">Suggested questions</summary>
+    <section className="mt-2">
       <h2 className="text-[13px] font-semibold">Try asking</h2>
       <div className="mt-3 flex flex-wrap gap-2">
         {ideas.map(idea => <button key={idea} type="button" onClick={()=>submit(idea)} disabled={busy}
@@ -983,10 +970,10 @@ export default function VoiceAssistant({
         </button>)}
       </div>
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck size={15} className="mt-0.5 shrink-0"/>Offline answers use your unlocked vault. Conversation messages are only held in page memory. Bank figures are not independently verified.</p>
-    </section>
+    </section></details>
 
-    <details className="rounded-[20px] border border-border bg-card p-4 shadow-sm">
-      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Desktop Ollama · saved connection
+    <details className="mc-assistant-dock-card snap-start rounded-[20px] border border-border bg-card p-4 shadow-sm">
+      <summary className="flex cursor-pointer items-center gap-2 text-[13px] font-semibold"><LockKeyhole size={17} className="text-primary"/> Compass AI · saved connection
         <span className="ml-auto text-[11px] font-normal text-muted-foreground">{connected ? 'Connected' : settings.enabled ? 'Auto reconnect' : 'Set up once'}</span>
       </summary>
       <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
@@ -1009,7 +996,7 @@ export default function VoiceAssistant({
       {protectedSameOrigin && (
         <p role="note" className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-[12px] leading-5">
           You are on the protected website: <strong>{window.location.hostname}</strong>.
-          {' '}For private AI, use the exact same HTTPS origin (not a GitHub Pages or Tailscale URL).
+          {' '}Your iPhone uses this authenticated gateway for private Compass AI even when a Tailscale host is saved for separately authorised desktop devices.
           {privateTailnetOrigin(host) !== protectedSameOrigin && ' Tap “Use this protected website for AI” below to save the correct address without changing your token.'}
         </p>
       )}
@@ -1050,8 +1037,9 @@ export default function VoiceAssistant({
       </div> : settings.url ? <button type="button" onClick={()=>onSettingsChange({...settings, enabled:true})} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3 text-[12px] font-semibold">Resume automatic connection</button> : null}
       <p className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-muted-foreground">
         <CircleHelp size={14} className="mt-0.5 shrink-0"/>
-        Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run Ollama or continuously listen in the background when closed.
+        Your separate AI token is stored in the password-encrypted workspace and included in encrypted backups. It is not sent to GitHub or kept in plaintext localStorage. Unlocking is still required; a browser cannot run the standalone model or continuously listen in the background when closed.
       </p>
     </details>
+    </div>
   </div>;
 }
