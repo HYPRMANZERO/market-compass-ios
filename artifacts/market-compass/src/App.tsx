@@ -1,4 +1,4 @@
-import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { IonApp, IonHeader, IonToolbar, IonFooter, IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonSegment, IonSegmentButton, IonLabel } from '@ionic/react';
@@ -361,9 +361,10 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     window.addEventListener('offline', update);
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
-  // Keep the AI composer in the iPhone's *visible* viewport while the
-  // on-screen keyboard is active. Other routes retain normal document scroll.
-  useEffect(()=>{
+  // Apply the chat-only viewport lock before WebKit paints the new route.
+  // A passive effect allows one stale 100dvh/Ionic frame during tab navigation.
+  // Other routes retain normal document scrolling.
+  useLayoutEffect(()=>{
     if(path!=='/assistant')return;
     return installAssistantKeyboardViewport();
   },[path]);
