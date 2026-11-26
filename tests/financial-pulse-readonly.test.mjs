@@ -143,3 +143,32 @@ test('all sums use integer cents and reject invalid money or unsupported currenc
   assert.throws(()=>calculateFinancialPulse({asOf:today,approvedEntries:[],
     balance:{...bankBalance(100,today),currency:'USD'}}),/identified ZAR/);
 });
+
+test('blank source IDs and sub-cent imports are excluded rather than counted as approved evidence',()=>{
+  const valid=entry('salary','2026-11-25','income',900,'salary');
+  const badId=entry('','2026-11-25','income',300,'salary');
+  const subcent=entry('tiny','2026-11-25','expense',0.001);
+  const source=[valid,badId,subcent];
+  const before=JSON.stringify(source);
+  const pulse=calculateFinancialPulse({asOf:'2026-11-25',approvedEntries:source,
+    balance:bankBalance(1000,'2026-11-25'),commitmentsComplete:true,safetyBuffer:100});
+  assert.deepEqual(pulse.sourceIds.recorded,['salary']);
+  assert.equal(pulse.recorded.count,1);
+  assert.equal(pulse.recorded.income,900);
+  assert.equal(pulse.recorded.expenses,0);
+  assert.equal(pulse.recorded.excludedInvalidOrDuplicate,2);
+  assert.equal(pulse.safeToSpend,null,'unsafe records must block claims of spendable cash');
+  assert.equal(JSON.stringify(source),before,'source ledger remains unchanged');
+});
+test('imported large ledgers never silently lose cent precision',()=>{
+  const entries=Array.from({length:9500},(_,i)=>entry('large-'+i,'2026-11-25',
+    i%2?'expense':'income',1e10,i%2?'other':'salary'));
+  const pulse=calculateFinancialPulse({asOf:'2026-11-25',approvedEntries:entries});
+  assert.ok(pulse.recorded.excludedInvalidOrDuplicate>0);
+  assert.ok(pulse.recorded.count<entries.length);
+  assert.ok(Number.isSafeInteger(Math.round(pulse.recorded.income*100)));
+  assert.ok(Number.isSafeInteger(Math.round(pulse.recorded.expenses*100)));
+  assert.ok(Number.isSafeInteger(Math.round(pulse.recorded.difference*100)));
+  assert.equal(pulse.safeToSpend,null);
+  assert.ok(pulse.warnings.some(s=>/invalid or repeated/.test(s)));
+});

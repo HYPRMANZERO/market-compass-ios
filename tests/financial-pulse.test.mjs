@@ -95,3 +95,40 @@ test('mobile UI shows review selectors, provenance, links and no imaginary bank 
   assert.match(app,/entries=\{entries\} documents=\{docs\} expenseSettings=/);
   assert.match(app,/hidden lg:block"><FinancialPulse/);
 });
+
+test('identical import retries appear once in the Monthly Review and do not inflate cash flow',()=>{
+  const salary=entry('pay-1','2026-11-01','income','salary',10000);
+  const food=entry('food-1','2026-11-05','expense','groceries',300);
+  const input=[salary,food,{...food}];
+  const original=JSON.stringify(input);
+  const pulse=financialPulse(input,[],'2026-10-26','ZAR');
+  assert.equal(pulse.totalEntries,2);
+  assert.equal(pulse.income,10000);
+  assert.equal(pulse.outflows,300);
+  assert.equal(pulse.difference,9700);
+  assert.equal(pulse.excludedInvalidOrDuplicate,1);
+  assert.equal(JSON.stringify(input),original);
+});
+test('conflicting source ID edits are omitted entirely, not arbitrarily selected',()=>{
+  const changed=entry('duplicate','2026-11-03','expense','fees',200);
+  const pulse=financialPulse([
+    entry('income','2026-11-01','income','salary',1000),
+    entry('duplicate','2026-11-03','expense','fees',100),
+    changed
+  ],[],'2026-10-26','ZAR');
+  assert.equal(pulse.totalEntries,1);
+  assert.equal(pulse.outflows,0);
+  assert.equal(pulse.difference,null);
+  assert.equal(pulse.excludedInvalidOrDuplicate,2);
+});
+test('blank IDs and subcent amounts cannot be reported as approved monthly income',()=>{
+  const pulse=financialPulse([
+    entry('','2026-11-02','income','salary',500),
+    entry('tiny','2026-11-03','expense','fees',0.001),
+    entry('valid','2026-11-04','expense','groceries',10)
+  ],[],'2026-10-26','ZAR');
+  assert.equal(pulse.totalEntries,1);
+  assert.equal(pulse.income,0);
+  assert.equal(pulse.outflows,10);
+  assert.equal(pulse.excludedInvalidOrDuplicate,2);
+});

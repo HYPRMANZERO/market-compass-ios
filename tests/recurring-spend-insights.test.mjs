@@ -33,3 +33,33 @@ test('sensitive numeric references do not become public recurring labels',()=>{
   assert.equal(rows.length,1);
   assert.ok(!rows[0].label.includes('1234567890123'));
 });
+
+test('old recurring observations are historical, not present-day bills',()=>{
+  const old=[make('2025-09-28','gym-2025-sep'),make('2025-10-28','gym-2025-oct'),
+    make('2025-11-28','gym-2025-nov')];
+  assert.equal(recurringSpendCandidates(old,'2026-11-26').length,0);
+  // An observation in the immediately preceding salary cycle may still
+  // warrant owner review, including when the new cycle starts today.
+  const recent=[make('2026-08-28','gym-aug'),make('2026-09-28','gym-sep'),
+    make('2026-10-28','gym-oct')];
+  assert.equal(recurringSpendCandidates(recent,'2026-11-26').length,1);
+  assert.equal(recurringSpendCandidates(recent,'2026-12-26').length,0);
+});
+test('re-importing a record does not create an extra independent observation',()=>{
+  const original=[make('2026-09-28','gym-09'),make('2026-10-28','gym-10'),
+    make('2026-11-28','gym-11')];
+  assert.equal(recurringSpendCandidates([...original,original[1]],'2026-12-01').length,1);
+  // Repeated source IDs across different months must not become three
+  // independent observed payments.
+  assert.equal(recurringSpendCandidates(original.map(x=>({...x,id:'reused-id'})),
+    '2026-12-01').length,0);
+});
+test('large synthetic ledger grouping is deterministic and capped',()=>{
+  const huge=Array.from({length:6000},(_,i)=>make('2026-11-28','bulk-'+i,350,
+    'Synthetic unique transaction '+i));
+  const entries=[make('2026-09-28','gym-sep'),make('2026-10-28','gym-oct'),
+    make('2026-11-28','gym-nov'),...huge];
+  const result=recurringSpendCandidates(entries,'2026-12-02');
+  assert.equal(result.length,1);
+  assert.deepEqual(result[0].sourceIds,['gym-nov','gym-oct','gym-sep']);
+});
