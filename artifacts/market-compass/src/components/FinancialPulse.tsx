@@ -97,7 +97,7 @@ export default function FinancialPulse({entries,documents,currency,settings}:Pro
       <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-muted" role="progressbar"
         aria-label="Recorded spending limit used" aria-valuemin={0}
         aria-valuemax={100} aria-valuenow={Math.min(100,Math.round(pulse.limitUsedPercent??0))}>
-        <div className="h-full rounded-full bg-[hsl(165,34%,37%)]"
+        <div className="h-full rounded-full bg-[hsl(165,79%,32%)]"
           style={{width:Math.min(100,pulse.limitUsedPercent??0)+'%'}}/>
       </div>
       <p className="mt-1 text-[10px] text-muted-foreground">Limit is owner-entered; unrecorded bills may remain.</p>
@@ -114,7 +114,7 @@ export default function FinancialPulse({entries,documents,currency,settings}:Pro
             <span className="shrink-0 font-semibold tabular-nums">{fmt(category.amount,currency)}</span>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-[hsl(165,30%,39%)]"
+            <div className="h-full rounded-full bg-[hsl(165,79%,38%)]"
               style={{width:category.percent.toFixed(2)+'%'}}/>
           </div>
         </div>)}
