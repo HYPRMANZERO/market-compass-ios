@@ -390,8 +390,9 @@ async function main(){
       }),'chat lock cleaned after Home navigation');
       await selectRoute('assistant');
       await waitFor(()=>tab.invoke(function(){
-        return document.documentElement.classList.contains('mc-assistant-route');
-      }),'AI lock restored after returning');
+        return document.documentElement.classList.contains('mc-assistant-route') &&
+          !!document.querySelector('.mc-chat-composer-wrap');
+      }),'AI lock and lazy composer restored after returning');
       assertResting(await geometry());
       console.log('AI VIEWPORT BROWSER PASS: entrance, keyboard open/close and Home-to-AI return; synthetic Chromium, not actual Safari');
       return;
