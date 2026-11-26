@@ -36,6 +36,7 @@ import FinancialSpaceHero from '@/components/FinancialSpaceHero';
 import BankCarousel from '@/components/BankCarousel';
 import FinancialPulse from '@/components/FinancialPulse';
 import FinancialPulseMini from '@/components/FinancialPulseMini';
+import {calculateFinancialPulse} from '@/lib/financialPulseForecast';
 import AccountTransactionHistory from '@/components/AccountTransactionHistory';
 import LedgerIntegrityPanel from '@/components/LedgerIntegrityPanel';
 import FinancialSourceStatusPanel from '@/components/FinancialSourceStatusPanel';
@@ -1283,6 +1284,17 @@ function Assistant({ data, setData, onImportDocuments }: {
     privateBudget: data.privateBudget ?? emptyPrivateBudget,
     marketCache: data.marketCache,
     draftCount: data.drafts.filter(d => d.status === 'pending').length,
+    financialPulse:data.currency==='ZAR'?(()=>{
+      const pulse=calculateFinancialPulse({asOf:localDate(),approvedEntries:data.expenseEntries??[]});
+      return {readOnly:true as const,currency:'ZAR' as const,asOf:pulse.asOf,
+        cycleStart:pulse.cycle.start,cycleEnd:pulse.cycle.lastDay,
+        entryCount:pulse.recorded.count,income:pulse.recorded.income,
+        expenses:pulse.recorded.expenses,debtPayments:pulse.recorded.debtPayments,
+        transfers:pulse.recorded.transfers,recordedDifference:pulse.recorded.difference,
+        entrySourceIds:pulse.sourceIds.recorded.filter(id=>/^[A-Za-z0-9_.:-]{1,120}$/.test(id)).slice(0,20),
+        balanceQuality:'missing' as const,bankVerified:false as const,
+        commitmentsComplete:false as const,safeToSpend:null};
+    })():undefined,
     expenseSummary: (() => {
       const current=salaryCycle(localDate());
       const stats=cycleAnalysis(data.expenseEntries??[],current.start,data.currency,(data.expenseSettings??DEFAULT_EXPENSE_SETTINGS).cycleBudget);
