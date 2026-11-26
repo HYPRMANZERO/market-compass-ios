@@ -402,6 +402,54 @@ button[class~='bg-[hsl(43,65%,73%)]']:disabled {
   box-shadow: none !important;
 }
 
+/* ==================================================== desktop composition ==
+   The mobile-first shell was simply stretched to 1440px: a full-bleed promo bar,
+   a balance card whose stat pair spanned the page, a three-way period control
+   with each label a third of the screen, and a rail whose wordmark wrapped. A
+   phone layout is not a desktop layout -- these rules give the wide screen its
+   own proportions without touching the phone. */
+@media (min-width: 1024px) {
+  /* Content column: keep a readable measure instead of the full 1192px. */
+  .mc-mobile-content {
+    max-width: 1080px !important;
+    margin-inline: auto !important;
+  }
+
+  /* Promo cards read as cards, not as page-wide bars. */
+  a[aria-label='Open Compass Personal AI assistant'] {
+    max-width: 620px;
+  }
+
+  /* Balance card: the stat pair and CTA no longer stretch across a metre. */
+  .fin-hero-stats {
+    max-width: 460px;
+  }
+  .mc-wallet-number {
+    font-size: 46px;
+  }
+  .mc-wallet-footnote {
+    font-size: 11px;
+  }
+
+  /* Three period labels were each a third of the page. */
+  div[aria-label='Choose salary cycle'] {
+    max-width: 420px;
+  }
+  div[aria-label='Choose salary cycle'] > button {
+    flex: 0 0 auto;
+    padding-inline: 18px;
+  }
+
+  /* Navigation rail: the wordmark must not break into two lines. */
+  aside[aria-label='Desktop navigation'] .serif {
+    font-size: 19px;
+    white-space: nowrap;
+  }
+  aside[aria-label='Desktop navigation'] p {
+    max-width: none;
+  }
+}
+
 /* ------------------------------------------------------- dock geometry --- */
 /* The dock's height is not a constant: it depends on the home-indicator inset
    and on the browser's own zoom. AppShell measures it and publishes
