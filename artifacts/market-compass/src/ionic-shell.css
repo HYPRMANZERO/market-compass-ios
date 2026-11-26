@@ -501,10 +501,12 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     /* The safe-area strip continues the dark app bar down to the exact top edge
        of the assistant header (safe area + 10px, matching the padding above).
        It used to be the old forest green and stopped 1px early, which left a
-       light hairline between the status bar and the bar. */
+       light hairline between the status bar and the bar. It is now the same
+       solid ink as the app bar on every other tab: a green tint here showed as
+       a colour step between the two surfaces. */
     background:linear-gradient(to bottom,
       #0b1620 0,
-      #10302a calc(env(safe-area-inset-top,0px) + 10px),
+      #0b1620 calc(env(safe-area-inset-top,0px) + 10px),
       #f2f5fa calc(env(safe-area-inset-top,0px) + 10px));
   }
   .mc-assistant-page .mc-assistant-composer {
