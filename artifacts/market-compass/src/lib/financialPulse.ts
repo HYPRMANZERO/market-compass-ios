@@ -19,6 +19,7 @@ export type FinancialPulse = {
   documentCount:number;
   lastDocumentImport:string|null;
   omittedOtherCurrency:number;
+  excludedInvalidOrDuplicate:number;
   spendingLimit:number|null;
   limitUsedPercent:number|null;
 };
@@ -33,8 +34,32 @@ export function financialPulse(
   entries:readonly ExpenseEntry[],documents:readonly LocalFinanceDocument[],
   start:string,currency:string,settings?:ExpenseSettings
 ):FinancialPulse{
-  const valid=(Array.isArray(entries)?entries:[]).filter(safeEntry);
   const period=salaryCycle(start);
+  const first=new Map<string,ExpenseEntry>();
+  const conflicts=new Set<string>();
+  let excludedInvalidOrDuplicate=0;
+  for(const e of Array.isArray(entries)?entries:[]){
+    if(!safeEntry(e)||!e.id.trim()){excludedInvalidOrDuplicate++;continue;}
+    const prior=first.get(e.id);
+    if(!prior){first.set(e.id,e);continue;}
+    // Identical re-imports represent one approved record; conflicting edits
+    // with the same source ID are ambiguous and neither may count.
+    excludedInvalidOrDuplicate++;
+    if(prior.date!==e.date||prior.amount!==e.amount||prior.kind!==e.kind||
+       prior.category!==e.category||prior.currency!==e.currency)conflicts.add(e.id);
+  }
+  let totalCents=0;
+  const valid=[...first.values()].filter(e=>{
+    if(conflicts.has(e.id)){excludedInvalidOrDuplicate++;return false;}
+    if(e.date>=period.start&&e.date<period.endExclusive&&e.currency===currency){
+      const amountCents=Math.round(e.amount*100);
+      if(amountCents<1||totalCents>Number.MAX_SAFE_INTEGER-amountCents){
+        excludedInvalidOrDuplicate++;return false;
+      }
+      totalCents+=amountCents;
+    }
+    return true;
+  });
   const dated=valid.filter(e=>e.date>=period.start&&e.date<period.endExclusive);
   const own=cycleEntries(valid,period.start,currency);
   const limit=safeLimit(settings?.cycleBudget??'');
@@ -57,6 +82,7 @@ export function financialPulse(
     recent:[...own].sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt)).slice(0,3),
     documentCount:documentsSaved.length,lastDocumentImport:imports[0]??null,
     omittedOtherCurrency:dated.filter(e=>e.currency!==currency).length,
+    excludedInvalidOrDuplicate,
     spendingLimit:stats.budget,
     limitUsedPercent:stats.percent
   };
