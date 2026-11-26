@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useMemo,useState} from 'react';
 import {Link} from 'wouter';
 import {
   ArrowDownLeft,ArrowRight,ArrowUpRight,CalendarDays,FileText,Landmark,
@@ -32,7 +32,10 @@ export default function FinancialPulse({entries,documents,currency,settings}:Pro
   const today=localDate();
   const current=salaryCycle(today);
   const chosen=shiftSalaryCycle(current.start,offset);
-  const pulse=financialPulse(entries,documents,chosen.start,currency,settings);
+  // Imported files can be large; unrelated navigation/state changes should
+  // not re-validate every record or rebuild all category totals.
+  const pulse=useMemo(()=>financialPulse(entries,documents,chosen.start,currency,settings),
+    [entries,documents,chosen.start,currency,settings]);
   const lastImport=pulse.lastDocumentImport?.slice(0,10);
   const recent=pulse.recent;
   return <section className="mc-financial-pulse min-w-0 rounded-[22px] border border-border bg-card p-4 shadow-sm sm:p-5"
@@ -63,6 +66,9 @@ export default function FinancialPulse({entries,documents,currency,settings}:Pro
       {' · '}{offset===0?'In progress':'Past salary cycle'}
       {' · '}{pulse.totalEntries} {pulse.totalEntries===1?'entry':'entries'}
     </p>
+    {pulse.excludedInvalidOrDuplicate>0&&<p role="status" className="mt-2 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-950">
+      {pulse.excludedInvalidOrDuplicate} invalid, duplicated or conflicting saved record(s) were excluded from this review. Check your source records in Spend before relying on the totals. This does not delete or alter any entry.
+    </p>}
     <div className="mt-4 grid grid-cols-2 gap-2.5">
       <div className="min-w-0 rounded-[16px] border border-border bg-muted/30 p-3">
         <span className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
