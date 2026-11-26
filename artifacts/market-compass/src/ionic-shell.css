@@ -676,3 +676,21 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     line-height:1.45;
   }
 }
+
+/* Installed iPhone PWA: WebKit can report a layout viewport taller than the
+   visible screen after entering AI. Fix the ACTUAL resting viewport boundary;
+   no second document scroll host and no extra footer below the home indicator.
+   The keyboard-open layout above still owns its separate absolute positioning. */
+@media (max-width:1023px) {
+  html.mc-assistant-route:not(.mc-chat-keyboard-open) .mc-mobile-tabbar {
+    bottom:var(--mc-chat-resting-bottom-inset,0px) !important;
+    /* Some iOS restores report an inflated safe-area value. Keep one inset. */
+    padding-bottom:clamp(10px,env(safe-area-inset-bottom,0px),34px) !important;
+  }
+  html.mc-assistant-route:not(.mc-chat-keyboard-open) .mc-mobile-content.mc-assistant-page {
+    height:calc(var(--mc-chat-resting-visible-bottom,100dvh) - var(--mc-chat-tabbar-height,100px)) !important;
+    max-height:calc(var(--mc-chat-resting-visible-bottom,100dvh) - var(--mc-chat-tabbar-height,100px)) !important;
+    min-height:0 !important;
+    padding-bottom:0 !important;
+  }
+}
