@@ -347,6 +347,145 @@ section[aria-label='Compass model connection'] {
   }
 }
 
+/* ---------------------------------------------------------- spend tabs --- */
+/* Segment captions were muted-foreground at 78% opacity: 3.2:1 on the track,
+   below the AA floor for 10px text. */
+.mc-spend-tabs .mc-spend-tab-meta {
+  opacity: 1;
+  color: var(--fin-ink-faint);
+}
+
+/* ------------------------------------------------------ disclosure rows -- */
+/* <details> rows were showing the raw native triangle inside rounded cards.
+   Hide it everywhere and give plain-text rows a proper chevron; rows that
+   already carry their own arrow icon are left alone. */
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::marker {
+  content: '';
+}
+details > summary:not(:has(svg)) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+details > summary:not(:has(svg))::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  margin-top: -3px;
+  opacity: 0.42;
+  transition: transform 0.18s ease-out;
+}
+details[open] > summary:not(:has(svg))::after {
+  transform: rotate(-135deg);
+  margin-top: 3px;
+}
+
+/* ------------------------------------------------------ disabled buttons -- */
+/* A disabled primary was brand emerald at 40% opacity: pale mint with white
+   text, which reads as a broken button. Use a neutral, legible state instead. */
+button[class~='bg-primary']:disabled,
+button[class~='bg-[hsl(43,65%,73%)]']:disabled {
+  background: var(--fin-line-soft) !important;
+  color: var(--fin-ink-faint) !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------- empty states --- */
+/* One pattern for every "nothing here yet" surface: a tinted icon chip, a
+   headline, one honest line, then actions. An empty screen should read as a
+   designed state, not as a gap where data failed to arrive. */
+.fin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 16px 20px;
+  text-align: center;
+}
+.fin-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  background: var(--fin-brand-tint);
+  color: var(--fin-brand-deep);
+}
+.dark .fin-empty-icon {
+  color: var(--fin-mint);
+}
+.fin-empty h3 {
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--fin-ink);
+}
+.fin-empty p {
+  margin: 5px 0 0;
+  max-width: 330px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--fin-ink-soft);
+}
+.fin-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.fin-empty-list {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin-top: 14px;
+  text-align: left;
+}
+.fin-prompt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--fin-line);
+  border-radius: 14px;
+  background: var(--fin-card);
+  color: var(--fin-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+}
+.fin-prompt:active {
+  background: var(--fin-line-soft);
+}
+.fin-prompt svg {
+  flex: none;
+  color: var(--fin-brand);
+}
+/* A short conversation centres in the log, so the first screen reads as one
+   composed panel instead of content pinned to the top with a void beneath it.
+   Keyed off the first-run panel so the log's own className stays untouched
+   (the keyboard viewport gate pins it). */
+.mc-chat-log:has(.fin-empty) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* ------------------------------------------------------ button geometry --- */
 /* Ionic's structure.css declares an UNLAYERED `button{border:0;border-radius:0}`.
    Unlayered rules beat everything inside Tailwind's `@layer utilities`, so every
