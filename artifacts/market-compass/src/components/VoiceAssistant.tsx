@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type {ReactNode} from 'react';
 import CompassQuickActions from '@/components/CompassQuickActions';
+import AssistantMessageText from '@/components/AssistantMessageText';
 import {isPersonalOnlyAction,type CompassActionId} from '@/lib/compassActionMenu';
 import { ArrowRight, Plus, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, RefreshCw, Send, ShieldCheck, Speaker, VolumeX, WifiOff, X } from 'lucide-react';
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
@@ -991,9 +992,9 @@ export default function VoiceAssistant({
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>
-            {message.source === 'ollama' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Private desktop</span>}
-            {message.source === 'agent' && <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[.11em] text-muted-foreground">Compass · Private desktop · Read-only agent</span>}
-            {message.text}
+            {message.source === 'ollama' && <span className="mc-response-label mb-1 block text-[10px] font-semibold uppercase tracking-[.08em] text-muted-foreground">Compass · Private desktop</span>}
+            {message.source === 'agent' && <span className="mc-response-label mb-1 block text-[10px] font-semibold uppercase tracking-[.08em] text-muted-foreground" title="Compass · Private desktop · Read-only agent">Compass · Private desktop · Agent</span>}
+            <AssistantMessageText text={message.text}/>
             {message.link && <a href={message.link.url} target="_blank" rel="noopener noreferrer"
               className="mt-2 inline-flex min-h-10 items-center rounded-xl border border-primary/35 bg-background px-3 py-2 text-[12px] font-semibold text-primary underline-offset-4 hover:underline"
               aria-label={message.link.label}>{message.link.label}</a>}
@@ -1356,7 +1357,7 @@ export default function VoiceAssistant({
             <Plus size={24} aria-hidden="true"/>
           </button>
           <label className="min-w-0 flex-1"><span className="sr-only">Ask Market Compass</span>
-            <textarea value={query} rows={2} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask Compass about finances…" : "Message Compass…"} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
+            <textarea value={query} rows={1} maxLength={500} enterKeyHint="send" placeholder={financeEdition ? "Ask Compass about finances…" : "Message Compass…"} onChange={e=>setQuery(e.target.value)} onKeyDown={handleComposerKeyDown}
               aria-describedby="mc-composer-hint" className="mc-composer-input max-h-28 min-h-[52px] w-full resize-none rounded-[15px] border border-input bg-background px-3 py-2.5 text-[16px] leading-[1.45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"/>
           </label>
           {query.trim()&&!listening?
@@ -1370,9 +1371,9 @@ export default function VoiceAssistant({
               {listening?<MicOff size={22}/>:<Mic size={23}/>}
             </button>}
         </form>
-        <p id="mc-composer-hint" className="mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
+        <p id="mc-composer-hint" className="mc-composer-hint mt-2 text-[10px] leading-4 text-muted-foreground">Enter to send · Shift+Enter for a new line</p>
         {!recognitionSupported && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">Use your device keyboard microphone to dictate.</p>}
-        {status && <p role="status" className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
+        {status && <p role="status" title={status} className="mc-composer-status mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{status}</p>}
       </div>
     </section>
 
