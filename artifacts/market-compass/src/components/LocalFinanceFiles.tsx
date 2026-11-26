@@ -142,7 +142,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
       sequentially and reviewed one by one. The originals are not uploaded to HYPRBOX, GitHub or an AI provider.
     </p>
     <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
-      <summary className="min-h-9 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
+      <summary className="min-h-11 cursor-pointer text-[11px] font-semibold">Supported files, privacy & limits</summary>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
         Batch selection supports CSV, TXT, transaction JSON and selectable-text PDF. Multi-page PDFs
         are processed across all pages with visible progress; a 64 MB on-device
@@ -161,7 +161,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
         className="mt-1 min-h-12 w-full rounded-xl border border-input bg-background px-3 text-[16px]"/>
     </label>
     <details className="mt-3 rounded-xl border border-border bg-background px-3 py-2">
-      <summary className="min-h-9 cursor-pointer text-[12px] font-semibold">Password-protected PDF? Open one-time password</summary>
+      <summary className="min-h-11 cursor-pointer text-[12px] font-semibold">Password-protected PDF? Open one-time password</summary>
       <label className="mt-2 block text-[12px] font-semibold">
         Temporary PDF password (only if required)
         <input ref={passwordInput} type="password" autoComplete="off" spellCheck={false}
@@ -257,7 +257,7 @@ export default function LocalFinanceFiles({documents,onAdd,onRemove,
     </section>}
     {recoveryFailures.length>0&&<details className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3"
       aria-label="Unimported document recovery guidance" open>
-      <summary className="min-h-9 cursor-pointer text-[12px] font-semibold">
+      <summary className="min-h-11 cursor-pointer text-[12px] font-semibold">
         {recoveryFailures.length} document(s) need attention
       </summary>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
