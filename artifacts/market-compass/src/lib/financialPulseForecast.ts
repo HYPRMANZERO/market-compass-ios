@@ -77,6 +77,9 @@ export function calculateFinancialPulse(input:PulseInput):PulseSummary{
   const sourceIds:string[]=[];
   const seenEntries=new Set<string>();
   let excluded=0;
+  // Limit the absolute cumulative cents, not just each movement bucket. This
+  // ensures income-minus-outflow arithmetic stays exact at large import sizes.
+  let absoluteCents=0;
   for(const entry of input.approvedEntries){
     try{
       validateExpenseEntry(entry);
@@ -85,9 +88,16 @@ export function calculateFinancialPulse(input:PulseInput):PulseSummary{
         if(entry.currency==='ZAR'&&seenEntries.has(entry.id))excluded++;
         continue;
       }
+      const amount=cents(entry.amount);
+      if(!entry.id.trim()||amount===0||absoluteCents>Number.MAX_SAFE_INTEGER-amount){
+        // A blank provenance ID, fractional subcent amount or unsafe sum
+        // cannot be presented as approved evidence. Do not mutate the ledger.
+        excluded++;
+        continue;
+      }
+      absoluteCents+=amount;
       seenEntries.add(entry.id);
       sourceIds.push(entry.id);
-      const amount=cents(entry.amount);
       if(entry.kind==='income')recordedCents.income+=amount;
       else if(entry.kind==='expense')recordedCents.expenses+=amount;
       else if(entry.kind==='debt-payment')recordedCents.debtPayments+=amount;
