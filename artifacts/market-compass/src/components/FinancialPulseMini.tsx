@@ -12,21 +12,26 @@ const zar=(n:number)=>new Intl.NumberFormat('en-ZA',{style:'currency',currency:'
 /** The owner-approved ledger does not establish a live bank balance. */
 export default function FinancialPulseMini({entries,currency}:{entries:readonly ExpenseEntry[];currency:string}){
   const today=localDate();
-  if(currency!=='ZAR')return <section className="mb-4 rounded-[18px] border border-border bg-card p-4 lg:hidden" aria-label="Financial Pulse">
-    <h2 className="text-[14px] font-extrabold">Financial Pulse</h2>
-    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ZAR evidence only for now. No automatic currency conversion or bank balance is assumed.</p>
-  </section>;
-  // Documents and expense arrays can be large. Recalculate only when the
-  // approved ledger or salary-cycle day changes, not on unrelated UI renders.
-  const {pulse,out,patterns,nextReview}=useMemo(()=>{
+  // Hook order stays unconditional even when the workspace currency changes.
+  // Do not scan a large ledger on every unrelated chat or navigation render.
+  const snapshot=useMemo(()=>{
+    if(currency!=='ZAR')return null;
     const pulse=calculateFinancialPulse({asOf:today,approvedEntries:entries});
     const out=pulse.recorded.expenses+pulse.recorded.debtPayments;
     const patterns=recurringSpendCandidates(entries,today,'ZAR');
     const nextReview=nextFinancialPulseReview(pulse,patterns.length);
-    return {pulse,out,patterns,nextReview};
-  },[entries,today]);
-  const lastEntryDate=entries.filter(e=>e&&e.currency==='ZAR'&&e.date<=today&&/^\d{4}-\d{2}-\d{2}$/.test(e.date))
-    .map(e=>e.date).sort().at(-1)??null;
+    let lastEntryDate:string|null=null;
+    for(const e of entries){
+      if(e&&e.currency==='ZAR'&&e.date<=today&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&
+         (lastEntryDate===null||e.date>lastEntryDate))lastEntryDate=e.date;
+    }
+    return {pulse,out,patterns,nextReview,lastEntryDate};
+  },[entries,today,currency]);
+  if(!snapshot)return <section className="mb-4 rounded-[18px] border border-border bg-card p-4 lg:hidden" aria-label="Financial Pulse">
+    <h2 className="text-[14px] font-extrabold">Financial Pulse</h2>
+    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ZAR evidence only for now. No automatic currency conversion or bank balance is assumed.</p>
+  </section>;
+  const {pulse,out,patterns,nextReview,lastEntryDate}=snapshot;
   return <section className="mb-4 rounded-[18px] border border-border bg-card p-4 lg:hidden" aria-label="Financial Pulse" data-testid="financial-pulse-mobile">
     <div className="flex items-center justify-between gap-2">
       <h2 className="flex items-center gap-2 text-[14px] font-extrabold"><Activity size={17} className="text-primary" aria-hidden="true"/>Financial Pulse</h2>
