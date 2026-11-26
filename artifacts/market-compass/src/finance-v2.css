@@ -1586,3 +1586,22 @@ h1.serif,
     transition: none !important;
   }
 }
+
+/* Locked workspace owns the entire iOS canvas, including rubber-band and safe areas. */
+html:has(.mc-vault-entry), html:has(.mc-vault-entry) body,
+html:has(.mc-vault-entry) #root {
+  background: #0b1620 !important;
+  min-height: 100%;
+}
+html:has(.mc-vault-entry) body, html:has(.mc-vault-entry) #root,
+html:has(.mc-vault-entry) .mc-vault-entry {
+  min-height: 100vh;
+  min-height: 100lvh;
+}
+html:has(.mc-vault-entry) .mc-vault-entry {
+  background: linear-gradient(168deg,#12302a 0%,#0b1620 58%,#0b1620 100%) !important;
+  box-sizing: border-box;
+}
+@media (max-width: 1023px) {
+  html:has(.mc-vault-entry)::before { background: #0b1620 !important; }
+}
