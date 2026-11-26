@@ -268,7 +268,7 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
         <div className="mb-3 flex items-center gap-2"><ShieldCheck className="shrink-0 text-primary" size={20}/><h2 className="text-[19px] font-bold leading-snug">{vault.hasVault ? 'Unlock your workspace' : 'Create your private vault'}</h2></div>
         <p className="text-[12px] leading-[1.6] text-muted-foreground">Your debt plans, markets and notes are encrypted on this device. No bank login required.</p>
         <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-[11px] text-muted-foreground">
-          <summary className="cursor-pointer font-semibold text-foreground">{isStandalone?'Home Screen app':'Safari browser tab'} · Vault & privacy information</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-foreground">{isStandalone?'Home Screen app':'Safari browser tab'} · Vault & privacy information</summary>
           <p role="note" className="mt-2 leading-[1.6]">
             Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>
             {vaultOrigin?<> on <strong>{vaultOrigin}</strong></>:null}.
@@ -279,7 +279,7 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
           </p>
         </details>
         {!vault.hasVault && <details className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5 text-[11px]">
-          <summary className="cursor-pointer font-semibold text-foreground">Already have a vault? Restore it instead</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-foreground">Already have a vault? Restore it instead</summary>
           <p role="note" className="mt-2 leading-[1.6] text-muted-foreground">
             Already using Market Compass on another website address or device? Keep your original app and encrypted vault intact. First export an encrypted backup from that app, then select <strong>Restore from encrypted backup</strong> below. Creating a new vault here does not transfer your saved expenses, debts, or Assistant settings.
           </p>
@@ -345,10 +345,10 @@ function InstallHelp() {
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-bold">Make it an app on your Home Screen</div>
         <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{ios ? 'Add it to your Home Screen to launch without the browser toolbar.' : 'Install it to open as a standalone app.'}</p>
-        {ios ? <button type="button" onClick={() => setDetails(!details)} className="mt-2 min-h-9 text-[12px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Show iPhone steps'}</button> :
+        {ios ? <button type="button" onClick={() => setDetails(!details)} className="mt-2 min-h-10 text-[12px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Show iPhone steps'}</button> :
           <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="mt-2 min-h-9 rounded-lg bg-primary px-4 text-[12px] font-semibold text-primary-foreground">Install app</button>}
       </div>
-      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={18}/></button>
+      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={18}/></button>
     </div>
     {details && <p className="mt-2 rounded-lg bg-white/60 p-3 text-[12px] leading-5">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
   </section>;
@@ -584,7 +584,7 @@ function Overview({ data, setData, onImportDocuments, onRecoverVault, onAddAccou
   const entries=Array.isArray(data.expenseEntries)?data.expenseEntries:[];
   return <>
     {!isFinanceEdition() && <Link href="/assistant" aria-label="Open Compass Personal AI assistant" className="mb-3 flex items-center gap-3 rounded-[18px] border border-primary/15 bg-primary/5 px-3.5 py-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-primary text-primary-foreground"><Compass size={18}/></span>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-primary text-primary-foreground"><Compass size={18}/></span>
       <span className="min-w-0 flex-1"><span className="block text-[13px] font-bold leading-tight">Ask Compass Personal</span><span className="mt-0.5 block text-[11.5px] leading-[1.45] text-muted-foreground">Research, plan and review your finances with private tools.</span></span>
       <ArrowRight size={17} className="shrink-0 text-primary"/>
     </Link>}
@@ -843,7 +843,7 @@ function Markets({ data, setData }: { data: WorkspaceData; setData: Dispatch<Set
         <label className="sm:w-40"><span className="mb-2 block text-[10px] font-semibold uppercase tracking-[.13em] text-muted-foreground">Lookback</span><span className="relative block"><select data-testid="select-market-range" value={range} onChange={(e) => selectRange(e.target.value as CandleRange)} className="h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 pr-8 text-[12px] outline-none focus:ring-2 focus:ring-ring/30"><option value="1m">1 month</option><option value="3m">3 months</option><option value="6m">6 months</option><option value="1y">1 year</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-3.5 text-muted-foreground" /></span></label>
         <ActionButton type="submit" disabled={!symbol.trim() || fetching}>{fetching ? <LoaderCircle className="animate-spin" size={15} /> : <Search size={15} />}{fetching ? 'Loading data' : 'Request data'}</ActionButton>
       </form>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically unless Data Saver is on · not live quotes</span></div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 sm:px-5"><span className="text-[11px] text-muted-foreground">Try:</span>{['BTC','ETH','SOL','XRP','ADA'].map(item => <button key={item} type="button" className="min-h-10 rounded-md border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted" onClick={() => setSymbol(item)}>{item}</button>)}<span className="text-[10px] text-muted-foreground">Daily completed spot candles · changing lookback or exchange refreshes automatically unless Data Saver is on · not live quotes</span></div>
       <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Upload size={15} /></span>
         <p className="flex-1 text-[11px] leading-5 text-muted-foreground">For JSE shares, stocks, ETFs, licensed data feeds or offline use, import an authorized CSV with columns <span className="mono text-foreground">date,open,high,low,close[,volume]</span>. Check currency, units and licensing.</p>
@@ -1415,7 +1415,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
   };
   return <details id="mc-backup-controls" className="group mb-4 rounded-2xl border border-border bg-card shadow-sm lg:mb-7" aria-label="Encrypted vault and backup settings">
     <summary className="flex min-h-[55px] cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[hsl(154,40%,92%)] text-primary"><ShieldCheck size={18}/></span>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(154,40%,92%)] text-primary"><ShieldCheck size={18}/></span>
       <span className="min-w-0 flex-1">
         <span className="block text-[12px] font-bold">Encrypted vault &amp; settings</span>
         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{vault.saving ? 'Saving changes…' : vault.savedAt ? `Last saved ${new Date(vault.savedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'Stored on this device'} · Offline workspace</span>
@@ -1471,7 +1471,7 @@ function BackupControls({ vault }: { vault: ReturnType<typeof useWorkspaceVault>
       {vault.backupMessage && <p role="status" className="text-[12px] text-muted-foreground">{vault.backupMessage}</p>}
       {vault.error && <p role="alert" className="text-[12px] text-destructive">{vault.error}</p>}
       <details className="rounded-xl border border-border px-3 py-2 text-[11px] leading-5 text-muted-foreground">
-        <summary className="cursor-pointer font-semibold text-foreground">How offline mode and payments work</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-foreground">How offline mode and payments work</summary>
         <p className="mt-2">Debt calculations and saved historical candles work without internet after you install and open the app once online. New market prices need an exchange connection. Desktop Ollama requires your private desktop to be reachable. Bank payments and merchant checkout are separate authorized provider actions, not automatic features of this PWA.</p>
         <p className="mt-2">{vault.compressionInfo}</p>
       </details>

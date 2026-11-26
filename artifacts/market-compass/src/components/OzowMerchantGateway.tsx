@@ -209,10 +209,10 @@ export default function OzowMerchantGateway({ currency, region, records, onCreat
               {record.verifiedPaid && <div className="mt-2 flex items-start gap-2 text-[11px]"><CheckCircle2 size={15} className="shrink-0 text-primary"/>Ozow confirms a successful incoming merchant payment. This is not a creditor debt repayment.</div>}
               {!record.verifiedPaid && <p className="mt-2 text-[10px] text-muted-foreground">Not confirmed paid. Opening checkout or returning to this app is not payment verification.</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                {url && <a href={url} target="_blank" rel="noopener noreferrer" className="rounded-md border border-border px-3 py-2 font-semibold">Open Ozow <ArrowUpRight size={13} className="ml-1 inline"/></a>}
-                <button type="button" disabled={!url} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40" onClick={() => { void copyLink(record); }}><Copy size={13} className="mr-1 inline"/>Copy link</button>
-                <button type="button" disabled={!url} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40" onClick={() => { void shareLink(record); }}><Send size={13} className="mr-1 inline"/>Share</button>
-                <button type="button" disabled={!operatorReady || !!checking} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40" onClick={() => { void verifyStatus(record); }}>
+                {url && <a href={url} target="_blank" rel="noopener noreferrer" className="min-h-10 rounded-md border border-border px-3 py-2 font-semibold">Open Ozow <ArrowUpRight size={13} className="ml-1 inline"/></a>}
+                <button type="button" disabled={!url} className="min-h-10 min-h-10 rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40" onClick={() => { void copyLink(record); }}><Copy size={13} className="mr-1 inline"/>Copy link</button>
+                <button type="button" disabled={!url} className="min-h-10 min-h-10 rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40" onClick={() => { void shareLink(record); }}><Send size={13} className="mr-1 inline"/>Share</button>
+                <button type="button" disabled={!operatorReady || !!checking} className="min-h-10 min-h-10 rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40" onClick={() => { void verifyStatus(record); }}>
                   {checking === record.localId ? <LoaderCircle size={13} className="mr-1 inline animate-spin"/> : <RefreshCw size={13} className="mr-1 inline"/>}Verify with Ozow
                 </button>
               </div>
