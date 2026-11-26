@@ -23,6 +23,7 @@ if (Number.isNaN(port) || port <= 0) {
 const outDir = path.resolve(process.env.MC_PWA_OUT_DIR || path.resolve(import.meta.dirname, 'dist/public'));
 const edition = process.env.VITE_MC_EDITION || 'personal';
 if (edition !== 'personal' && edition !== 'finance') throw Error('VITE_MC_EDITION must be personal or finance.');
+if(process.env.VITE_MC_MUI_TRIAL==='true'&&edition!=='finance')throw Error('Material UI trial requires an explicit Finance build.');
 const brandEdition:Plugin = {
   name:'market-compass-edition-branding',
   apply:'build',

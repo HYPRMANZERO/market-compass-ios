@@ -43,6 +43,10 @@ import FinancialSourceStatusPanel from '@/components/FinancialSourceStatusPanel'
 import IncomeAllocation from '@/components/IncomeAllocation';
 // MonthlyExpenses loads only on its route.
 // SpendingPortfolio loads only on its route.
+// Explicit opt-in for the protected Finance candidate only. Personal keeps the existing shell.
+const muiFinanceTrial=import.meta.env.VITE_MC_EDITION==='finance'&&import.meta.env.VITE_MC_MUI_TRIAL==='true';
+const MaterialFinanceDock=muiFinanceTrial?lazy(()=>import('@/components/MaterialFinanceDock')):null;
+const MaterialFinanceActions=muiFinanceTrial?lazy(()=>import('@/components/MaterialFinanceActions')):null;
 const IonicSpendPreview=lazy(()=>import('@/components/IonicSpendPreview'));
 const VoiceAssistant=lazy(()=>import('@/components/VoiceAssistant'));
 const LocalFinanceFiles=lazy(()=>import('@/components/LocalFinanceFiles'));
@@ -517,10 +521,16 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
             <div className="fin-sheet-grabber" aria-hidden="true"/>
             <div className="fin-sheet-head"><h2 className="fin-sheet-title">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="fin-sheet-close"><X size={19}/></button></div>
             <p className="fin-sheet-hint">Choose an action without searching through tabs.</p>
-            <div className="fin-sheet-actions">
+            {MaterialFinanceActions ? <Suspense fallback={<div className="fin-sheet-actions">
               <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="fin-sheet-primary"><Plus size={18} className="shrink-0"/>Add account</button>
               <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="fin-sheet-secondary"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
-            </div>
+            </div>}>
+              <MaterialFinanceActions onAdd={()=>{setMenuOpen(false);onAddAccount();}} onImport={()=>{setMenuOpen(false);onImportDocuments();}}/>
+            </Suspense> : <div className="fin-sheet-actions">
+              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="fin-sheet-primary"><Plus size={18} className="shrink-0"/>Add account</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="fin-sheet-secondary"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
+            </div>}
+
             <div className="fin-sheet-list">
               {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map((item,index)=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className={`fin-sheet-row${index>0?' is-divided':''}`}><span className="fin-menu-icon"><item.icon size={17}/></span><span className="min-w-0 flex-1 truncate">{item.label}</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>)}
               <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="fin-sheet-row is-divided"><span className="fin-menu-icon"><ShieldCheck size={17}/></span><span className="min-w-0 flex-1 truncate">Vault &amp; backup</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>
@@ -531,7 +541,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
-       <div className="fin-dock">
+       {MaterialFinanceDock ? <Suspense fallback={<div className="fin-dock">
          {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
            const selected = href === path;
            const short = label === 'Overview' ? 'Home' : label === 'Local assistant' ? 'AI' : label;
@@ -548,7 +558,27 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
            <span className="fin-tab-label">Menu</span>
            {pending > 0 && <span className="fin-tab-badge">{pending > 99 ? '99+' : pending}</span>}
          </button>
-</div>
+</div>}>
+         <MaterialFinanceDock path={path} pending={pending} menuOpen={menuOpen} navigate={navigate} openMenu={()=>setMenuOpen(true)}/>
+       </Suspense> : <div className="fin-dock">
+         {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
+           const selected = href === path;
+           const short = label === 'Overview' ? 'Home' : label === 'Local assistant' ? 'AI' : label;
+           return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
+             data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
+             className={`mc-tab-link fin-tab ${selected ? 'is-active' : ''}`}>
+             <span className="fin-tab-icon"><Icon size={21} strokeWidth={selected ? 2.4 : 1.9}/></span>
+             <span className="fin-tab-label">{short}</span>
+           </Link>;
+         })}
+         <button type="button" data-testid="mobile-nav-menu" data-menu="true" aria-label="Open Market Compass menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
+           className={`mc-tab-link fin-tab fin-tab-menu ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'is-active' : ''}`}>
+           <span className="fin-tab-icon"><Menu size={21} strokeWidth={2.1}/></span>
+           <span className="fin-tab-label">Menu</span>
+           {pending > 0 && <span className="fin-tab-badge">{pending > 99 ? '99+' : pending}</span>}
+         </button>
+</div>}
+
       </nav>
     </IonFooter>
   </div>;
