@@ -384,6 +384,34 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
   // back to whatever opened it. Without this a keyboard or switch user is left
   // tabbing through the page hidden behind the scrim.
   const menuPanelRef = useRef<HTMLElement|null>(null);
+  // Publish the dock's real height so layout never assumes a constant. It varies
+  // with the home-indicator inset and with browser page zoom.
+  useEffect(() => {
+    const publish = () => {
+      const dock = document.querySelector<HTMLElement>('.mc-mobile-tabbar');
+      const height = Math.round((dock?.getBoundingClientRect().height ?? 0) || 102);
+      const value = height + 'px';
+      // One measurement, both consumers: --mc-dock-height for the layout above the
+      // dock, and --mc-chat-tabbar-height for the assistant page height that
+      // index.css computes. Writing only one of them left the composer under the
+      // bar whenever the real bar was taller than the assumed constant.
+      document.documentElement.style.setProperty('--mc-dock-height', value);
+      document.documentElement.style.setProperty('--mc-chat-tabbar-height', value);
+    };
+    publish();
+    const frame = window.requestAnimationFrame(publish);
+    window.addEventListener('resize', publish);
+    window.addEventListener('orientationchange', publish);
+    const dock = document.querySelector<HTMLElement>('.mc-mobile-tabbar');
+    const observer = typeof ResizeObserver === 'function' && dock ? new ResizeObserver(publish) : null;
+    observer?.observe(dock!);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', publish);
+      window.removeEventListener('orientationchange', publish);
+      observer?.disconnect();
+    };
+  }, [path]);
   useEffect(() => {
     if(!menuOpen)return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
