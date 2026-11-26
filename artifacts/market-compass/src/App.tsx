@@ -253,6 +253,8 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
   const isStandalone=typeof window!=='undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & {standalone?:boolean}).standalone===true);
+  // Two public addresses means two encrypted vaults; name the one in use.
+  const vaultOrigin=typeof window!=='undefined'?window.location.host:'';
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
   const run = async (action: () => Promise<void>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
@@ -268,8 +270,10 @@ function VaultScreen({ vault }: { vault: ReturnType<typeof useWorkspaceVault> })
         <details className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-[11px] text-muted-foreground">
           <summary className="cursor-pointer font-semibold text-foreground">{isStandalone?'Home Screen app':'Safari browser tab'} · Vault & privacy information</summary>
           <p role="note" className="mt-2 leading-[1.6]">
-            Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>.
-            Browser tabs, Home Screen apps and different HTTPS addresses can have separate encrypted vaults.
+            Current session: <strong>{isStandalone?'iPhone Home Screen app':'Safari browser tab'}</strong>
+            {vaultOrigin?<> on <strong>{vaultOrigin}</strong></>:null}.
+            Browser tabs, Home Screen apps and different HTTPS addresses each keep their own encrypted vault — for example a Tailscale
+            address and an ngrok address never share one.
             If your password works elsewhere, open the original session where your documents were saved.
             Do not clear website data or overwrite either vault.
           </p>
@@ -324,7 +328,9 @@ function InstallHelp() {
   useEffect(() => {
     const installed = window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    setVisible(!installed && !localStorage.getItem('mc-install-dismissed-v3'));
+    let dismissed=false;
+    try{dismissed=Boolean(localStorage.getItem('mc-install-dismissed-v3'));}catch{dismissed=false;}
+    setVisible(!installed && !dismissed);
     const onInstall = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as Event & { prompt?: () => Promise<void> });
@@ -342,7 +348,7 @@ function InstallHelp() {
         {ios ? <button type="button" onClick={() => setDetails(!details)} className="mt-2 min-h-9 text-[12px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Show iPhone steps'}</button> :
           <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="mt-2 min-h-9 rounded-lg bg-primary px-4 text-[12px] font-semibold text-primary-foreground">Install app</button>}
       </div>
-      <button type="button" onClick={() => { localStorage.setItem('mc-install-dismissed-v3','1'); setVisible(false); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={18}/></button>
+      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={18}/></button>
     </div>
     {details && <p className="mt-2 rounded-lg bg-white/60 p-3 text-[12px] leading-5">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
   </section>;
@@ -376,13 +382,42 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     const frame = window.requestAnimationFrame(reset);
     return () => window.cancelAnimationFrame(frame);
   }, [path]);
+  // The sheet is a modal: move focus into it, keep Tab inside it, and give focus
+  // back to whatever opened it. Without this a keyboard or switch user is left
+  // tabbing through the page hidden behind the scrim.
+  const menuPanelRef = useRef<HTMLElement|null>(null);
   useEffect(() => {
     if(!menuOpen)return;
-    const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setMenuOpen(false);};
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = menuPanelRef.current;
+    const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>(
+      'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    ) ?? []).filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null);
+    // Land on the first action, not the close button.
+    window.requestAnimationFrame(()=>{
+      const list=focusables();
+      const target=list.find(el=>el.getAttribute('aria-label')!=='Close Market Compass menu') ?? list[0] ?? panel;
+      target.focus();
+    });
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'){ setMenuOpen(false); return; }
+      if(event.key!=='Tab')return;
+      const list=focusables();
+      if(!list.length){ event.preventDefault(); return; }
+      const first=list[0], last=list[list.length-1];
+      const current=document.activeElement;
+      if(event.shiftKey && (current===first || !panel?.contains(current))){ event.preventDefault(); last.focus(); }
+      else if(!event.shiftKey && (current===last || !panel?.contains(current))){ event.preventDefault(); first.focus(); }
+    };
     document.documentElement.classList.add('mc-menu-open');
     document.body.classList.add('mc-menu-open');
     window.addEventListener('keydown',key);
-    return ()=>{document.documentElement.classList.remove('mc-menu-open');document.body.classList.remove('mc-menu-open');window.removeEventListener('keydown',key);};
+    return ()=>{
+      document.documentElement.classList.remove('mc-menu-open');
+      document.body.classList.remove('mc-menu-open');
+      window.removeEventListener('keydown',key);
+      if(opener && document.contains(opener)) opener.focus();
+    };
   },[menuOpen]);
   const openSettings = () => {
     const el = document.getElementById('mc-backup-controls') as HTMLDetailsElement | null;
@@ -452,7 +487,7 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       {path==='/'&&<InstallHelp/>}
       {menuOpen && createPortal(
         <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
-          <section role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
+          <section ref={menuPanelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
             <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
             <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-extrabold tracking-[-.025em]">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-full bg-muted/70"><X size={19}/></button></div>
             <p className="mb-4 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
