@@ -339,16 +339,16 @@ function InstallHelp() {
     return () => window.removeEventListener('beforeinstallprompt', onInstall);
   }, []);
   if (!visible || (!ios && !installPrompt)) return null;
-  return <section className="mx-4 mt-3 rounded-2xl border border-primary/15 bg-[hsl(154,44%,96%)] px-2.5 py-1.5 sm:mx-6 lg:mx-10 lg:max-w-lg" aria-label="Install Market Compass">
-    <div className="flex min-h-11 items-center gap-2.5">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary"><Share size={15} aria-hidden="true"/></span>
-      <span className="min-w-0 flex-1 text-[12px] font-bold leading-tight">Add to your Home Screen</span>
+  return <section className="fin-install" aria-label="Install Market Compass">
+    <div className="fin-install-row">
+      <span className="fin-install-icon"><Share size={15} aria-hidden="true"/></span>
+      <span className="fin-install-label">Add to your Home Screen</span>
       {ios
-        ? <button type="button" onClick={() => setDetails(!details)} className="min-h-10 shrink-0 px-1 text-[11.5px] font-bold text-primary underline underline-offset-2">{details ? 'Hide steps' : 'Steps'}</button>
+        ? <button type="button" onClick={() => setDetails(!details)} className="fin-install-steps">{details ? 'Hide steps' : 'Steps'}</button>
         : <button type="button" onClick={() => { void installPrompt?.prompt?.(); setInstallPrompt(null); }} className="min-h-10 shrink-0 rounded-lg bg-primary px-3 text-[11.5px] font-semibold text-primary-foreground">Install</button>}
-      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted-foreground" aria-label="Dismiss install instructions"><X size={17}/></button>
+      <button type="button" onClick={() => { try{localStorage.setItem('mc-install-dismissed-v3','1');}catch{/* storage may be unavailable */} setVisible(false); }} className="fin-install-dismiss" aria-label="Dismiss install instructions"><X size={17}/></button>
     </div>
-    {details && <p className="mb-1 mt-1 rounded-lg bg-white/70 p-3 text-[12px] leading-5">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
+    {details && <p className="fin-install-detail">1. Open the link in Safari. 2. Tap the Share icon. 3. Scroll to <strong>Add to Home Screen</strong>. 4. Tap Add, then open Market Compass from the new icon.</p>}
   </section>;
 }
 
@@ -484,13 +484,13 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       {path!=='/assistant'&&(
       <IonHeader className="mc-mobile-header sticky top-0 z-30 lg:hidden" role="banner">
         <IonToolbar className="mc-ionic-toolbar">
-        <div className="flex min-h-[46px] items-center gap-3">
-          <Link href="/" className="fin-brandmark grid h-10 w-10 shrink-0 place-items-center" aria-label="Go to Market Compass home"><Compass size={21} strokeWidth={2}/></Link>
-          <div className="min-w-0 flex-1">
-            <div className="fin-hdr-title truncate">{isFinanceEdition()?'Compass Financial':'Compass Personal'}</div>
+        <div className="fin-appbar">
+          <Link href="/" className="fin-brandmark" aria-label="Go to Market Compass home"><Compass size={21} strokeWidth={2}/></Link>
+          <div className="fin-appbar-text">
+            <div className="fin-hdr-title">{isFinanceEdition()?'Compass Financial':'Compass Personal'}</div>
             <div className="fin-hdr-meta">
               <span className={`fin-hdr-dot ${online ? 'is-online' : 'is-offline'}`}/>
-              <span className="truncate">{online ? 'iPhone online' : 'iPhone offline'} · {active.label}</span>
+              <span className="fin-hdr-meta-label">{online ? 'iPhone online' : 'iPhone offline'} · {active.label}</span>
             </div>
           </div>
           <span className="fin-chip" aria-label={`Workspace currency ${currency}`}>{currency}</span>
@@ -513,17 +513,17 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
       {path==='/'&&<InstallHelp/>}
       {menuOpen && createPortal(
         <div className="mc-quick-menu-layer fixed inset-0 z-[110] flex items-end justify-center bg-black/45" role="presentation" onClick={()=>setMenuOpen(false)}>
-          <section ref={menuPanelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel w-full max-w-[560px] overflow-y-auto rounded-t-[26px] bg-card px-4 pb-[max(16px,env(safe-area-inset-bottom,0px))] pt-3 text-foreground shadow-2xl" onClick={e=>e.stopPropagation()}>
-            <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-border" aria-hidden="true"/>
-            <div className="flex items-center justify-between gap-3"><h2 className="text-[17px] font-extrabold tracking-[-.025em]">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="grid h-11 w-11 place-items-center rounded-full bg-muted/70"><X size={19}/></button></div>
-            <p className="mb-4 mt-1 text-[11px] text-muted-foreground">Choose an action without searching through tabs.</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-[12.5px] font-bold text-primary-foreground active:scale-[.985]"><Plus size={18} className="shrink-0"/>Add account</button>
-              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-3 text-[12.5px] font-bold active:scale-[.985]"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
+          <section ref={menuPanelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Market Compass quick menu" className="mc-quick-menu-panel fin-sheet" onClick={e=>e.stopPropagation()}>
+            <div className="fin-sheet-grabber" aria-hidden="true"/>
+            <div className="fin-sheet-head"><h2 className="fin-sheet-title">Market Compass menu</h2><button type="button" onClick={()=>setMenuOpen(false)} aria-label="Close Market Compass menu" className="fin-sheet-close"><X size={19}/></button></div>
+            <p className="fin-sheet-hint">Choose an action without searching through tabs.</p>
+            <div className="fin-sheet-actions">
+              <button type="button" onClick={()=>{setMenuOpen(false);onAddAccount();}} className="fin-sheet-primary"><Plus size={18} className="shrink-0"/>Add account</button>
+              <button type="button" onClick={()=>{setMenuOpen(false);onImportDocuments();}} className="fin-sheet-secondary"><Upload size={18} className="shrink-0 text-primary"/>Import document</button>
             </div>
-            <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-card">
-              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map((item,index)=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className={`flex min-h-14 w-full items-center gap-3 px-4 text-left text-[13px] font-semibold active:bg-muted/60 ${index>0?'border-t border-border/70':''}`}><span className="fin-menu-icon"><item.icon size={17}/></span><span className="min-w-0 flex-1 truncate">{item.label}</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>)}
-              <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="flex min-h-14 w-full items-center gap-3 border-t border-border/70 px-4 text-left text-[13px] font-semibold active:bg-muted/60"><span className="fin-menu-icon"><ShieldCheck size={17}/></span><span className="min-w-0 flex-1 truncate">Vault &amp; backup</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>
+            <div className="fin-sheet-list">
+              {([{label:'View accounts & debt',href:'/debt',icon:Landmark},{label:'Markets',href:'/markets',icon:Activity},{label:'Spend history',href:'/expenses',icon:ReceiptText},{label:'Orders & drafts',href:'/drafts',icon:FileClock},{label:'Link a bank',href:'/banks',icon:WalletCards},{label:'Ask Compass',href:'/assistant',icon:CircleHelp}] as const).map((item,index)=><button type="button" key={item.href} onClick={()=>{setMenuOpen(false);navigate(item.href);}} className={`fin-sheet-row${index>0?' is-divided':''}`}><span className="fin-menu-icon"><item.icon size={17}/></span><span className="min-w-0 flex-1 truncate">{item.label}</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>)}
+              <button type="button" onClick={()=>{setMenuOpen(false);navigate("/");window.requestAnimationFrame(openSettings);}} className="fin-sheet-row is-divided"><span className="fin-menu-icon"><ShieldCheck size={17}/></span><span className="min-w-0 flex-1 truncate">Vault &amp; backup</span><ArrowRight size={16} className="shrink-0 text-muted-foreground/60"/></button>
             </div>
           </section>
         </div>,document.body)}
@@ -531,19 +531,19 @@ function AppShell({ children, pending, currency, onImportDocuments, onAddAccount
     </main>
     <IonFooter className="mc-ionic-footer lg:hidden">
       <nav aria-label="Mobile app tabs" className="mc-mobile-tabbar fixed inset-x-0 bottom-0 z-40 lg:hidden">
-       <div className="fin-dock mx-auto grid max-w-[550px] grid-cols-4 gap-1">
+       <div className="fin-dock">
          {navItems.filter(item => ['/', '/markets', '/assistant'].includes(item.href)).map(({ href, label, icon: Icon }) => {
            const selected = href === path;
            const short = label === 'Overview' ? 'Home' : label === 'Local assistant' ? 'AI' : label;
            return <Link key={href} href={href} aria-current={selected ? 'page' : undefined} aria-label={label}
              data-testid={`mobile-nav-${href === '/' ? 'home' : href.slice(1)}`}
-             className={`mc-tab-link fin-tab relative flex flex-col items-center justify-center text-center ${selected ? 'is-active' : ''}`}>
+             className={`mc-tab-link fin-tab ${selected ? 'is-active' : ''}`}>
              <span className="fin-tab-icon"><Icon size={21} strokeWidth={selected ? 2.4 : 1.9}/></span>
              <span className="fin-tab-label">{short}</span>
            </Link>;
          })}
          <button type="button" data-testid="mobile-nav-menu" data-menu="true" aria-label="Open Market Compass menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}
-           className={`mc-tab-link fin-tab fin-tab-menu relative flex flex-col items-center justify-center text-center ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'is-active' : ''}`}>
+           className={`mc-tab-link fin-tab fin-tab-menu ${menuOpen || !['/','/markets','/assistant'].includes(path) ? 'is-active' : ''}`}>
            <span className="fin-tab-icon"><Menu size={21} strokeWidth={2.1}/></span>
            <span className="fin-tab-label">Menu</span>
            {pending > 0 && <span className="fin-tab-badge">{pending > 99 ? '99+' : pending}</span>}
