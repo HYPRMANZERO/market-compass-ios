@@ -36,7 +36,7 @@ self.addEventListener('fetch', event => {
           // Cloudflare Access can return an HTML login page; do not poison the
           // offline app shell cache with that page when a session expires.
           const html = await live.clone().text();
-          if (html.includes('<title>Market Compass</title>') && html.includes('id="root"')) {
+          if ((/<title>(?:Market Compass|Compass Personal|Compass Financial Advisor)<\/title>/.test(html)) && html.includes('id="root"')) {
             const cache = await caches.open(CACHE);
             await cache.put(SHELL_URL, live.clone());
           }

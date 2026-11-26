@@ -11,7 +11,7 @@ Clone this experiment to a separate checkout (use D: on HYPRBOX). Then from repo
     pnpm install --no-frozen-lockfile
     $env:VITE_MC_EDITION='finance'
     $env:VITE_MC_MUI_TRIAL='true'
-    $env:BASE_PATH='/'
+    $env:BASE_PATH='/market-compass-ios/'
     $env:MC_PWA_OUT_DIR='D:\MarketCompass\Releases\finance-mui-trial-20261126'
     pnpm --filter @workspace/market-compass run build
     node scripts/prepare-offline-shell.mjs
@@ -19,3 +19,5 @@ Clone this experiment to a separate checkout (use D: on HYPRBOX). Then from repo
  
 Preview is desktop loopback only. Do not enter real financial records into new origin; use synthetic vault. Do not serve preview publicly or change existing ngrok OAuth or gateway settings. Existing protection script denies build into the configured live dist. For protected ngrok test on iPhone, owner must explicitly back up current dist/settings, verify gateway's CSP permits Emotion styles, and switch only the Finance static candidate after three test rounds; retain same origin and service worker update, no clearing website data. 
 Verify Home/Markets/AI/Menu, pending badge, account and import actions, focus return, keyboard dismissal, safe areas, dark mode, data retention, offline restart and bundle size against current baseline. Existing backend gateway and original Personal PWA stay untouched. If preview fails, abandon the candidate without changing the live directory.
+
+For the protected ngrok release, use the Finance artifact from the successful updated workflow; it must contain /market-compass-ios/ asset URLs. Do not deploy the original root-path experiment artifact. The owner-operated static swap helper is tools/swap-finance-mui-candidate.ps1; it validates the candidate, preserves the previous dist and does not restart the gateway or modify DPAPI settings. Only use after confirming the current gateway uses the configured pwaDist. Export an encrypted vault backup before testing; never clear Safari website data.

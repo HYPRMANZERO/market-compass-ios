@@ -32,7 +32,7 @@ jobs:
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('.release/personal/manifest.webmanifest','utf8'));if(m.name!=='Compass Personal')process.exit(1)"
       - name: Build isolated Finance trial
         env:
-          BASE_PATH: /
+          BASE_PATH: /market-compass-ios/
           VITE_MC_EDITION: finance
           VITE_MC_MUI_TRIAL: 'true'
           MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance-mui
@@ -40,6 +40,17 @@ jobs:
           pnpm --filter @workspace/market-compass run build
           node scripts/prepare-offline-shell.mjs
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('.release/finance-mui/manifest.webmanifest','utf8'));if(m.name!=='Compass Financial Advisor')process.exit(1)"
+      - name: Three isolated mobile browser checks
+        env:
+          BASE_PATH: /market-compass-ios/
+          VITE_MC_EDITION: finance
+          VITE_MC_MUI_TRIAL: 'true'
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance-mui
+          MC_TEST_MUI_ONLY: 'true'
+        run: |
+          for round in 1 2 3; do
+            node scripts/browser-release-gate.mjs || exit 1
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: finance-mui-candidate

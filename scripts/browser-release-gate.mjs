@@ -228,7 +228,7 @@ async function main(){
       await waitFor(async()=>{
         if(child.exitCode!==null)throw Error('Vite preview exited');
         const r=await fetch(url);
-        return r.status===200 && /(?:Market Compass|Compass Personal)/.test(await r.text());
+        return r.status===200 && /(?:Market Compass|Compass Personal|Compass Financial Advisor)/.test(await r.text());
       },'localhost-only PWA preview '+port);
       return url;
     };
@@ -297,6 +297,37 @@ async function main(){
     await click(tab,'Create encrypted workspace');
     await expectText(tab,'Encrypted vault & settings','synthetic vault created');
     console.log('PASS: isolated AES-GCM vault creation in actual browser');
+    if(process.env.MC_TEST_MUI_ONLY==='true'){
+      await waitFor(()=>tab.invoke(()=>!!document.querySelector('[data-testid="finance-material-dock"]')),'Material UI navigation loaded');
+      const nav=await tab.invoke(()=>{
+        const dock=document.querySelector('[data-testid="finance-material-dock"]');
+        const tabs=[...dock.querySelectorAll('button')];
+        return {count:tabs.length,labels:tabs.map(x=>x.innerText.trim()),widths:tabs.map(x=>x.getBoundingClientRect().width),
+          heights:tabs.map(x=>x.getBoundingClientRect().height),overflow:document.documentElement.scrollWidth>innerWidth+1};
+      });
+      assert.equal(nav.count,4);assert.deepEqual(nav.labels,['Home','Markets','AI','Menu']);
+      assert.ok(nav.widths.every(w=>w>0&&Math.abs(w-nav.widths[0])<2),'equal-width tabs');
+      assert.ok(nav.heights.every(h=>h>=44),'touch targets');
+      assert.equal(nav.overflow,false);
+      const tap=async id=>{await tab.invoke(id=>{const el=document.querySelector('[data-testid="'+id+'"]');if(!el)throw Error('missing '+id);el.click();},id);};
+      await tap('mobile-nav-menu');
+      await waitFor(()=>tab.invoke(()=>!!document.querySelector('[data-testid="finance-material-actions"]')),'Material UI quick actions loaded');
+      assert.equal(await tab.invoke(()=>document.querySelector('[role="dialog"]')?.getAttribute('aria-modal')),'true');
+      assert.equal(await tab.invoke(()=>document.querySelector('[data-testid="finance-material-actions"]').querySelectorAll('button').length),2);
+      await tab.invoke(()=>document.querySelector('button[aria-label="Close Market Compass menu"]').click());
+      await waitFor(()=>tab.invoke(()=>!document.querySelector('[data-testid="finance-material-actions"]')),'menu closes');
+      await tap('mobile-nav-markets');
+      await waitFor(()=>tab.invoke(()=>location.pathname.endsWith('/markets')),'Markets navigation');
+      await tap('mobile-nav-assistant');
+      await waitFor(()=>tab.invoke(()=>location.pathname.endsWith('/assistant')),'AI navigation');
+      await tap('mobile-nav-home');
+      await waitFor(()=>tab.invoke(()=>!!document.querySelector('.mc-mobile-header')),'Home navigation');
+      const record=await storedRecord(tab);
+      assert.ok(record?.ciphertext,'encrypted workspace remains present');
+      console.log('MATERIAL UI MOBILE GATE PASS (synthetic Chromium only; not Safari)');
+      return;
+    }
+
 
     const ui=await tab.invoke(function(){
       const hero=document.querySelector('.mc-wallet-hero');
