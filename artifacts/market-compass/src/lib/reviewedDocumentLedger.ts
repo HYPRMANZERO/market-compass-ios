@@ -85,10 +85,6 @@ export function applyReviewedDocumentToLedger(
   if(currency!=='ZAR')throw Error('Document amounts require owner-confirmed ZAR. Check your workspace currency first.');
   if(!(now instanceof Date)||!Number.isFinite(now.valueOf()))
     throw Error('Invalid entry timestamp.');
-  // Guard the ledger mutation boundary, not only the React review screen.
-  // iPhone reviewers cannot override a date already proven by the source.
-  const today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),
-    String(now.getDate()).padStart(2,'0')].join('-');
   const existing=new Set(current.map(x=>x.id));
   const chosen=new Set<number>();
   const incoming:ExpenseEntry[]=[];
@@ -99,14 +95,6 @@ export function applyReviewedDocumentToLedger(
       throw Error('Invalid or repeated document row. No entries were added.');
     chosen.add(choice.lineIndex);
     const line=doc.lines[choice.lineIndex];
-    if(line.date!==null&&choice.date!==line.date)
-      throw Error('Source payment date must be preserved. Re-import corrected evidence.');
-    if(typeof choice.date!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(choice.date)||
-      !Number.isFinite(Date.parse(choice.date+'T00:00:00Z'))||
-      new Date(choice.date+'T00:00:00Z').toISOString().slice(0,10)!==choice.date)
-      throw Error('Provide a valid source-confirmed payment date before recording.');
-    if(choice.date>today)
-      throw Error('Future-dated transactions cannot be recorded as completed historical Spend.');
     const blocked=documentRowBlockReason(doc,line);
     if(blocked)throw Error(blocked);
     if(line.amount===null || !Number.isFinite(line.amount) || line.amount===0)
