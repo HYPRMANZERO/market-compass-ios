@@ -6,6 +6,9 @@ import { ArrowRight, Plus, BrainCircuit, CircleHelp, LockKeyhole, Mic, MicOff, R
 import { interpretCompassCommand, type CompassCommandContext } from '@/lib/compassCommands';
 import {interpretJarvisPersonalCommand,stripCompassWakeWord} from '@/lib/jarvisPersonalCommands';
 import { privateTailnetOrigin } from '@/lib/privateTailnetUrl';
+import {
+  CASHFLOW_REVIEW_QUESTION,describeLocalCashflowReview,isCashflowReviewHandoff
+} from '@/lib/cashflowReviewHandoff';
 import { personalSessionActive,type PersonalTailnetSession } from '@/lib/personalTailnetAuto';
 import { approvedPersonalHosts,acquireAvailablePersonalNode } from '@/lib/personalTailnetFailover';
 import {
@@ -101,13 +104,17 @@ export default function VoiceAssistant({
   context,onNavigate,onImportDocuments,settings,onSettingsChange,
   queuedReadOnlyQuestions,onQueueReadOnlyQuestion,onRemoveQueuedReadOnlyQuestion,auxiliaryPanel
 }: Props) {
+  // Only an intent marker travels in the route; all figures remain in the
+  // already-unlocked local ledger and are never embedded in the URL.
+  const [cashflowReview] = useState(()=>typeof window!=='undefined'&&
+    isCashflowReviewHandoff(window.location.search));
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', source: 'local',
     text: currentAssistantEdition() === 'finance'
       ? 'Welcome back to Compass Financial Advisor. Ask about your accounts, spending, debt, financial documents, markets and plans. My tools are read-only.'
       : 'Welcome back to Compass Personal, your personal and financial assistant. Ask about daily plans, writing, research, budgeting or markets. Private actions require permission.'
   }]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(cashflowReview?CASHFLOW_REVIEW_QUESTION:'');
   const [recognitionSupported] = useState(micAvailable);
   const [speakingSupported] = useState(voiceAvailable);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -193,8 +200,10 @@ export default function VoiceAssistant({
   useEffect(() => {
     // scrollIntoView can also scroll the root document on iOS; only move messages.
     const log=chatLog.current;
-    if(log)log.scrollTo({top:log.scrollHeight,behavior:'smooth'});
-  }, [messages]);
+    // Keep the linked cash-flow summary visible on first entry; subsequent
+    // replies continue to scroll within the conversation, not the page.
+    if(log && !(cashflowReview && messages.length===1))log.scrollTo({top:log.scrollHeight,behavior:'smooth'});
+  }, [messages,cashflowReview]);
 
   useEffect(() => {
     if (!speakingSupported) return;
@@ -958,6 +967,27 @@ export default function VoiceAssistant({
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck size={13} aria-hidden="true"/> Agent on · read only</span>
       </div>
       <div ref={chatLog} className="mc-chat-log min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:p-4" role="log" aria-live="polite" aria-label="AI conversation">
+        {cashflowReview&&<section aria-label="Cash-flow review from Spend" className="rounded-2xl border border-primary/25 bg-primary/5 p-3.5 text-[12px] leading-5">
+          <h3 className="text-[13px] font-bold">Cash-flow review from Spend</h3>
+          <p className="mt-2 whitespace-pre-line">{describeLocalCashflowReview(context)}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {connected
+              ? settings.shareFinancialContext
+                ? 'Private Compass is connected. Your question is prepared below. If you tap Send, Compass may use the approved aggregate figures you allowed it to see.'
+                : 'Private Compass is connected, but financial-context sharing is off. Turn it on in Compass tools before sending if you want advice based on these totals.'
+              : 'Private AI is not connected on this iPhone. This is a local, read-only summary, not an AI-generated recommendation. Your prepared question remains below until you choose to send it.'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="min-h-10 rounded-xl border border-border bg-background px-3 text-[11px] font-semibold" onClick={()=>onNavigate('/expenses')}>Back to Spend</button>
+            {!connected&&<button type="button" className="min-h-10 rounded-xl border border-primary/30 bg-background px-3 text-[11px] font-semibold" onClick={()=>{
+              setOptionsOpen(true);
+              window.requestAnimationFrame(()=>{
+                const advanced=document.querySelector<HTMLDetailsElement>('.mc-chat-advanced');
+                if(advanced)advanced.open=true;
+              });
+            }}>Private connection options</button>}
+          </div>
+        </section>}
         {messages.length===0 && !busy && <p className="rounded-xl bg-muted/55 px-3 py-3 text-[12px] leading-5 text-muted-foreground">Conversation cleared. Ask a new question below.</p>}
         {messages.map(message => <div key={message.id} className={`flex ${message.source === 'owner' ? 'justify-end' : 'justify-start'}`}>
           <div className={`mc-chat-bubble max-w-[90%] break-words rounded-[16px] px-3.5 py-2.5 text-[13px] leading-[1.6] sm:max-w-[85%] ${message.source === 'owner' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted/70 text-foreground'}`}>

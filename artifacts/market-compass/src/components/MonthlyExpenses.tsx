@@ -6,6 +6,7 @@ import {Link} from 'wouter';
 import {allowedDocumentCategories} from '@/lib/reviewedDocumentLedger';
 import {privateTailnetOrigin} from '@/lib/privateTailnetUrl';
 import {buildSpendCoachingRequest} from '@/lib/spendAiGuidance';
+import {CASHFLOW_REVIEW_HREF} from '@/lib/cashflowReviewHandoff';
 import type { DesktopAiSettings } from '@/lib/desktopAiSettings';
 import {
   type ExpenseEntry, type ExpenseKind, type ExpenseCategory, type ExpenseSettings,
@@ -72,6 +73,9 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
     [entries,cycleStart,currency,settings.cycleBudget]
   );
   const coachingKey=coachingRequest?JSON.stringify(coachingRequest.financialContext.expenseSummary):'';
+  // Do not silently discard a half-entered transaction when opening AI.
+  const unsavedEntry=Boolean(editingId||description.trim()||paidVia.trim()||amount.trim()||
+    linkedDebtId||accountLabel.trim()||remaining.trim()||note.trim());
   const selectedEntries=cycleEntries(allEntries,cycleStart,currency)
     .slice().sort((a,b)=>b.date.localeCompare(a.date)||b.recordedAt.localeCompare(a.recordedAt));
   const shownEntries=selectedEntries.filter(e=>{
@@ -408,7 +412,9 @@ export default function MonthlyExpenses({entries,settings,currency,region='ZA',d
         </p>
       </div>
       <p className="mt-3 text-[11px] leading-5 text-muted-foreground">Save an entry, label Unsorted spending or change cycles to refresh the automatic guidance. For follow-up questions, open Compass AI in Assistant.</p>
-      <Link href="/assistant" className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-primary/40 px-4 text-[12px] font-semibold">
+      <Link href={CASHFLOW_REVIEW_HREF} onClick={event=>{
+        if(unsavedEntry&&!window.confirm('This expense entry has not been saved. Leave it and open the Cash-flow review?'))event.preventDefault();
+      }} className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-primary/40 px-4 text-[12px] font-semibold">
         Open Compass AI · cash-flow review
       </Link>
       <h3 className="mt-4 text-[14px] font-bold">Spending patterns and recommendations</h3>
