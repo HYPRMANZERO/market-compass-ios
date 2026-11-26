@@ -131,6 +131,17 @@ export default function VoiceAssistant({
       ? privateTailnetOrigin(window.location.origin) : null;
   const publicPagesEdition = typeof window !== 'undefined' && window.location.hostname.endsWith('.github.io');
   const financeEdition = currentAssistantEdition() === 'finance';
+  // First-run suggestions: only real capabilities, and tapping one fills the
+  // composer rather than sending, so nothing leaves the device by accident.
+  const examplePrompts = financeEdition
+    ? ['Which debt should I clear first?', 'What did I spend this salary cycle?', 'Explain my emergency reserve target.']
+    : ['Help me plan my week.', 'What did I spend this salary cycle?', 'What can you do offline?'];
+  const usePrompt = (text: string) => {
+    setQuery(text);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>('textarea.mc-composer-input')?.focus();
+    });
+  };
   // An independently protected standby can take over if HYPRBOX is down.
   // Both origins are validated private HTTPS .ts.net endpoints. No keys or
   // owner data are embedded in the GitHub Pages build.
@@ -1008,6 +1019,20 @@ export default function VoiceAssistant({
               aria-label={message.link.label}>{message.link.label}</a>}
           </div>
         </div>)}
+        {(messages.length===0 || (messages.length===1 && messages[0].id==='welcome')) && !busy && !cashflowReview &&
+          <section className="fin-empty" aria-label="Example questions">
+            <span className="fin-empty-icon"><CircleHelp size={22} aria-hidden="true"/></span>
+            <h3>Start a conversation</h3>
+            <p>{financeEdition
+              ? 'Ask about your accounts, spending, debt or plan. Figures stay on this device unless you turn on sharing.'
+              : 'Ask about plans, writing, research, markets or your finances. Tools stay read-only until you approve an action.'}</p>
+            <div className="fin-empty-list">
+              {examplePrompts.map(prompt => <button key={prompt} type="button" className="fin-prompt" onClick={()=>usePrompt(prompt)}>
+                <ArrowRight size={14} aria-hidden="true"/><span className="min-w-0 flex-1">{prompt}</span>
+              </button>)}
+            </div>
+          </section>}
+
         {busy && <div className="rounded-[16px] bg-muted/75 px-4 py-3 text-[12px]">{agentMode ? 'Checking approved read-only agent tools…' : 'Waiting for Compass…'}</div>}
         <div aria-hidden="true"/>
       </div>
