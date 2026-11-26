@@ -537,6 +537,85 @@ button[class~='bg-[hsl(43,65%,73%)]']:disabled {
   }
 }
 
+/* ==================================================== typography pass ====
+   The text was sized for density rather than reading: 12px paragraphs, 10px
+   meta, and ragged short last lines everywhere. With the platform font in place
+   (SF on iOS) these rules give the reading text room and stop headings and
+   labels breaking badly. Sizes move by 0.5-1px only, so nothing reflows
+   dramatically. */
+body {
+  /* Faux bold/italic never appears when a weight is missing. */
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Short last lines in headings and orphaned words in paragraphs. */
+@supports (text-wrap: balance) {
+  h1,
+  h2,
+  h3,
+  .fin-hdr-title,
+  .fin-sheet-title,
+  .mc-app-section-heading h2,
+  .mc-wallet-number,
+  .fin-kpi strong {
+    text-wrap: balance;
+  }
+}
+@supports (text-wrap: pretty) {
+  p,
+  li,
+  small,
+  .fin-empty p,
+  .fin-sheet-hint,
+  .mc-stat-meta,
+  .mc-account-label small {
+    text-wrap: pretty;
+  }
+}
+
+/* Reading text. */
+.fin-empty p {
+  font-size: 12.8px;
+  line-height: 1.6;
+}
+.fin-sheet-hint {
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.fin-prompt,
+.fin-action-row {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.fin-sheet-row {
+  font-size: 13.5px;
+}
+
+/* Small labels keep their hierarchy but stop being unreadable. */
+.mc-app-section-heading > span,
+.mc-stat-meta,
+.mc-account-label small,
+.mc-market-history-label {
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+/* The vault screen is the first thing anyone reads. */
+.mc-vault-entry p {
+  font-size: 12.8px;
+  line-height: 1.62;
+}
+.mc-vault-entry h2 {
+  letter-spacing: -0.02em;
+}
+
+/* Money and dates line up, and the chat reads at a comfortable measure. */
+.mc-chat-bubble {
+  line-height: 1.62;
+  letter-spacing: 0.002em;
+}
+
 /* ------------------------------------------------------- dock geometry --- */
 /* The dock's height is not a constant: it depends on the home-indicator inset
    and on the browser's own zoom. AppShell measures it and publishes
