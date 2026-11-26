@@ -104,34 +104,6 @@ export default function MobileOverview({
       <p className="mt-2 text-[10px] leading-4 text-muted-foreground">Never replace an existing vault without first exporting a backup and reviewing the restore instructions.</p>
     </section>}
 
-    <section aria-label="Quick actions" className="mc-app-section">
-      <div className="mc-app-section-heading">
-        <h2>Quick actions</h2><span>Do more, in fewer taps</span>
-      </div>
-      <div className="row g-2 mc-bs-quick-actions">
-        <div className="col-4">
-          <button type="button" onClick={()=>setAccountActionsOpen(true)} className="mc-quick-action w-full">
-            <span className="mc-quick-icon"><Plus size={20} aria-hidden="true"/></span>
-            <span>Accounts</span>
-          </button>
-        </div>
-        <div className="col-4">
-          <button type="button" onClick={onImportDocuments} className="mc-quick-action w-full">
-            <span className="mc-quick-icon"><FileText size={20} aria-hidden="true"/></span>
-            <span>Documents</span>
-          </button>
-        </div>
-        <div className="col-4">
-          <Link href="/assistant" className="mc-quick-action ion-activatable">
-            <span className="mc-quick-icon"><Sparkles size={20} aria-hidden="true"/></span>
-            <span>Ask Compass</span>
-          </Link>
-        </div>
-      </div>
-    </section>
-
-    <BankCarousel compact onImportDocuments={onImportDocuments}/>
-
     <section aria-label="Workspace snapshot" className="mc-app-section">
       <div className="mc-app-section-heading">
         <h2>At a glance</h2><span>Saved locally</span>
@@ -162,6 +134,34 @@ export default function MobileOverview({
         </div>
       </div>
     </section>
+
+    <section aria-label="Quick actions" className="mc-app-section">
+      <div className="mc-app-section-heading">
+        <h2>Quick actions</h2><span>Do more, in fewer taps</span>
+      </div>
+      <div className="row g-2 mc-bs-quick-actions">
+        <div className="col-4">
+          <button type="button" onClick={()=>setAccountActionsOpen(true)} className="mc-quick-action w-full">
+            <span className="mc-quick-icon"><Plus size={20} aria-hidden="true"/></span>
+            <span>Accounts</span>
+          </button>
+        </div>
+        <div className="col-4">
+          <button type="button" onClick={onImportDocuments} className="mc-quick-action w-full">
+            <span className="mc-quick-icon"><FileText size={20} aria-hidden="true"/></span>
+            <span>Documents</span>
+          </button>
+        </div>
+        <div className="col-4">
+          <Link href="/assistant" className="mc-quick-action ion-activatable">
+            <span className="mc-quick-icon"><Sparkles size={20} aria-hidden="true"/></span>
+            <span>Ask Compass</span>
+          </Link>
+        </div>
+      </div>
+    </section>
+
+    <BankCarousel compact onImportDocuments={onImportDocuments}/>
 
     <EvidenceReviewInbox documents={documents} entries={entries} currency={currency}
       currencyReviewRequired={currencyReviewRequired}/>
