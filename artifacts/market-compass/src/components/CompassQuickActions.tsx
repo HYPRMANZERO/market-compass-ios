@@ -17,13 +17,13 @@ export default function CompassQuickActions({edition,onAction}:Props){
       <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[.08em] text-muted-foreground">
         {group==='finance'?'Finance & secure workspace':'Personal assistant'}
       </h4>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="fin-action-list">
         {actions.filter(action=>action.group===group).map(action=>
           <button type="button" key={action.id} onClick={()=>onAction(action.id)}
             aria-label={action.label}
-            className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-border bg-background px-2.5 py-2 text-left text-[12px] font-semibold transition-colors hover:bg-muted active:bg-muted">
-            <span className="min-w-0 break-words">{action.label}</span>
-            <ArrowRight size={14} aria-hidden="true" className="shrink-0 text-muted-foreground"/>
+            className="fin-action-row">
+            <span className="min-w-0 flex-1">{action.label}</span>
+            <ArrowRight size={15} aria-hidden="true" className="shrink-0"/>
           </button>)}
       </div>
     </div>)}

@@ -402,6 +402,54 @@ button[class~='bg-[hsl(43,65%,73%)]']:disabled {
   box-shadow: none !important;
 }
 
+/* ------------------------------------------------------- dock geometry --- */
+/* The dock's height is not a constant: it depends on the home-indicator inset
+   and on the browser's own zoom. AppShell measures it and publishes
+   --mc-dock-height, so every reserved space follows the real bar instead of a
+   hard-coded 66px/84px that left the composer and the last card sitting under
+   it on a device whose bar is taller than the constant assumed. */
+@media (max-width: 1023px) {
+  .mc-mobile-content {
+    padding-bottom: calc(var(--mc-dock-height, 102px) + 22px) !important;
+  }
+  .mc-mobile-content.mc-assistant-page {
+    /* Composer bottom edge lands exactly on the dock's top edge. */
+    height: calc(100dvh - var(--mc-dock-height, 102px)) !important;
+    max-height: calc(100dvh - var(--mc-dock-height, 102px)) !important;
+  }
+}
+
+/* --------------------------------------------------- assistant action rows -- */
+/* Two-up pills turned every second label into a two-line block at 320-360px and
+   at any page zoom above 100%. Full-width rows stay legible and keep the 44px
+   target. */
+.fin-action-list {
+  display: grid;
+  gap: 6px;
+}
+.fin-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--fin-line);
+  border-radius: 13px;
+  background: var(--fin-card);
+  color: var(--fin-ink);
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.3;
+  text-align: left;
+}
+.fin-action-row:active {
+  background: var(--fin-line-soft);
+}
+.fin-action-row svg {
+  color: var(--fin-ink-faint);
+}
+
 /* --------------------------------------------------------- empty states --- */
 /* One pattern for every "nothing here yet" surface: a tinted icon chip, a
    headline, one honest line, then actions. An empty screen should read as a
