@@ -25,6 +25,28 @@ export function shouldBlockChatTouchScroll(
   return false;
 }
 
+/**
+ * In installed iOS WebKit the layout viewport may extend BELOW the visual
+ * viewport, leaving an apparently oversized footer beneath the home indicator.
+ * Anchor the chat surface and tabs to the actual resting visual bottom.
+ * This is deliberately a geometry-only calculation with no data side effects.
+ */
+export function assistantRestingViewportGeometry(
+  layoutHeight:number,
+  visualHeight:number,
+  visualTop:number,
+  tabbarHeight:number,
+):{visibleBottom:number;bottomInset:number;tabbarHeight:number}{
+  const layout=Number.isFinite(layoutHeight)&&layoutHeight>200?Math.round(layoutHeight):844;
+  const visible=Number.isFinite(visualHeight)&&visualHeight>200?visualHeight:layout;
+  const top=Number.isFinite(visualTop)?Math.max(0,visualTop):0;
+  const visibleBottom=Math.min(layout,Math.max(220,Math.round(visible+top)));
+  const bottomInset=Math.min(200,Math.max(0,layout-visibleBottom));
+  const nav=Number.isFinite(tabbarHeight)&&tabbarHeight>=58&&tabbarHeight<=180
+    ?Math.round(tabbarHeight):100;
+  return {visibleBottom,bottomInset,tabbarHeight:nav};
+}
+
 export function installAssistantKeyboardViewport():()=>void {
   const root=document.documentElement;
   const visual=window.visualViewport;
@@ -63,6 +85,18 @@ export function installAssistantKeyboardViewport():()=>void {
     const keyboardOpen=isChatKeyboardVisible(focused,baseline,height);
     root.classList.toggle('mc-chat-input-focused',focused);
     root.classList.toggle('mc-chat-keyboard-open',keyboardOpen);
+    if(!keyboardOpen){
+      // The footer is outside the assistant component; only this route owns
+      // its bottom inset. A 100dvh-only calculation can place the tabbar
+      // BELOW the visible screen in standalone iOS Safari.
+      const nav=document.querySelector<HTMLElement>('.mc-mobile-tabbar');
+      const geometry=assistantRestingViewportGeometry(
+        window.innerHeight,height,top,nav?.getBoundingClientRect().height??100
+      );
+      root.style.setProperty('--mc-chat-resting-visible-bottom',geometry.visibleBottom+'px');
+      root.style.setProperty('--mc-chat-resting-bottom-inset',geometry.bottomInset+'px');
+      root.style.setProperty('--mc-chat-tabbar-height',geometry.tabbarHeight+'px');
+    }
     if(wasKeyboardOpen&&!keyboardOpen){
       // Closing via the keyboard's Done button may preserve input focus.
       // Reset WebKit's document auto-pan even without a blur event.
@@ -151,5 +185,8 @@ export function installAssistantKeyboardViewport():()=>void {
     root.style.removeProperty('--mc-chat-visible-height');
     root.style.removeProperty('--mc-chat-visible-top');
     root.style.removeProperty('--mc-chat-visible-page-top');
+    root.style.removeProperty('--mc-chat-resting-visible-bottom');
+    root.style.removeProperty('--mc-chat-resting-bottom-inset');
+    root.style.removeProperty('--mc-chat-tabbar-height');
   };
 }
