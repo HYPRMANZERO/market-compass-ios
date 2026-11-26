@@ -627,6 +627,30 @@ async function main(){
     assert.ok(beforeChat.micWidth>=44&&beforeChat.plusWidth>=44,'accessible plus/voice buttons');
     assert.ok(Math.abs(beforeChat.plusHeight-beforeChat.micHeight)<=1,'matching plus and microphone heights');
     assert.equal(beforeChat.overflow,false,'AI tab must not horizontally overflow');
+    // The safe-area padding must not grow into the large blank footer shown in
+    // physical iPhone reports. Confirm chat and navigation share one boundary.
+    const restingLayout=await tab.invoke(function(){
+      const page=document.querySelector('.mc-assistant-page')?.getBoundingClientRect();
+      const nav=document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect();
+      const composer=document.querySelector('.mc-chat-composer-wrap')?.getBoundingClientRect();
+      return {
+        pageBottom:page?.bottom??null,navTop:nav?.top??null,
+        navBottom:nav?.bottom??null,navHeight:nav?.height??null,
+        composerBottom:composer?.bottom??null,
+        screenHeight:window.innerHeight,
+        rootOverflow:getComputedStyle(document.documentElement).overflowY
+      };
+    });
+    assert.ok(restingLayout.navHeight!==null&&restingLayout.navHeight<=101,
+      'iPhone tabs must not acquire oversized bottom safe-area padding: '+JSON.stringify(restingLayout));
+    assert.ok(restingLayout.pageBottom!==null&&restingLayout.navTop!==null&&
+      Math.abs(restingLayout.pageBottom-restingLayout.navTop)<=5,
+      'AI conversation must meet the tabbar without a viewport-sized strip: '+JSON.stringify(restingLayout));
+    assert.ok(restingLayout.navBottom!==null&&Math.abs(restingLayout.navBottom-restingLayout.screenHeight)<=3,
+      'iPhone tabbar must meet the bottom of the resting viewport: '+JSON.stringify(restingLayout));
+    assert.ok(restingLayout.composerBottom!==null&&
+      Math.abs(restingLayout.composerBottom-restingLayout.pageBottom)<=4,
+      'composer must anchor to the chat surface with no blank band');
     // The document must be locked on the AI route even with the keyboard CLOSED.
     // Home and Spend still rely on ordinary document scrolling.
     const chatOnly=await tab.invoke(async function(){

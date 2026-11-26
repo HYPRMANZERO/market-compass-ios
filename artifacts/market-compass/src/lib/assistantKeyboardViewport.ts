@@ -33,6 +33,9 @@ export function installAssistantKeyboardViewport():()=>void {
   root.classList.add('mc-assistant-route');
   let baseline=Math.max(window.innerHeight,visual?.height??window.innerHeight);
   let baselineWidth=Math.round(visual?.width??window.innerWidth);
+  // Give the newly mounted route a stable full-screen measurement before its
+  // first frame. A transient keyboard resize must not shrink the resting page.
+  root.style.setProperty('--mc-chat-resting-height',Math.round(baseline)+'px');
   let focused=document.activeElement instanceof Element &&
     document.activeElement.matches('textarea.mc-composer-input');
   let frame=0;
@@ -61,6 +64,12 @@ export function installAssistantKeyboardViewport():()=>void {
       baselineWidth=width;
     }
     const keyboardOpen=isChatKeyboardVisible(focused,baseline,height);
+    // Always maintain the non-keyboard page size. Without this, WebKit can
+    // leave a large white gap below the bottom tabs when navigation restores
+    // a viewport that differs from 100dvh. Ignore intermediate keyboard frames.
+    if(!keyboardOpen&&(height>=baseline-110||Math.abs(width-baselineWidth)>80)){
+      root.style.setProperty('--mc-chat-resting-height',height+'px');
+    }
     root.classList.toggle('mc-chat-input-focused',focused);
     root.classList.toggle('mc-chat-keyboard-open',keyboardOpen);
     if(wasKeyboardOpen&&!keyboardOpen){
@@ -151,5 +160,6 @@ export function installAssistantKeyboardViewport():()=>void {
     root.style.removeProperty('--mc-chat-visible-height');
     root.style.removeProperty('--mc-chat-visible-top');
     root.style.removeProperty('--mc-chat-visible-page-top');
+    root.style.removeProperty('--mc-chat-resting-height');
   };
 }

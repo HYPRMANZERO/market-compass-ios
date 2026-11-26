@@ -9,7 +9,8 @@ const home=read('../artifacts/market-compass/src/components/HomeFinancialEvidenc
 test('edge-to-edge AI uses the available phone viewport, not a floating card',()=>{
  assert.match(app,/mc-assistant-page w-full px-0 pt-0/);
  assert.match(css,/\.mc-mobile-content\.mc-assistant-page\{/);
- assert.match(css,/height:calc\(100dvh - 66px - max\(10px,env\(safe-area-inset-bottom,0px\)\)\)/);
+ assert.match(css,/height:calc\(var\(--mc-chat-resting-height, 100dvh\) - 66px - var\(--mc-mobile-footer-safe\)\)/);
+ assert.match(css,/--mc-mobile-footer-safe: clamp\(10px, env\(safe-area-inset-bottom, 0px\), 34px\)/);
  assert.match(chat,/mc-assistant flex min-h-0 min-w-0 max-w-full flex-col/);
  assert.match(chat,/mc-chat-panel flex min-h-0 flex-1 flex-col/);
  assert.match(chat,/mc-chat-log min-h-0 flex-1/);
