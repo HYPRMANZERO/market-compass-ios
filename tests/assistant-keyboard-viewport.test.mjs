@@ -108,17 +108,17 @@ test('resting iPhone visual viewport anchors tabs above hidden layout bottom',()
   assert.equal(recovery.bottomInset,0,'navigation returns after dismissing keyboard');
   assert.equal(assistantRestingViewportGeometry(896,896,0,NaN).tabbarHeight,100);
 });
-test('both editions bind non-keyboard AI page and nav to visual viewport, then clean up',()=>{
+test('both editions share the resting dock anchor and measure its edge, then clean up',()=>{
   const module=read('../artifacts/market-compass/src/lib/assistantKeyboardViewport.ts');
   assert.match(module,/if\(!keyboardOpen\)\{/);
   assert.match(module,/assistantRestingViewportGeometry\(/);
-  for(const variable of ['--mc-chat-resting-visible-bottom','--mc-chat-resting-bottom-inset','--mc-chat-tabbar-height']){
+  for(const variable of ['--mc-chat-resting-visible-bottom','--mc-chat-resting-bottom-inset','--mc-chat-tabbar-height','--mc-chat-dock-top']){
     assert.ok(module.includes("root.style.setProperty('"+variable+"'"));
     assert.ok(module.includes("root.style.removeProperty('"+variable+"'"));
   }
   assert.match(css,/html\.mc-assistant-route:not\(\.mc-chat-keyboard-open\) \.mc-mobile-tabbar/);
-  assert.match(css,/bottom:var\(--mc-chat-resting-bottom-inset,0px\) !important/);
-  assert.match(css,/height:calc\(var\(--mc-chat-resting-visible-bottom,100dvh\) - var\(--mc-chat-tabbar-height,100px\)\) !important/);
+  assert.match(css,/bottom:0 !important/);
+  assert.match(css,/height:var\(--mc-chat-dock-top, calc\(100dvh - var\(--mc-dock-height, 102px\)\)\) !important/);
   assert.match(css,/padding-bottom:clamp\(10px,env\(safe-area-inset-bottom,0px\),34px\) !important/);
   assert.match(css,/html\.mc-chat-keyboard-open \.mc-mobile-content\.mc-assistant-page/);
 });
