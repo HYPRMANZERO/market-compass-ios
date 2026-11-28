@@ -111,6 +111,14 @@ export function installAssistantKeyboardViewport():()=>void {
       root.style.setProperty('--mc-chat-resting-visible-bottom',geometry.visibleBottom+'px');
       root.style.setProperty('--mc-chat-resting-bottom-inset',geometry.bottomInset+'px');
       root.style.setProperty('--mc-chat-tabbar-height',geometry.tabbarHeight+'px');
+      // The fixed dock already follows the browser's viewport. Measure its actual
+      // top relative to the page instead of subtracting a second viewport inset.
+      const page=document.querySelector<HTMLElement>('.mc-mobile-content.mc-assistant-page');
+      const dockTop=nav?.getBoundingClientRect().top;
+      const pageTop=page?.getBoundingClientRect().top;
+      if(dockTop!==undefined&&pageTop!==undefined&&dockTop>pageTop){
+        root.style.setProperty('--mc-chat-dock-top',Math.round(dockTop-pageTop)+'px');
+      }
     }
     if(wasKeyboardOpen&&!keyboardOpen){
       // Closing via the keyboard's Done button may preserve input focus.
@@ -203,5 +211,6 @@ export function installAssistantKeyboardViewport():()=>void {
     root.style.removeProperty('--mc-chat-resting-visible-bottom');
     root.style.removeProperty('--mc-chat-resting-bottom-inset');
     root.style.removeProperty('--mc-chat-tabbar-height');
+    root.style.removeProperty('--mc-chat-dock-top');
   };
 }
