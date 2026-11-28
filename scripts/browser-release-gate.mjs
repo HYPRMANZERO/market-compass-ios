@@ -603,7 +603,9 @@ async function main(){
       const toolbar=header?.querySelector('.mc-ionic-toolbar');
       return {top:header?.getBoundingClientRect().top,bottom:header?.getBoundingClientRect().bottom,
         inset:header?parseFloat(getComputedStyle(header).paddingTop):null,
-        toolbarHeight:toolbar?.getBoundingClientRect().height};
+        toolbarHeight:toolbar?.getBoundingClientRect().height,
+        navBottom:document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect().bottom,
+        navTop:document.querySelector('.mc-mobile-tabbar')?.getBoundingClientRect().top};
     });
     assert.ok(homeHeader.inset!==null&&homeHeader.inset>=16,'unlocked Home header keeps safe-area clearance');
     assert.ok(homeHeader.toolbarHeight>=68,'unlocked Home toolbar retains common height');
@@ -683,12 +685,15 @@ async function main(){
       return {navBottom:nav?.bottom,pageBottom:page?.bottom,navTop:nav?.top,
         visibleBottom,cssBottom:root.getPropertyValue('--mc-chat-resting-visible-bottom'),
         cssInset:root.getPropertyValue('--mc-chat-resting-bottom-inset'),
-        cssNav:root.getPropertyValue('--mc-chat-tabbar-height')};
+        cssNav:root.getPropertyValue('--mc-chat-tabbar-height'),cssDockTop:root.getPropertyValue('--mc-chat-dock-top')};
     });
     assert.ok(restingBounds.navBottom!==undefined&&restingBounds.pageBottom!==undefined,
       'assistant resting footer and page must exist');
     assert.ok(Math.abs(restingBounds.navBottom-restingBounds.visibleBottom)<=5,
       'AI nav must end at the real visual viewport bottom: '+JSON.stringify(restingBounds));
+    assert.ok(Math.abs(restingBounds.navBottom-homeHeader.navBottom)<=2&&Math.abs(restingBounds.navTop-homeHeader.navTop)<=2,
+      'Home and AI must use the same resting dock geometry: '+JSON.stringify({homeHeader,restingBounds}));
+    assert.ok(restingBounds.cssDockTop.endsWith('px'),'actual dock edge must be measured');
     assert.ok(Math.abs(restingBounds.navTop-restingBounds.pageBottom)<=5,
       'composer cannot leave a dead strip above navigation: '+JSON.stringify(restingBounds));
     assert.ok(restingBounds.cssBottom.endsWith('px')&&restingBounds.cssInset.endsWith('px')&&
