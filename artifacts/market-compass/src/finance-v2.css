@@ -1641,8 +1641,8 @@ html:has(.mc-vault-entry) .mc-vault-entry {
     padding-bottom: var(--mc-unlocked-bottom-inset) !important;
   }
   html.mc-assistant-route:not(.mc-chat-keyboard-open) .mc-mobile-content.mc-assistant-page {
-    height: calc(var(--mc-chat-resting-visible-bottom, 100dvh) - var(--mc-chat-tabbar-height, var(--mc-dock-height, 102px))) !important;
-    max-height: calc(var(--mc-chat-resting-visible-bottom, 100dvh) - var(--mc-chat-tabbar-height, var(--mc-dock-height, 102px))) !important;
+    height: var(--mc-chat-dock-top, calc(100dvh - var(--mc-dock-height, 102px))) !important;
+    max-height: var(--mc-chat-dock-top, calc(100dvh - var(--mc-dock-height, 102px))) !important;
   }
   html.mc-assistant-route.mc-chat-keyboard-open .mc-mobile-tabbar,
   html.mc-assistant-route.mc-chat-keyboard-open .mc-ionic-footer {
@@ -1652,5 +1652,19 @@ html:has(.mc-vault-entry) .mc-vault-entry {
 @media (display-mode: standalone) and (max-width: 1023px) {
   :root {
     --mc-unlocked-top-inset: calc(32px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Standalone status backing: paint the document underneath native status chrome.
+   Do not change the locked vault or the already aligned header dimensions. */
+@media (display-mode: standalone) and (max-width: 1023px) {
+  html:has(.mc-mobile-tabbar),
+  html:has(.mc-mobile-tabbar) body,
+  html:has(.mc-mobile-tabbar) #root {
+    background-color: #0b1620 !important;
+  }
+  html:has(.mc-mobile-tabbar) .mc-mobile-header {
+    transform: none;
+    -webkit-transform: none;
   }
 }
