@@ -597,6 +597,16 @@ async function main(){
       return card?.getBoundingClientRect().height>100;
     }),'iPhone hero restored after desktop layout');
     console.log('PASS: shared debt hero matches mobile/desktop, desktop nav and header menu open, View accounts routes correctly');
+    const homeHeader=await tab.invoke(async function(){
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const header=document.querySelector('.mc-mobile-header');
+      const toolbar=header?.querySelector('.mc-ionic-toolbar');
+      return {top:header?.getBoundingClientRect().top,bottom:header?.getBoundingClientRect().bottom,
+        inset:header?parseFloat(getComputedStyle(header).paddingTop):null,
+        toolbarHeight:toolbar?.getBoundingClientRect().height};
+    });
+    assert.ok(homeHeader.inset!==null&&homeHeader.inset>=16,'unlocked Home header keeps safe-area clearance');
+    assert.ok(homeHeader.toolbarHeight>=68,'unlocked Home toolbar retains common height');
 
 
     await tab.invoke(function(){
@@ -604,6 +614,20 @@ async function main(){
       if(!link)throw Error('Assistant tab missing');link.click();
     });
     await expectText(tab,'Conversation','assistant chat');
+    const assistantHeader=await tab.invoke(async function(){
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const page=document.querySelector('.mc-mobile-content.mc-assistant-page');
+      const header=page?.querySelector('section[aria-label="Compass model connection"]');
+      return {top:header?.getBoundingClientRect().top,bottom:header?.getBoundingClientRect().bottom,
+        inset:page?parseFloat(getComputedStyle(page).paddingTop):null,height:header?.getBoundingClientRect().height};
+    });
+    assert.ok(assistantHeader.inset!==null&&Math.abs(assistantHeader.inset-homeHeader.inset)<=1,
+      'Home and AI share unlocked safe-area clearance: '+JSON.stringify({homeHeader,assistantHeader}));
+    assert.ok(Math.abs(assistantHeader.height-homeHeader.toolbarHeight)<=2,
+      'Home and AI bars have matching heights: '+JSON.stringify({homeHeader,assistantHeader}));
+    assert.ok(Math.abs(assistantHeader.bottom-homeHeader.bottom)<=2,
+      'Header bottom must not jump when navigating to AI: '+JSON.stringify({homeHeader,assistantHeader}));
+    console.log('PASS: unlocked Home and AI header geometry matches');
     const beforeChat=await tab.invoke(function(){
       const input=document.querySelector('textarea[aria-describedby="mc-composer-hint"]');
       const plus=document.querySelector('button[aria-label="Open Compass actions"]');
