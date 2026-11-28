@@ -55,3 +55,16 @@ test('account list and category details use Ionic components but keep their fina
   assert.match(activity,/<IonSegment scrollable value=\{filter\}/);
   assert.doesNotMatch(activity,/localStorage|indexedDB|fetch\(|sendBeacon\(/);
 });
+
+
+test('unlocked mobile routes share header clearance and AI uses measured resting viewport',async()=>{
+  const css=await file('finance-v2.css');
+  const block=css.slice(css.indexOf('/* Shared authenticated mobile geometry.'));
+  assert.match(block,/--mc-unlocked-top-inset: calc\(32px \+ env\(safe-area-inset-top, 0px\)\)/);
+  assert.match(block,/\.mc-mobile-header \{\s*padding-top: var\(--mc-unlocked-top-inset\) !important;/);
+  assert.match(block,/\.mc-assistant-page \{\s*padding-top: var\(--mc-unlocked-top-inset\) !important;\s*padding-bottom: 0 !important;/);
+  assert.match(block,/--mc-unlocked-bottom-inset: clamp\(10px, env\(safe-area-inset-bottom, 0px\), 34px\)/);
+  assert.match(block,/height: calc\(var\(--mc-chat-resting-visible-bottom, 100dvh\) - var\(--mc-chat-tabbar-height, var\(--mc-dock-height, 102px\)\)\) !important;/);
+  assert.match(block,/html\.mc-assistant-route\.mc-chat-keyboard-open \.mc-ionic-footer \{\s*display: none !important;/);
+  assert.doesNotMatch(block,/\.mc-vault-entry\s*\{/);
+});
