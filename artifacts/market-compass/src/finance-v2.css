@@ -1605,3 +1605,66 @@ html:has(.mc-vault-entry) .mc-vault-entry {
 @media (max-width: 1023px) {
   html:has(.mc-vault-entry)::before { background: #0b1620 !important; }
 }
+
+
+/* Shared authenticated mobile geometry. The vault entry already has its own
+   working status-bar clearance; do not modify it. Use its clearance on both
+   authenticated bars and keep the viewport adapter authoritative on AI. */
+@media (max-width: 1023px) {
+  :root {
+    --mc-unlocked-top-inset: calc(16px + env(safe-area-inset-top, 0px));
+    --mc-unlocked-bar-height: 68px;
+    --mc-unlocked-bottom-inset: clamp(10px, env(safe-area-inset-bottom, 0px), 34px);
+  }
+  .mc-mobile-header {
+    padding-top: var(--mc-unlocked-top-inset) !important;
+  }
+  .mc-mobile-header .mc-ionic-toolbar {
+    --min-height: var(--mc-unlocked-bar-height);
+    --ion-safe-area-top: 0px;
+  }
+  .mc-mobile-header .mc-ionic-toolbar::part(container),
+  .mc-mobile-header .mc-ionic-toolbar > div,
+  .mc-assistant-page .mc-assistant > section[aria-label="Compass model connection"] {
+    box-sizing: border-box;
+    min-height: var(--mc-unlocked-bar-height) !important;
+  }
+  .mc-mobile-content.mc-assistant-page {
+    padding-top: var(--mc-unlocked-top-inset) !important;
+    padding-bottom: 0 !important;
+    background: linear-gradient(to bottom,
+      #0b1620 0, #0b1620 var(--mc-unlocked-top-inset),
+      var(--fin-canvas) var(--mc-unlocked-top-inset));
+  }
+  .mc-mobile-tabbar {
+    min-height: calc(var(--fin-tabbar-h) + var(--mc-unlocked-bottom-inset)) !important;
+    padding-bottom: var(--mc-unlocked-bottom-inset) !important;
+  }
+  html.mc-assistant-route:not(.mc-chat-keyboard-open) .mc-mobile-content.mc-assistant-page {
+    height: var(--mc-chat-dock-top, calc(100dvh - var(--mc-dock-height, 102px))) !important;
+    max-height: var(--mc-chat-dock-top, calc(100dvh - var(--mc-dock-height, 102px))) !important;
+  }
+  html.mc-assistant-route.mc-chat-keyboard-open .mc-mobile-tabbar,
+  html.mc-assistant-route.mc-chat-keyboard-open .mc-ionic-footer {
+    display: none !important;
+  }
+}
+@media (display-mode: standalone) and (max-width: 1023px) {
+  :root {
+    --mc-unlocked-top-inset: calc(32px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Standalone status backing: paint the document underneath native status chrome.
+   Do not change the locked vault or the already aligned header dimensions. */
+@media (display-mode: standalone) and (max-width: 1023px) {
+  html:has(.mc-mobile-tabbar),
+  html:has(.mc-mobile-tabbar) body,
+  html:has(.mc-mobile-tabbar) #root {
+    background-color: #0b1620 !important;
+  }
+  html:has(.mc-mobile-tabbar) .mc-mobile-header {
+    transform: none;
+    -webkit-transform: none;
+  }
+}
