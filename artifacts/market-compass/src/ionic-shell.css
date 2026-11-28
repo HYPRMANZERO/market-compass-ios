@@ -689,7 +689,8 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
    The keyboard-open layout above still owns its separate absolute positioning. */
 @media (max-width:1023px) {
   html.mc-assistant-route:not(.mc-chat-keyboard-open) .mc-mobile-tabbar {
-    bottom:var(--mc-chat-resting-bottom-inset,0px) !important;
+    /* Use the same fixed dock anchor as Home and Markets. WebKit already accounts for the visible viewport on fixed elements. */
+    bottom:0 !important;
     /* Some iOS restores report an inflated safe-area value. Keep one inset. */
     padding-bottom:clamp(10px,env(safe-area-inset-bottom,0px),34px) !important;
   }
