@@ -64,7 +64,7 @@ test('unlocked mobile routes share header clearance and AI uses measured resting
   assert.match(block,/\.mc-mobile-header \{\s*padding-top: var\(--mc-unlocked-top-inset\) !important;/);
   assert.match(block,/\.mc-assistant-page \{\s*padding-top: var\(--mc-unlocked-top-inset\) !important;\s*padding-bottom: 0 !important;/);
   assert.match(block,/--mc-unlocked-bottom-inset: clamp\(10px, env\(safe-area-inset-bottom, 0px\), 34px\)/);
-  assert.match(block,/height: calc\(var\(--mc-chat-resting-visible-bottom, 100dvh\) - var\(--mc-chat-tabbar-height, var\(--mc-dock-height, 102px\)\)\) !important;/);
+  assert.match(block,/height: var\(--mc-chat-dock-top, calc\(100dvh - var\(--mc-dock-height, 102px\)\)\) !important;/);
   assert.match(block,/html\.mc-assistant-route\.mc-chat-keyboard-open \.mc-ionic-footer \{\s*display: none !important;/);
   assert.doesNotMatch(block,/\.mc-vault-entry\s*\{/);
 });
