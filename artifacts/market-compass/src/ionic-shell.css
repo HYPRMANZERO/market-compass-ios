@@ -695,8 +695,8 @@ html.mc-menu-open,body.mc-menu-open{overflow-y:hidden !important;overscroll-beha
     padding-bottom:clamp(10px,env(safe-area-inset-bottom,0px),34px) !important;
   }
   html.mc-assistant-route:not(.mc-chat-keyboard-open) .mc-mobile-content.mc-assistant-page {
-    height:calc(var(--mc-chat-resting-visible-bottom,100dvh) - var(--mc-chat-tabbar-height,100px)) !important;
-    max-height:calc(var(--mc-chat-resting-visible-bottom,100dvh) - var(--mc-chat-tabbar-height,100px)) !important;
+    height:var(--mc-chat-dock-top, calc(100dvh - var(--mc-dock-height, 102px))) !important;
+    max-height:var(--mc-chat-dock-top, calc(100dvh - var(--mc-dock-height, 102px))) !important;
     min-height:0 !important;
     padding-bottom:0 !important;
   }
