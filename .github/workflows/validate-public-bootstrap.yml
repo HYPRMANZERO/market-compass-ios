@@ -115,6 +115,18 @@ jobs:
         run: |
           node scripts/bootstrap-ui-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Synthetic Edge UI check failed' }
+      - name: Full Personal browser gate three independent times
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: personal
+          NODE_ENV: production
+        run: |
+          foreach ($round in 1..3) {
+            Write-Host "Personal browser round $round of 3"
+            node scripts/browser-release-gate.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Personal browser gate failed in round $round" }
+          }
       - name: Personal Spend pagination and encrypted-review browser smoke
         shell: pwsh
         env:
@@ -138,3 +150,17 @@ jobs:
         run: |
           node scripts/category-review-ui-smoke.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Finance Spend review browser check failed' }
+
+      - name: Full Finance browser gate three independent times
+        shell: pwsh
+        env:
+          BASE_PATH: '/market-compass-ios/'
+          VITE_MC_EDITION: finance
+          MC_PWA_OUT_DIR: ${{ github.workspace }}/.release/finance
+          NODE_ENV: production
+        run: |
+          foreach ($round in 1..3) {
+            Write-Host "Finance browser round $round of 3"
+            node scripts/browser-release-gate.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Finance browser gate failed in round $round" }
+          }
